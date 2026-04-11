@@ -21,5 +21,8 @@ public class Game
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     public int MoveCount { get; set; }
 
+    public string? PlayerName { get; set; }
+
     public ICollection<MoveRecord> Moves { get; set; } = new List<MoveRecord>();
+    public ICollection<PromptLog> PromptLogs { get; set; } = new List<PromptLog>();
 }

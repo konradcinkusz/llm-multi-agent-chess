@@ -37,9 +37,16 @@ public class GameHub(IGameService gameService) : Hub<IGameHubClient>
             => await Clients.Group(gameId.ToString())
                 .OnRetryAttempt(gameId, color, attempt, reason);
 
+        async Task OnPromptLogged(int ply, string promptColor, string promptModel,
+            string personality, string prompt, string? response, bool success)
+        {
+            _ = Task.Run(() => gameService.PersistPromptLogAsync(
+                gameId, ply, promptColor, promptModel, personality, prompt, response, success));
+        }
+
         try
         {
-            var result = await session.MakeMoveAsync(OnRetry, Context.ConnectionAborted);
+            var result = await session.MakeMoveAsync(OnRetry, OnPromptLogged, Context.ConnectionAborted);
             if (result == null)
             {
                 await Clients.Caller.OnMoveError(gameId, "Move failed");

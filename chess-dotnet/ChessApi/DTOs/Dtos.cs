@@ -10,7 +10,8 @@ public record CreateGameRequest(
     string WhitePersonality,
     string BlackAgentType,
     string BlackModel,
-    string BlackPersonality);
+    string BlackPersonality,
+    string? PlayerName = null);
 
 // ── Responses ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,68 @@ public record MoveResultDto(
     bool IsCheck, bool IsCheckmate,
     float Evaluation, int MaterialAdvantage,
     AnalysisDto Analysis);
+
+// ── Admin DTOs ────────────────────────────────────────────────────────────────
+
+public record AdminGameSummary(
+    Guid Id,
+    string? PlayerName,
+    string Status,
+    int MoveCount,
+    string WhiteAgentType,
+    string WhiteModel,
+    string BlackAgentType,
+    string BlackModel,
+    DateTime CreatedAt,
+    DateTime? CompletedAt);
+
+public record AdminMoveItem(
+    int Ply,
+    int MoveNumber,
+    string Color,
+    string San,
+    float Evaluation,
+    int MaterialAdvantage,
+    bool IsCheck,
+    bool IsCheckmate,
+    DateTime PlayedAt);
+
+public record AdminGameDetail(
+    Guid Id,
+    string? PlayerName,
+    string Status,
+    string CurrentFen,
+    int MoveCount,
+    string WhiteAgentType,
+    string WhiteModel,
+    string WhitePersonality,
+    string BlackAgentType,
+    string BlackModel,
+    string BlackPersonality,
+    List<AdminMoveItem> Moves,
+    DateTime CreatedAt,
+    DateTime? CompletedAt);
+
+public record AdminPromptLogItem(
+    int Id,
+    Guid GameId,
+    string? PlayerName,
+    int Ply,
+    string Color,
+    string Model,
+    string Personality,
+    string PromptText,
+    string? ResponseText,
+    bool Success,
+    DateTime CreatedAt);
+
+public record AdminStats(
+    int TotalGames,
+    int TotalPrompts,
+    int TotalMoves,
+    int ActiveGames,
+    int CompletedGames,
+    List<string> PlayerNames);
 
 // ── Mappings ──────────────────────────────────────────────────────────────────
 

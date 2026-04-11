@@ -1,0 +1,380 @@
+@page "/admin/conversations"
+@using ChessBlazor.Models
+@using ChessBlazor.Services
+@inject AdminApiClient AdminApi
+@inject NavigationManager Nav
+
+<PageTitle>Admin - Conversations</PageTitle>
+
+<div class="admin-page">
+    <div class="admin-header">
+        <a class="back-link" href="/admin">&#x2190; Dashboard</a>
+        <h1>Conversations</h1>
+        <p class="subtitle">All game sessions on the platform</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+        <label>Filter by player:</label>
+        <select @bind="_selectedPlayer" @bind:after="LoadGames">
+            <option value="">All players</option>
+            @foreach (var p in _players)
+            {
+                <option value="@p">@p</option>
+            }
+        </select>
+        <button class="btn-refresh" @onclick="LoadGames">Refresh</button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-msg">Loading conversations...</div>
+    }
+    else if (_games.Count == 0)
+    {
+        <div class="empty-msg">No conversations found.</div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Status</th>
+                        <th>Moves</th>
+                        <th>White</th>
+                        <th>Black</th>
+                        <th>Started</th>
+                        <th>Completed</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var g in _games)
+                    {
+                        <tr class="@(g.Id == _detailGameId ? "selected-row" : "")">
+                            <td>
+                                @if (!string.IsNullOrEmpty(g.PlayerName))
+                                {
+                                    <span class="player-chip-sm" @onclick='() => SelectPlayer(g.PlayerName!)'>@g.PlayerName</span>
+                                }
+                                else
+                                {
+                                    <span class="anon">anonymous</span>
+                                }
+                            </td>
+                            <td><span class="status-badge @StatusClass(g.Status)">@g.Status</span></td>
+                            <td>@g.MoveCount</td>
+                            <td class="agent-cell">@g.WhiteAgentType / @g.WhiteModel</td>
+                            <td class="agent-cell">@g.BlackAgentType / @g.BlackModel</td>
+                            <td class="date-cell">@g.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            <td class="date-cell">@(g.CompletedAt.HasValue ? g.CompletedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</td>
+                            <td>
+                                <button class="btn-detail" @onclick="() => ToggleDetail(g.Id)">
+                                    @(g.Id == _detailGameId ? "Hide" : "Details")
+                                </button>
+                                <button class="btn-prompts" @onclick='() => Nav.NavigateTo($"/admin/prompts?gameId={g.Id}")'>
+                                    Prompts
+                                </button>
+                            </td>
+                        </tr>
+                        @if (g.Id == _detailGameId && _gameDetail != null)
+                        {
+                            <tr class="detail-row">
+                                <td colspan="8">
+                                    <div class="game-detail">
+                                        <div class="detail-meta">
+                                            <span><strong>Game ID:</strong> @_gameDetail.Id</span>
+                                            <span><strong>White:</strong> @_gameDetail.WhiteAgentType / @_gameDetail.WhiteModel (@_gameDetail.WhitePersonality)</span>
+                                            <span><strong>Black:</strong> @_gameDetail.BlackAgentType / @_gameDetail.BlackModel (@_gameDetail.BlackPersonality)</span>
+                                            <span><strong>FEN:</strong> <code>@_gameDetail.CurrentFen</code></span>
+                                        </div>
+                                        @if (_gameDetail.Moves.Count > 0)
+                                        {
+                                            <div class="move-list-wrap">
+                                                <table class="move-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>#</th>
+                                                            <th>Color</th>
+                                                            <th>Move</th>
+                                                            <th>Eval</th>
+                                                            <th>Material</th>
+                                                            <th>Flags</th>
+                                                            <th>Time</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var m in _gameDetail.Moves)
+                                                        {
+                                                            <tr>
+                                                                <td>@m.Ply</td>
+                                                                <td class="@(m.Color == "White" ? "white-color" : "black-color")">@m.Color</td>
+                                                                <td><strong>@m.San</strong></td>
+                                                                <td>@m.Evaluation.ToString("F2")</td>
+                                                                <td>@(m.MaterialAdvantage > 0 ? $"+{m.MaterialAdvantage}" : m.MaterialAdvantage.ToString())</td>
+                                                                <td>
+                                                                    @if (m.IsCheckmate) { <span class="flag checkmate">✓✓</span> }
+                                                                    else if (m.IsCheck) { <span class="flag check">+</span> }
+                                                                </td>
+                                                                <td class="date-cell">@m.PlayedAt.ToLocalTime().ToString("HH:mm:ss")</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <p class="no-moves">No moves recorded yet.</p>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            <button @onclick="PrevPage" disabled="@(_page <= 1)">&#x2190; Prev</button>
+            <span>Page @_page</span>
+            <button @onclick="NextPage" disabled="@(_games.Count < _pageSize)">Next &#x2192;</button>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "player")] public string? PlayerQuery { get; set; }
+
+    private List<AdminGameSummary> _games = new();
+    private List<string> _players = new();
+    private string _selectedPlayer = "";
+    private bool _loading = true;
+    private int _page = 1;
+    private const int _pageSize = 50;
+
+    private Guid? _detailGameId;
+    private AdminGameDetail? _gameDetail;
+    private bool _detailLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(PlayerQuery))
+            _selectedPlayer = PlayerQuery;
+
+        _players = await AdminApi.GetPlayersAsync();
+        await LoadGames();
+    }
+
+    private async Task LoadGames()
+    {
+        _loading = true;
+        _detailGameId = null;
+        _gameDetail = null;
+        try
+        {
+            _games = await AdminApi.GetGamesAsync(_selectedPlayer, _page, _pageSize);
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task ToggleDetail(Guid id)
+    {
+        if (_detailGameId == id)
+        {
+            _detailGameId = null;
+            _gameDetail = null;
+            return;
+        }
+        _detailGameId = id;
+        _gameDetail = null;
+        _detailLoading = true;
+        _gameDetail = await AdminApi.GetGameDetailAsync(id);
+        _detailLoading = false;
+    }
+
+    private void SelectPlayer(string name)
+    {
+        _selectedPlayer = name;
+        _page = 1;
+        _ = LoadGames();
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadGames(); } }
+    private async Task NextPage() { _page++; await LoadGames(); }
+
+    private static string StatusClass(string status) =>
+        status == "Ongoing" ? "ongoing"
+        : status.Contains("Checkmate") ? "checkmate"
+        : status.Contains("Draw") || status.Contains("Stalemate") ? "draw"
+        : status == "Check!" ? "check"
+        : "abandoned";
+}
+
+<style>
+    .admin-page { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+    .back-link { color: #888; text-decoration: none; font-size: 0.9rem; }
+    .back-link:hover { color: #ccc; }
+    .admin-header h1 { font-size: 1.8rem; font-weight: 700; margin: 0.25rem 0; }
+    .subtitle { color: #888; margin-bottom: 1.5rem; }
+
+    .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+    }
+    .filter-bar label { color: #aaa; font-size: 0.9rem; }
+    .filter-bar select {
+        background: #1e1e2e;
+        color: #fff;
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-refresh {
+        background: #2a2a3e;
+        color: #ccc;
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 0.4rem 0.9rem;
+        cursor: pointer;
+        font-size: 0.85rem;
+    }
+    .btn-refresh:hover { background: #3a3a5e; }
+
+    .table-wrap { overflow-x: auto; }
+
+    .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+    }
+    .admin-table th {
+        text-align: left;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 2px solid #444;
+        color: #aaa;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+    }
+    .admin-table td {
+        padding: 0.55rem 0.75rem;
+        border-bottom: 1px solid #2a2a3a;
+        vertical-align: middle;
+    }
+    .admin-table tr:hover td { background: #1a1a2a; }
+    .selected-row td { background: #1a1a35 !important; }
+
+    .player-chip-sm {
+        background: #2a2a4e;
+        border: 1px solid #555;
+        border-radius: 12px;
+        padding: 0.2rem 0.6rem;
+        cursor: pointer;
+        font-size: 0.82rem;
+    }
+    .player-chip-sm:hover { background: #3a3a6e; }
+
+    .anon { color: #666; font-style: italic; font-size: 0.82rem; }
+
+    .status-badge {
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .ongoing   { background: #1a3a1a; color: #4caf50; }
+    .checkmate { background: #3a1a1a; color: #f44336; }
+    .draw      { background: #2a2a1a; color: #ff9800; }
+    .check     { background: #3a2a1a; color: #ffc107; }
+    .abandoned { background: #2a2a2a; color: #888; }
+
+    .agent-cell { color: #bbb; font-size: 0.82rem; }
+    .date-cell  { color: #888; font-size: 0.82rem; white-space: nowrap; }
+
+    .btn-detail, .btn-prompts {
+        background: #2a2a3e;
+        color: #bbb;
+        border: 1px solid #555;
+        border-radius: 5px;
+        padding: 0.25rem 0.6rem;
+        cursor: pointer;
+        font-size: 0.78rem;
+        margin-right: 0.3rem;
+    }
+    .btn-detail:hover { background: #3a3a5e; color: #fff; }
+    .btn-prompts { border-color: #ff9800; color: #ff9800; }
+    .btn-prompts:hover { background: #3a2a0a; }
+
+    .detail-row td { padding: 0; background: #13131f; }
+
+    .game-detail {
+        padding: 1rem 1.5rem;
+        border-top: 1px dashed #444;
+    }
+
+    .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.82rem;
+        color: #aaa;
+    }
+    .detail-meta code { background: #222; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.78rem; }
+
+    .move-list-wrap { overflow-x: auto; max-height: 320px; overflow-y: auto; }
+
+    .move-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+    }
+    .move-table th {
+        padding: 0.4rem 0.6rem;
+        text-align: left;
+        color: #888;
+        border-bottom: 1px solid #333;
+        position: sticky;
+        top: 0;
+        background: #13131f;
+    }
+    .move-table td { padding: 0.3rem 0.6rem; border-bottom: 1px solid #1e1e2a; }
+    .white-color { color: #f5f5f5; }
+    .black-color { color: #aaa; }
+
+    .flag { font-size: 0.75rem; font-weight: 700; padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .check     { background: #3a2a0a; color: #ffc107; }
+    .checkmate { background: #3a0a0a; color: #f44336; }
+
+    .no-moves { color: #666; font-style: italic; padding: 0.5rem 0; }
+
+    .pagination {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 0;
+        font-size: 0.9rem;
+        color: #aaa;
+    }
+    .pagination button {
+        background: #2a2a3e;
+        color: #bbb;
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 0.35rem 0.8rem;
+        cursor: pointer;
+    }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+    .pagination button:not(:disabled):hover { background: #3a3a5e; }
+
+    .loading-msg, .empty-msg { text-align: center; padding: 3rem; color: #888; }
+</style>

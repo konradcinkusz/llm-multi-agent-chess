@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<Game> Games => Set<Game>();
     public DbSet<MoveRecord> Moves => Set<MoveRecord>();
+    public DbSet<PromptLog> PromptLogs => Set<PromptLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -19,12 +20,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
              .WithOne(m => m.Game)
              .HasForeignKey(m => m.GameId)
              .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(g => g.PromptLogs)
+             .WithOne(p => p.Game)
+             .HasForeignKey(p => p.GameId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<MoveRecord>(e =>
         {
             e.HasKey(m => m.Id);
             e.HasIndex(m => new { m.GameId, m.Ply }).IsUnique();
+        });
+
+        modelBuilder.Entity<PromptLog>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
         });
     }
 }

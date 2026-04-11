@@ -47,8 +47,11 @@ public class ChessGameSession
     /// Executes the next move. Calls the appropriate agent and updates board state.
     /// The SemaphoreSlim prevents concurrent moves during auto-play.
     /// </summary>
+    /// <param name="onPromptLogged">Called with (ply, color, model, personality, promptText, responseText, success)
+    /// for each LLM prompt attempt made during this move.</param>
     public async Task<MoveResult?> MakeMoveAsync(
         Func<int, string, Task>? onRetry = null,
+        Func<int, string, string, string, string, string?, bool, Task>? onPromptLogged = null,
         CancellationToken ct = default)
     {
         await _lock.WaitAsync(ct);
@@ -57,17 +60,25 @@ public class ChessGameSession
             if (IsGameOver) return null;
             IsThinking = true;
 
+            int ply = _history.Count + 1;
+            string color = ply % 2 == 1 ? "White" : "Black";
             var agent = _board.SideToMove == Side.White ? WhiteAgent : BlackAgent;
-            var (success, san) = await agent.GetMoveAsync(_board, _history, onRetry, ct);
+
+            Func<string, string?, bool, Task>? promptCallback = null;
+            if (onPromptLogged != null)
+            {
+                promptCallback = (prompt, response, success) =>
+                    onPromptLogged(ply, color, agent.Model, agent.Personality, prompt, response, success);
+            }
+
+            var (success, san) = await agent.GetMoveAsync(_board, _history, onRetry, promptCallback, ct);
 
             if (!success || san == null) return null;
 
             bool applied = _board.ApplyMoveSan(san);
             if (!applied) return null;
 
-            int ply = _history.Count + 1;
             int moveNumber = (ply + 1) / 2;
-            string color = ply % 2 == 1 ? "White" : "Black";
             _history.Add((moveNumber, color, san));
 
             var analysis = GetAnalysis();
