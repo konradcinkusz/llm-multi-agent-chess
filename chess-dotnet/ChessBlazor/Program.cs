@@ -15,5 +15,6 @@ builder.Services.AddScoped(sp => new HttpClient
 
 builder.Services.AddScoped<ChessApiClient>();
 builder.Services.AddScoped<GameHubService>();
+builder.Services.AddScoped<AdminApiClient>();
 
 await builder.Build().RunAsync();

@@ -31,6 +31,7 @@ public class GameService(AgentFactory agentFactory, IDbContextFactory<AppDbConte
             BlackAgentType = req.BlackAgentType,
             BlackModel = req.BlackModel,
             BlackPersonality = req.BlackPersonality,
+            PlayerName = req.PlayerName,
         });
         await db.SaveChangesAsync();
 
@@ -100,6 +101,25 @@ public class GameService(AgentFactory agentFactory, IDbContextFactory<AppDbConte
             game.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
         }
+    }
+
+    public async Task PersistPromptLogAsync(Guid gameId, int ply, string color, string model,
+        string personality, string prompt, string? response, bool success)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        db.PromptLogs.Add(new PromptLog
+        {
+            GameId = gameId,
+            Ply = ply,
+            Color = color,
+            Model = model,
+            Personality = personality,
+            PromptText = prompt,
+            ResponseText = response,
+            Success = success,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
     }
 
     private static GameResponse BuildResponse(ChessGameSession s)

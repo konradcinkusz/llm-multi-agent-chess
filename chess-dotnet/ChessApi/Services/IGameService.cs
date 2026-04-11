@@ -12,4 +12,6 @@ public interface IGameService
     ChessGameSession? GetSession(Guid id);
     Task PersistMoveAsync(Guid gameId, MoveResult result);
     Task FinalizeGameAsync(Guid gameId, string status);
+    Task PersistPromptLogAsync(Guid gameId, int ply, string color, string model,
+        string personality, string prompt, string? response, bool success);
 }

@@ -77,3 +77,75 @@ public class GameResponse
     public List<MoveHistoryItem> History { get; set; } = new();
     public AnalysisData? Analysis { get; set; }
 }
+
+// ── Admin Models ──────────────────────────────────────────────────────────────
+
+public class AdminStats
+{
+    public int TotalGames { get; set; }
+    public int TotalPrompts { get; set; }
+    public int TotalMoves { get; set; }
+    public int ActiveGames { get; set; }
+    public int CompletedGames { get; set; }
+    public List<string> PlayerNames { get; set; } = new();
+}
+
+public class AdminGameSummary
+{
+    public Guid Id { get; set; }
+    public string? PlayerName { get; set; }
+    public string Status { get; set; } = "";
+    public int MoveCount { get; set; }
+    public string WhiteAgentType { get; set; } = "";
+    public string WhiteModel { get; set; } = "";
+    public string BlackAgentType { get; set; } = "";
+    public string BlackModel { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+}
+
+public class AdminMoveItem
+{
+    public int Ply { get; set; }
+    public int MoveNumber { get; set; }
+    public string Color { get; set; } = "";
+    public string San { get; set; } = "";
+    public float Evaluation { get; set; }
+    public int MaterialAdvantage { get; set; }
+    public bool IsCheck { get; set; }
+    public bool IsCheckmate { get; set; }
+    public DateTime PlayedAt { get; set; }
+}
+
+public class AdminGameDetail
+{
+    public Guid Id { get; set; }
+    public string? PlayerName { get; set; }
+    public string Status { get; set; } = "";
+    public string CurrentFen { get; set; } = "";
+    public int MoveCount { get; set; }
+    public string WhiteAgentType { get; set; } = "";
+    public string WhiteModel { get; set; } = "";
+    public string WhitePersonality { get; set; } = "";
+    public string BlackAgentType { get; set; } = "";
+    public string BlackModel { get; set; } = "";
+    public string BlackPersonality { get; set; } = "";
+    public List<AdminMoveItem> Moves { get; set; } = new();
+    public DateTime CreatedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+}
+
+public class AdminPromptLogItem
+{
+    public int Id { get; set; }
+    public Guid GameId { get; set; }
+    public string? PlayerName { get; set; }
+    public int Ply { get; set; }
+    public string Color { get; set; } = "";
+    public string Model { get; set; } = "";
+    public string Personality { get; set; } = "";
+    public string PromptText { get; set; } = "";
+    public string? ResponseText { get; set; }
+    public bool Success { get; set; }
+    public DateTime CreatedAt { get; set; }
+}

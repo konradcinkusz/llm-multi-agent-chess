@@ -13,6 +13,7 @@ public class RandomChessAgent(string name) : IChessAgent
         ChessBoard board,
         IReadOnlyList<(int MoveNumber, string Color, string San)> history,
         Func<int, string, Task>? onRetry = null,
+        Func<string, string?, bool, Task>? onPrompt = null,
         CancellationToken ct = default)
     {
         var moves = board.GetLegalMoves();

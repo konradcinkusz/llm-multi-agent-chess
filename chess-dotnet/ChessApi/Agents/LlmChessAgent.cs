@@ -29,6 +29,7 @@ public class LlmChessAgent : IChessAgent
         ChessBoard board,
         IReadOnlyList<(int MoveNumber, string Color, string San)> history,
         Func<int, string, Task>? onRetry = null,
+        Func<string, string?, bool, Task>? onPrompt = null,
         CancellationToken ct = default)
     {
         var legalMoves = board.GetLegalMoves().Select(m => m.San).ToList();
@@ -51,7 +52,12 @@ public class LlmChessAgent : IChessAgent
                     ct);
 
                 string san = completion.Value.Content[0].Text.Trim();
-                if (legalMoves.Contains(san)) return (true, san);
+                bool valid = legalMoves.Contains(san);
+
+                if (onPrompt != null)
+                    await onPrompt(prompt, san, valid);
+
+                if (valid) return (true, san);
 
                 if (onRetry != null)
                     await onRetry(attempt, $"'{san}' is not a legal move");
@@ -59,6 +65,9 @@ public class LlmChessAgent : IChessAgent
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
+                if (onPrompt != null)
+                    await onPrompt(prompt, null, false);
+
                 if (attempt == _config.MaxRetries) break;
                 if (onRetry != null) await onRetry(attempt, ex.Message);
             }
