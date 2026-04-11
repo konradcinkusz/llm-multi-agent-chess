@@ -1,0 +1,45 @@
+@namespace ChessBlazor.Components
+@using ChessBlazor.Models
+
+<div class="move-history">
+    <h4>Move History</h4>
+    @if (History.Count == 0)
+    {
+        <p class="empty-history">No moves yet.</p>
+    }
+    else
+    {
+        <div class="history-table">
+            <div class="history-header">
+                <span>#</span><span>White</span><span>Black</span>
+            </div>
+            @foreach (var pair in GetPairedMoves())
+            {
+                <div class="history-row @(pair.IsLatest ? "latest-move" : "")">
+                    <span class="move-num">@pair.MoveNumber.</span>
+                    <span class="move-white">@pair.WhiteSan</span>
+                    <span class="move-black">@pair.BlackSan</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<MoveHistoryItem> History { get; set; } = new();
+
+    private record MovePair(int MoveNumber, string WhiteSan, string BlackSan, bool IsLatest);
+
+    private List<MovePair> GetPairedMoves()
+    {
+        var pairs = new List<MovePair>();
+        for (int i = 0; i < History.Count; i += 2)
+        {
+            var white = History[i];
+            var black = i + 1 < History.Count ? History[i + 1] : null;
+            bool isLatest = i + 1 >= History.Count - 1;
+            pairs.Add(new MovePair(white.MoveNumber, white.San, black?.San ?? "…", isLatest));
+        }
+        return pairs;
+    }
+}

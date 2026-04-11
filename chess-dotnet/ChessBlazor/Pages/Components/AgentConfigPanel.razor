@@ -1,0 +1,72 @@
+@namespace ChessBlazor.Components
+@using ChessBlazor.Models
+@using ChessBlazor.Services
+@inject ChessApiClient Api
+
+<div class="config-panel">
+    <h3>Configure Agents</h3>
+
+    <div class="agent-section">
+        <h4>⬜ White</h4>
+        <label>Type</label>
+        <select @bind="White.AgentType">
+            <option value="llm">LLM</option>
+            <option value="random">Random</option>
+        </select>
+        @if (White.AgentType == "llm")
+        {
+            <label>Model</label>
+            <select @bind="White.Model">
+                @foreach (var m in _models)
+                { <option value="@m">@m</option> }
+            </select>
+            <label>Personality</label>
+            <select @bind="White.Personality">
+                @foreach (var p in _personalities)
+                { <option value="@p">@p</option> }
+            </select>
+        }
+    </div>
+
+    <div class="agent-section">
+        <h4>⬛ Black</h4>
+        <label>Type</label>
+        <select @bind="Black.AgentType">
+            <option value="llm">LLM</option>
+            <option value="random">Random</option>
+        </select>
+        @if (Black.AgentType == "llm")
+        {
+            <label>Model</label>
+            <select @bind="Black.Model">
+                @foreach (var m in _models)
+                { <option value="@m">@m</option> }
+            </select>
+            <label>Personality</label>
+            <select @bind="Black.Personality">
+                @foreach (var p in _personalities)
+                { <option value="@p">@p</option> }
+            </select>
+        }
+    </div>
+
+    <button class="btn btn-primary" @onclick="OnNewGame" disabled="@IsLoading">
+        @(IsLoading ? "Starting…" : "New Game")
+    </button>
+</div>
+
+@code {
+    [Parameter] public AgentConfig White { get; set; } = new();
+    [Parameter] public AgentConfig Black { get; set; } = new();
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public EventCallback OnNewGame { get; set; }
+
+    private string[] _models = [];
+    private string[] _personalities = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _models = await Api.GetModelsAsync();
+        _personalities = await Api.GetPersonalitiesAsync();
+    }
+}

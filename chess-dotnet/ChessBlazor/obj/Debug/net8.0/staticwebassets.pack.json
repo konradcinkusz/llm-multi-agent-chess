@@ -1,0 +1,61 @@
+{
+  "Files": [
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/bin/Debug/net8.0/wwwroot/_framework/blazor.webassembly.js",
+      "PackagePath": "staticwebassets/_framework/blazor.webassembly.js"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/obj/Debug/net8.0/compressed/jqg0lu26dd.gz",
+      "PackagePath": "staticwebassets/_framework/blazor.webassembly.js.gz"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/obj/Debug/net8.0/scopedcss/bundle/ChessBlazor.styles.css",
+      "PackagePath": "staticwebassets/ChessBlazor.styles.css"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/wwwroot/css/app.css",
+      "PackagePath": "staticwebassets/css/app.css"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/wwwroot/css/bootstrap/bootstrap.min.css",
+      "PackagePath": "staticwebassets/css/bootstrap/bootstrap.min.css"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/wwwroot/css/bootstrap/bootstrap.min.css.map",
+      "PackagePath": "staticwebassets/css/bootstrap/bootstrap.min.css.map"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/wwwroot/favicon.png",
+      "PackagePath": "staticwebassets/favicon.png"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/wwwroot/icon-192.png",
+      "PackagePath": "staticwebassets/icon-192.png"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/wwwroot/index.html",
+      "PackagePath": "staticwebassets/index.html"
+    },
+    {
+      "Id": "/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/wwwroot/sample-data/weather.json",
+      "PackagePath": "staticwebassets/sample-data/weather.json"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.ChessBlazor.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.build.ChessBlazor.props",
+      "PackagePath": "build\\ChessBlazor.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildMultiTargeting.ChessBlazor.props",
+      "PackagePath": "buildMultiTargeting\\ChessBlazor.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildTransitive.ChessBlazor.props",
+      "PackagePath": "buildTransitive\\ChessBlazor.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

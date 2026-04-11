@@ -1,0 +1,79 @@
+is_global = true
+build_property.EnableAotAnalyzer = 
+build_property.EnableSingleFileAnalyzer = 
+build_property.EnableTrimAnalyzer = false
+build_property.IncludeAllContentForSelfExtract = 
+build_property.TargetFramework = net8.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = false
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = browser
+build_property.RootNamespace = ChessBlazor
+build_property.RootNamespace = ChessBlazor
+build_property.ProjectDir = /home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = false
+build_property.RazorLangVersion = 8.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = /home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor
+build_property._RazorSourceGeneratorDebug = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/App.razor]
+build_metadata.AdditionalFiles.TargetPath = QXBwLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Components/AgentConfigPanel.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ29tcG9uZW50cy9BZ2VudENvbmZpZ1BhbmVsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Components/AnalysisPanel.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ29tcG9uZW50cy9BbmFseXNpc1BhbmVsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Components/ChessBoard.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ29tcG9uZW50cy9DaGVzc0JvYXJkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Components/GameControls.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ29tcG9uZW50cy9HYW1lQ29udHJvbHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Components/MoveHistory.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ29tcG9uZW50cy9Nb3ZlSGlzdG9yeS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Components/StatusBadge.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ29tcG9uZW50cy9TdGF0dXNCYWRnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Counter.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ291bnRlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvSG9tZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvSW5kZXgucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Pages/Weather.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvV2VhdGhlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = X0ltcG9ydHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = TGF5b3V0L01haW5MYXlvdXQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-xh8ttxmw6v
+
+[/home/user/llm-multi-agent-chess/chess-dotnet/ChessBlazor/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = TGF5b3V0L05hdk1lbnUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-iivqshm612

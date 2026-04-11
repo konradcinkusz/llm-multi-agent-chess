@@ -1,0 +1,40 @@
+@namespace ChessBlazor.Components
+@using ChessBlazor.Services
+@inject ChessApiClient Api
+
+<div class="board-container">
+    @if (IsThinking)
+    {
+        <div class="thinking-overlay">
+            <div class="thinking-spinner"></div>
+            <span>Thinking…</span>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(_svgContent))
+    {
+        <div class="board-svg" @key="Fen">@((MarkupString)_svgContent)</div>
+    }
+    else
+    {
+        <div class="board-placeholder">Loading board…</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid GameId { get; set; }
+    [Parameter, EditorRequired] public string Fen { get; set; } = "";
+    [Parameter] public bool IsThinking { get; set; }
+
+    private string _svgContent = "";
+    private string _lastFen = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Fen != _lastFen && GameId != Guid.Empty)
+        {
+            _lastFen = Fen;
+            var svg = await Api.GetBoardSvgAsync(GameId);
+            if (svg != null) _svgContent = svg;
+        }
+    }
+}
