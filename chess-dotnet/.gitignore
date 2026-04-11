@@ -1,0 +1,19 @@
+# .NET build artifacts
+**/bin/
+**/obj/
+*.user
+.vs/
+*.suo
+*.userprefs
+
+# Published output
+**/publish/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+**/packages/
+
+# IDE
+.idea/
+*.sln.DotSettings.user
