@@ -1,0 +1,196 @@
+@page "/"
+@namespace ChessBlazor.Pages
+@using ChessBlazor.Components
+@using ChessBlazor.Models
+@using ChessBlazor.Services
+@inject ChessApiClient Api
+@inject GameHubService Hub
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+<PageTitle>LLM Chess</PageTitle>
+
+<div class="app-layout">
+    <!-- Left column: config -->
+    <aside class="sidebar">
+        <h2>♟ LLM Chess</h2>
+        <AgentConfigPanel White="_whiteConfig" Black="_blackConfig"
+                          IsLoading="_isLoading" OnNewGame="StartNewGame" />
+        @if (_game != null)
+        {
+            <AnalysisPanel Analysis="_game.Analysis" />
+        }
+    </aside>
+
+    <!-- Center: board + controls -->
+    <main class="board-area">
+        @if (_game != null)
+        {
+            <GameControls Game="_game" IsThinking="_game.IsThinking"
+                          IsAutoPlaying="_isAutoPlaying"
+                          OnStepClicked="StepAsync"
+                          OnRunClicked="StartAutoPlay"
+                          OnStopClicked="StopAutoPlay" />
+
+            <ChessBoard GameId="_game.Id" Fen="_game.CurrentFen"
+                        IsThinking="_game.IsThinking" />
+
+            @if (!string.IsNullOrEmpty(_game.LastError))
+            {
+                <div class="error-banner">@_game.LastError</div>
+            }
+        }
+        else
+        {
+            <div class="start-prompt">
+                <p>Configure agents and click <strong>New Game</strong> to start.</p>
+            </div>
+        }
+    </main>
+
+    <!-- Right column: move history -->
+    @if (_game != null)
+    {
+        <aside class="history-sidebar">
+            <MoveHistory History="_game.History" />
+        </aside>
+    }
+</div>
+
+@code {
+    private GameState? _game;
+    private readonly AgentConfig _whiteConfig = new();
+    private readonly AgentConfig _blackConfig = new();
+    private bool _isLoading;
+    private bool _isAutoPlaying;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hubUrl = Nav.BaseUri.TrimEnd('/') + "/gamehub";
+        await Hub.ConnectAsync(hubUrl);
+
+        Hub.OnMoveStarted += HandleMoveStarted;
+        Hub.OnMoveMade += HandleMoveMade;
+        Hub.OnGameOver += HandleGameOver;
+        Hub.OnMoveError += HandleMoveError;
+    }
+
+    private async Task StartNewGame()
+    {
+        _isLoading = true;
+        _isAutoPlaying = false;
+        StateHasChanged();
+        try
+        {
+            var response = await Api.CreateGameAsync(_whiteConfig, _blackConfig);
+            if (response == null) return;
+
+            _game = new GameState
+            {
+                Id = response.Id,
+                Status = response.Status,
+                CurrentFen = response.CurrentFen,
+                CurrentTurn = response.CurrentTurn,
+                White = response.White,
+                Black = response.Black,
+                History = response.History,
+                Analysis = response.Analysis
+            };
+
+            await Hub.JoinGameAsync(_game.Id);
+        }
+        finally { _isLoading = false; StateHasChanged(); }
+    }
+
+    private async Task StepAsync()
+    {
+        if (_game == null || _game.IsGameOver) return;
+        await Hub.MakeMoveAsync(_game.Id);
+    }
+
+    private async Task StartAutoPlay()
+    {
+        if (_game == null) return;
+        _isAutoPlaying = true;
+        StateHasChanged();
+        await Hub.StartAutoPlayAsync(_game.Id);
+    }
+
+    private async Task StopAutoPlay()
+    {
+        _isAutoPlaying = false;
+        StateHasChanged();
+        await Hub.StopAutoPlayAsync();
+    }
+
+    // ── SignalR callbacks — must use InvokeAsync to marshal to the Blazor UI thread ──
+
+    private async Task HandleMoveStarted(Guid id, string color, string model, int attempt)
+    {
+        if (_game == null || _game.Id != id) return;
+        await InvokeAsync(() =>
+        {
+            _game.IsThinking = true;
+            _game.CurrentTurn = color;
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleMoveMade(Guid id, MoveResultMessage result)
+    {
+        if (_game == null || _game.Id != id) return;
+        await InvokeAsync(() =>
+        {
+            _game.IsThinking = false;
+            _game.CurrentFen = result.Fen;
+            _game.Status = result.StatusText;
+            _game.IsGameOver = result.IsGameOver;
+            _game.MoveCount++;
+            _game.Analysis = result.Analysis;
+            _game.CurrentTurn = result.Color == "White" ? "Black" : "White";
+            _game.History.Add(new MoveHistoryItem
+            {
+                MoveNumber = result.MoveNumber,
+                Color = result.Color,
+                San = result.San,
+                Evaluation = result.Evaluation,
+                IsCheck = result.IsCheck,
+                IsCheckmate = result.IsCheckmate
+            });
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleGameOver(Guid id, string statusText)
+    {
+        if (_game == null || _game.Id != id) return;
+        await InvokeAsync(() =>
+        {
+            _game.IsGameOver = true;
+            _game.IsThinking = false;
+            _game.Status = statusText;
+            _isAutoPlaying = false;
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleMoveError(Guid id, string message)
+    {
+        if (_game == null || _game.Id != id) return;
+        await InvokeAsync(() =>
+        {
+            _game.IsThinking = false;
+            _game.LastError = message;
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.OnMoveStarted -= HandleMoveStarted;
+        Hub.OnMoveMade -= HandleMoveMade;
+        Hub.OnGameOver -= HandleGameOver;
+        Hub.OnMoveError -= HandleMoveError;
+        await Hub.DisposeAsync();
+    }
+}

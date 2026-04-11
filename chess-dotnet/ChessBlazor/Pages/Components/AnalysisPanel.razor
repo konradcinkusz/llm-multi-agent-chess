@@ -1,0 +1,45 @@
+@namespace ChessBlazor.Components
+@using ChessBlazor.Models
+
+<div class="analysis-panel">
+    <h4>Position Analysis</h4>
+    @if (Analysis == null)
+    {
+        <p class="empty-analysis">Start a game to see analysis.</p>
+    }
+    else
+    {
+        <div class="analysis-row">
+            <span class="label">Material</span>
+            <span class="value">
+                W: @Analysis.MaterialWhite | B: @Analysis.MaterialBlack
+                <strong>(@(Analysis.MaterialAdvantage >= 0 ? "+" : "")@Analysis.MaterialAdvantage)</strong>
+            </span>
+        </div>
+        <div class="analysis-row">
+            <span class="label">Square control</span>
+            <span class="value">
+                W: @Analysis.ControlWhite | B: @Analysis.ControlBlack
+                <strong>(@(Analysis.ControlAdvantage >= 0 ? "+" : "")@Analysis.ControlAdvantage)</strong>
+            </span>
+        </div>
+        <div class="analysis-row">
+            <span class="label">King safety</span>
+            <span class="value">W: @Analysis.KingSafetyWhite.ToString("F1") | B: @Analysis.KingSafetyBlack.ToString("F1")</span>
+        </div>
+        <div class="analysis-row">
+            <span class="label">Development</span>
+            <span class="value">W: @Analysis.DevelopmentWhite | B: @Analysis.DevelopmentBlack</span>
+        </div>
+        <div class="analysis-row">
+            <span class="label">Evaluation</span>
+            <span class="value eval @(Analysis.Evaluation >= 0 ? "eval-white" : "eval-black")">
+                @(Analysis.Evaluation >= 0 ? "+" : "")@Analysis.Evaluation.ToString("F2")
+            </span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public AnalysisData? Analysis { get; set; }
+}

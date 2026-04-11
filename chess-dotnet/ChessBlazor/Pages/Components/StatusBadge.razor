@@ -1,0 +1,16 @@
+@namespace ChessBlazor.Components
+
+<span class="status-badge @CssClass">@Status</span>
+
+@code {
+    [Parameter, EditorRequired] public string Status { get; set; } = "";
+
+    private string CssClass => Status switch
+    {
+        "Ongoing" => "badge-ongoing",
+        "Check!" => "badge-check",
+        var s when s.StartsWith("Checkmate") => "badge-checkmate",
+        var s when s.StartsWith("Draw") || s == "Stalemate!" => "badge-draw",
+        _ => "badge-ongoing"
+    };
+}
