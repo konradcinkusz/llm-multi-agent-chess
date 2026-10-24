@@ -15,7 +15,8 @@ var web = builder.AddProject<Projects.Chess_Web>("web")
     .WithHttpEndpoint(port: 5070, targetPort: 5070, name: "http", isProxied: false)
     .WithExternalHttpEndpoints()
     .WithReference(api)
-    .WaitFor(api);
+    .WaitFor(api)
+    .WithHttpHealthCheck("/health");
 
 if (fake)
 {

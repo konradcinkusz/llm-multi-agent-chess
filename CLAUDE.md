@@ -62,7 +62,7 @@ Llm, Rating and Engine reference no projects. Any other edge is a review finding
 | Chess.Engine, Chess.Rating | none |
 | Chess.Llm | `GitHub.Copilot.SDK` |
 | Chess.Analysis | none (Stockfish is an external binary) |
-| Chess.Api | EF Core, `Npgsql.EntityFrameworkCore.PostgreSQL`, `Microsoft.EntityFrameworkCore.InMemory` |
+| Chess.Api | EF Core, `Npgsql.EntityFrameworkCore.PostgreSQL`, `Microsoft.EntityFrameworkCore.InMemory`. `Microsoft.EntityFrameworkCore.Design` is build tooling only (`dotnet ef`), not a runtime dependency |
 | Chess.ServiceDefaults | OpenTelemetry.*, `Microsoft.Extensions.ServiceDiscovery`, `Microsoft.Extensions.Http.Resilience` |
 | Chess.Web | none beyond the ASP.NET Core shared framework. No JS dependencies, no component library, no chess library |
 | Chess.AppHost | `Aspire.Hosting.AppHost`, `Aspire.Hosting.PostgreSQL` |

@@ -28,8 +28,9 @@ jobs:
       - name: Build (warnings as errors)
         run: dotnet build Chess.sln -warnaserror
 
+      # The browser journeys (Chess.E2E) need a Chromium, so they run only in the e2e job, which installs one first.
       - name: Test
-        run: dotnet test Chess.sln --no-build --logger trx --results-directory TestResults
+        run: dotnet test Chess.sln --no-build --filter "FullyQualifiedName!~Chess.E2E" --logger trx --results-directory TestResults
 
       - name: Upload test results
         if: always()
@@ -93,6 +94,18 @@ jobs:
             exit 1
           fi
           echo "GitHub.Copilot.SDK is referenced only by Chess.Llm"
+
+      # A project that gets the SDK types transitively (Chess.Api through ProjectReference) compiles a `using` with no
+      # csproj change, so the code itself is checked too.
+      - name: Find Copilot SDK namespaces in code outside Chess.Llm
+        run: |
+          offenders=$(grep -rnE --include='*.cs' 'using GitHub\.Copilot|GitHub\.Copilot\.' src tests | grep -v '/obj/' | grep -v '/bin/' | grep -v -e '^src/Chess\.Llm/' -e '^tests/Chess\.Llm\.Tests/' || true)
+          if [ -n "${offenders}" ]; then
+            echo "::error::GitHub.Copilot types may only be used inside src/Chess.Llm and tests/Chess.Llm.Tests (03 §3.1, invariant)"
+            echo "${offenders}"
+            exit 1
+          fi
+          echo "No GitHub.Copilot namespace is used outside Chess.Llm"
 
   solution:
     name: every project is in Chess.sln and every web project is in the AppHost
