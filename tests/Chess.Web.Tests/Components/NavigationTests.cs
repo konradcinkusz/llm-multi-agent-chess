@@ -16,6 +16,9 @@ public class NavigationTests
         "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan",
     ];
 
+    // "/broadcast" is the chrome-less OBS page (03 §9.4): a route, but deliberately NOT in the navigation.
+    private static readonly string[] ObsRoutes = ["/broadcast"];
+
     // The navigation shows the top-level routes, Results first; the detail routes are reached from their lists.
     private static readonly string[] NavHrefs =
         ["/results", "/", "/head-to-head", "/tournaments", "/broadcast/plan", "/games", "/admin/attempts"];
@@ -27,6 +30,7 @@ public class NavigationTests
             .Where(t => t.Namespace?.StartsWith("Chess.Web.Components.Pages", StringComparison.Ordinal) == true)
             .SelectMany(t => t.GetCustomAttributes<RouteAttribute>())
             .Select(r => r.Template)
+            .Except(ObsRoutes)
             .Order()
             .ToArray();
 
