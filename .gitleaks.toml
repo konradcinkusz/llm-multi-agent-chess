@@ -1,0 +1,7 @@
+# Secret scanning for CI (the `secrets` job) and the local pre-commit hook.
+# The default gitleaks ruleset is kept. Add an allowlist entry here only with a
+# written reason next to it, and prefer a narrow path or regex over a commit id.
+title = "LLM Chess Arena gitleaks config"
+
+[extend]
+useDefault = true
