@@ -18,7 +18,8 @@ internal sealed class GameRun(
     IMoveQualityAnalyzer analyzer,
     IGameEventStream events,
     GameRunnerOptions limits,
-    TimeProvider clock)
+    TimeProvider clock,
+    IGamePacer? pacer = null)
 {
     /// <summary>Plays the game from its stored position to its end. The events of each ply follow its save.</summary>
     public async Task<GameEnd> PlayAsync(CancellationToken ct)
@@ -50,6 +51,11 @@ internal sealed class GameRun(
             if (await PlayPlyAsync(board, history, mover, ct) is { } forfeit)
             {
                 return forfeit;
+            }
+
+            if (pacer is not null)
+            {
+                await pacer.AfterMoveAsync(ct);
             }
         }
     }
