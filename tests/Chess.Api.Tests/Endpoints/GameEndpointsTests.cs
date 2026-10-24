@@ -147,7 +147,7 @@ public class GameEndpointsTests
         return frames;
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_queues_a_random_game_and_returns_it_with_a_location()
     {
         using var app = new GatedApp();
@@ -172,7 +172,7 @@ public class GameEndpointsTests
         Assert.Empty(detail.Moves);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_accepts_an_llm_player_on_a_model_the_gateway_offers()
     {
         using var app = new GatedApp();
@@ -182,7 +182,7 @@ public class GameEndpointsTests
         Assert.Equal(FakeA, summary.White);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_rejects_a_player_kind_that_is_neither_llm_nor_random()
     {
         using var app = new GatedApp();
@@ -194,7 +194,7 @@ public class GameEndpointsTests
         Assert.Contains("kind", problem.GetProperty("detail").GetString());
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_rejects_an_llm_model_the_gateway_does_not_offer()
     {
         using var app = new GatedApp();
@@ -206,7 +206,7 @@ public class GameEndpointsTests
         Assert.Contains("gpt-nope", problem.GetProperty("detail").GetString());
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_rejects_an_llm_model_the_gateway_lists_as_disabled()
     {
         using var app = new DisabledModelApp();
@@ -218,7 +218,7 @@ public class GameEndpointsTests
         Assert.Contains("not enabled", problem.GetProperty("detail").GetString());
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_rejects_a_random_player_on_any_model_but_random()
     {
         using var app = new GatedApp();
@@ -229,7 +229,7 @@ public class GameEndpointsTests
         await ProblemAsync(response, HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_rejects_an_llm_player_on_the_random_model()
     {
         using var app = new GatedApp();
@@ -240,7 +240,7 @@ public class GameEndpointsTests
         await ProblemAsync(response, HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_rejects_a_request_without_both_players()
     {
         using var app = new GatedApp();
@@ -250,7 +250,7 @@ public class GameEndpointsTests
         await ProblemAsync(response, HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_with_an_llm_side_answers_503_telling_the_user_to_log_in_when_the_gateway_is_not_signed_in()
     {
         using var app = new NotAuthenticatedApp();
@@ -262,7 +262,7 @@ public class GameEndpointsTests
         Assert.Contains("`copilot` and log in", problem.GetProperty("detail").GetString());
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Create_still_accepts_a_random_game_when_the_gateway_is_not_signed_in()
     {
         using var app = new NotAuthenticatedApp();
@@ -272,7 +272,7 @@ public class GameEndpointsTests
         Assert.Equal(RandomPlayer, summary.Black);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Archive_lists_newest_first_and_echoes_the_paging_metadata()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -294,7 +294,7 @@ public class GameEndpointsTests
         Assert.Equal([T0.AddMinutes(1)], last!.Items.Select(g => g.CreatedAt));
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Archive_filters_by_a_model_on_either_side()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -312,7 +312,7 @@ public class GameEndpointsTests
         Assert.All(page.Items, g => Assert.Contains("fake-b", new[] { g.White.ModelId, g.Black.ModelId }));
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Archive_filters_by_state_derived_from_the_game_timestamps()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -345,7 +345,7 @@ public class GameEndpointsTests
         Assert.Equal("queued", onlyQueued.State);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Archive_rejects_an_unknown_status_and_bad_paging()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -356,7 +356,7 @@ public class GameEndpointsTests
         await ProblemAsync(await client.GetAsync("/api/games?pageSize=500"), HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Detail_returns_the_summary_fens_and_moves_in_ply_order_with_their_optional_fields()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -389,7 +389,7 @@ public class GameEndpointsTests
         Assert.Null(black.BestSan);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Detail_of_an_unknown_game_is_404()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -399,7 +399,7 @@ public class GameEndpointsTests
         await ProblemAsync(response, HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Pgn_of_a_finished_game_downloads_as_chess_pgn_with_a_filename()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -416,7 +416,7 @@ public class GameEndpointsTests
         Assert.Equal(pgn, await response.Content.ReadAsStringAsync());
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Pgn_of_a_game_that_has_not_ended_is_409()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -427,7 +427,7 @@ public class GameEndpointsTests
         await ProblemAsync(await client.GetAsync($"/api/games/{game}/pgn"), HttpStatusCode.Conflict);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Pgn_of_an_unknown_game_is_404()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -435,7 +435,7 @@ public class GameEndpointsTests
         await ProblemAsync(await app.CreateClient().GetAsync($"/api/games/{Guid.NewGuid()}/pgn"), HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Events_of_a_finished_game_are_one_game_finished_and_the_stream_closes()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -457,7 +457,7 @@ public class GameEndpointsTests
         Assert.Equal(finishedAt, only.Data.GetProperty("at").GetDateTimeOffset());
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Events_of_an_unknown_game_are_404()
     {
         using var app = new SeededApp(Guid.NewGuid().ToString());
@@ -468,7 +468,7 @@ public class GameEndpointsTests
         await ProblemAsync(response, HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Live_stream_carries_every_ply_in_order_and_closes_after_game_finished()
     {
         using var app = new GatedApp();
@@ -501,7 +501,7 @@ public class GameEndpointsTests
         Assert.Equal(detail.Summary.Termination, end.GetProperty("termination").GetString());
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Live_stream_sends_a_ping_comment_each_heartbeat_while_the_game_is_quiet()
     {
         using var app = new GatedApp();
@@ -530,7 +530,7 @@ public class GameEndpointsTests
         Assert.Equal("GameFinished", Frames(rest)[^1].Name);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Delete_of_an_unknown_game_is_404()
     {
         using var app = new GatedApp();
@@ -540,7 +540,7 @@ public class GameEndpointsTests
         await ProblemAsync(response, HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Fact(Timeout = 90_000)]
     public async Task Delete_aborts_a_running_game_which_then_ends_as_aborted()
     {
         using var app = new GatedApp();
