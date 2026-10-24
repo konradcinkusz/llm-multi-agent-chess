@@ -10,9 +10,14 @@ in the same wave can run in parallel without merge conflicts (ADR-010).
 
 | Role | Who | Does | Never does |
 |---|---|---|---|
-| **Supervisor** | the planning session (Opus) | launches task sessions, reviews each PR against its acceptance criteria, merges, keeps the board below current, decides on contract changes | writes feature code |
-| **Implementer** | one Haiku 5.5 session per task | implements exactly one task on its own branch, runs the task's verification, opens a PR | merges; edits files outside its task's *Owns* list; changes a frozen contract |
-| **Owner** | Konrad | accepts this plan; answers decisions the supervisor escalates; runs the live Copilot smoke test (needs the subscription) | — |
+| **Supervisor** | the planning session (Opus) | launches task sessions, audits each merged PR against its acceptance criteria, keeps the board current, decides on contract changes, launches dependents | writes feature code |
+| **Implementer** | one Haiku 5.5 session per task | implements exactly one task on its own branch, runs the task's verification, opens a PR, **merges it itself once CI is green** | edits files outside its task's *Owns* list; changes a frozen contract; merges a red PR |
+| **Owner** | Konrad | accepted the plan and fully autonomous execution (2026-10-24); runs the live Copilot smoke test (needs the subscription) | — |
+
+**Autonomy.** Everything runs without asking the owner. An implementer merges its own PR as
+soon as CI is green on the head commit; the supervisor merges its own PRs the same way. Until
+the CI workflow exists on `main` (T1.8), "green" means the task's *Verify* commands passed in
+the session and their output is in the PR.
 
 ## 2. Waves and the dependency graph
 
@@ -67,7 +72,12 @@ These are repeated verbatim in the session prompt (§4).
    tests (use `FakeLlmGateway`, the InMemory provider, and fixtures).
 6. No secrets, tokens or personal paths in any file. No new package unless the task names it.
 7. Open the PR against `main` titled `<ID>: <title>`, with the acceptance criteria as a
-   checklist, each ticked with its evidence. Do not merge.
+   checklist, each ticked with its evidence.
+8. **Merge it yourself** (squash, delete the branch) once CI is green on the head commit. Before
+   T1.8 has merged there is no CI: merge once the *Verify* commands pass. If CI fails, fix and
+   push again until green. If `main` moved and the PR conflicts or is behind, merge `main` into
+   your branch, re-run *Verify*, push, and wait for green again.
+9. Never merge with `## Blocked`. Do not edit `06-TASKS.md`; the supervisor keeps the board.
 
 ## 4. Session prompt (the supervisor sends this, filling `<ID>`)
 
@@ -78,21 +88,23 @@ Your task is <ID> in docs/architecture/06-TASKS.md on main.
 Read, in this order: CLAUDE.md (once it exists), docs/architecture/03-TARGET-ARCHITECTURE.md,
 docs/architecture/04-MIGRATION-PLAN.md §3, and the <ID> section of 06-TASKS.md
 (plus docs/RATING.md if the task mentions it). Follow the rules of 04 §3 exactly.
-Implement only <ID>. When the Verify commands pass, push and open the PR. If you are blocked,
-open the PR anyway with a "## Blocked" section explaining exactly what you need.
+Implement only <ID>. Work fully autonomously; do not ask questions. When the Verify commands
+pass, push, open the PR and merge it yourself (squash) once CI is green (04 §3 rule 8).
+If you are blocked, open the PR anyway with a "## Blocked" section and do not merge.
 ```
 
-## 5. Supervisor procedure per PR
+## 5. Supervisor procedure
 
-1. CI green on the head commit (from T1.8 on; before that, the supervisor runs
-   `dotnet build && dotnet test` on the branch).
-2. Diff stays inside the task's *Owns* list. Anything outside → request changes.
-3. Each acceptance criterion has code **and** a test that would fail without it (read the test
-   bodies, not the count).
-4. Squash-merge. Update the board in 06-TASKS (status column) in the same sweep, then launch
-   every task whose dependencies are now all merged.
-5. A `## Blocked` PR: decide; if a contract changes, the supervisor makes that change on
-   `main` first (one small PR), then re-launches the task.
+1. Launch every task whose dependencies are all merged (at most 6 sessions at once).
+2. When a task's PR is merged, audit it after the fact: diff inside *Owns*; every acceptance
+   criterion has code **and** a test that would fail without it (read the test bodies). A gap
+   becomes a follow-up fix task, launched like any other.
+3. When `main` is red, nothing new launches until a fix task has made it green.
+4. Keep the board in 06-TASKS current with small supervisor PRs, merged when green.
+5. A `## Blocked` PR: decide; if a contract changes, the supervisor changes it on `main` first
+   (one small PR), then closes the blocked PR and re-launches the task.
+6. A session that ends without a merged PR: read its transcript, then relaunch the task with
+   the reason added to the prompt, or take the fix into a follow-up task.
 
 ## 6. Risks
 
