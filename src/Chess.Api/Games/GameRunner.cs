@@ -15,6 +15,8 @@ namespace Chess.Api.Games;
 /// Plays queued games to their end (03 §3.3, §7). A bounded queue feeds <c>Arena:MaxConcurrentGames</c> workers, so
 /// that many games run at once and no more. A game that fails, or is aborted, is recorded as <c>aborted</c>, and its
 /// worker goes on with the next game. A game cut off by the host stopping is left started; the start-up sweep closes it.
+/// Once the schema is ready, the games saved as queued but never started are queued again, oldest first, because the
+/// queue itself is lost with the process.
 /// </summary>
 public sealed class GameRunner(
     IDbContextFactory<ArenaDbContext> factory,
@@ -23,6 +25,7 @@ public sealed class GameRunner(
     IGameEventStream events,
     IOptions<GameRunnerOptions> options,
     TimeProvider clock,
+    DatabaseReadiness readiness,
     ILogger<GameRunner> logger) : BackgroundService, IGameRunner
 {
     private const int QueueCapacity = 1024;
@@ -66,8 +69,52 @@ public sealed class GameRunner(
 
         var workers = Enumerable.Range(0, options.Value.MaxConcurrentGames)
             .Select(_ => WorkAsync(stoppingToken))
+            .Append(RequeueQueuedGamesAsync(stoppingToken))
             .ToArray();
         await Task.WhenAll(workers);
+    }
+
+    /// <summary>
+    /// Waits for the schema, then queues every game that was saved but never started. Such a game is not in the queue
+    /// after a restart, so nothing else would play it. A game that is already queued or running is not queued twice.
+    /// </summary>
+    private async Task RequeueQueuedGamesAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await readiness.Finished.WaitAsync(stoppingToken);
+            if (readiness.Current.State != DatabaseState.Ready)
+            {
+                logger.LogWarning("The database is not ready, so queued games are not requeued");
+                return;
+            }
+
+            var queued = await QueuedGameIdsAsync(stoppingToken);
+            foreach (var gameId in queued)
+            {
+                await EnqueueAsync(gameId, stoppingToken);
+            }
+
+            logger.LogInformation("Requeued {Count} game(s) that were queued before the start", queued.Count);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // The host is stopping; the games stay queued in the database.
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Queued games could not be requeued");
+        }
+    }
+
+    private async Task<List<Guid>> QueuedGameIdsAsync(CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Games
+            .Where(g => g.StartedAt == null && g.FinishedAt == null)
+            .OrderBy(g => g.CreatedAt)
+            .Select(g => g.Id)
+            .ToListAsync(ct);
     }
 
     private async Task WorkAsync(CancellationToken stoppingToken)

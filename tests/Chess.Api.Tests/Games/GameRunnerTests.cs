@@ -318,6 +318,78 @@ public class GameRunnerTests
         Assert.Equal(2, players.Created);
     }
 
+    [Fact]
+    public async Task QueuedGamesLeftByARestartArePlayedOldestFirstAndAFinishedGameIsUntouched()
+    {
+        var players = new ScriptedPlayerFactory((descriptor, _) => new RandomChessPlayer(descriptor, Random.Shared.Next()));
+        await using var harness = new GameHarness(players, maxPlies: 20, maxConcurrentGames: 1);
+        // The newer game is saved first, so only its creation time puts the older one ahead of it.
+        var newer = await harness.SeedGameAsync(RandomPlayer, RandomPlayer, createdAt: GameHarness.CreatedAt.AddMinutes(1));
+        var older = await harness.SeedGameAsync(RandomPlayer, RandomPlayer, createdAt: GameHarness.CreatedAt);
+        var finished = await harness.SeedGameAsync(RandomPlayer, RandomPlayer, createdAt: GameHarness.CreatedAt.AddMinutes(2));
+        await harness.MarkFinishedAsync(finished, "0-1", "checkmate");
+        var finishedBefore = await harness.LoadGameAsync(finished);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var olderEvents = harness.Watch(older, timeout.Token);
+        var newerEvents = harness.Watch(newer, timeout.Token);
+
+        await harness.StartAsync();
+        harness.FinishMigration();
+
+        Assert.IsType<GameFinished>((await ReadUntilFinishedAsync(olderEvents))[^1]);
+        Assert.IsType<GameFinished>((await ReadUntilFinishedAsync(newerEvents))[^1]);
+        var olderGame = await harness.LoadGameAsync(older);
+        var newerGame = await harness.LoadGameAsync(newer);
+        Assert.NotNull(olderGame.FinishedAt);
+        Assert.NotNull(newerGame.FinishedAt);
+        Assert.Contains(olderGame.Termination, Terminations);
+        Assert.Contains(newerGame.Termination, Terminations);
+        Assert.True(olderGame.StartedAt < newerGame.StartedAt);
+
+        // Only the two queued games were played: four players, one per side each, and no moves for the finished game.
+        Assert.Equal(4, players.Created);
+        var finishedAfter = await harness.LoadGameAsync(finished);
+        Assert.Equal(finishedBefore.FinishedAt, finishedAfter.FinishedAt);
+        Assert.Equal(finishedBefore.StartedAt, finishedAfter.StartedAt);
+        Assert.Equal("0-1", finishedAfter.Result);
+        Assert.Equal("checkmate", finishedAfter.Termination);
+        Assert.Empty(await harness.LoadMovesAsync(finished));
+    }
+
+    [Fact]
+    public async Task AGameEnqueuedByHandAndAlsoRequeuedOnStartupIsPlayedOnce()
+    {
+        var players = new ScriptedPlayerFactory((descriptor, _) => new RandomChessPlayer(descriptor, 1));
+        await using var harness = new GameHarness(players, maxPlies: 20);
+        var gameId = await harness.SeedGameAsync(RandomPlayer, RandomPlayer);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var stream = harness.Watch(gameId, timeout.Token);
+
+        await harness.StartAsync();
+        await harness.Runner.EnqueueAsync(gameId, timeout.Token);
+        harness.FinishMigration();
+
+        var events = await ReadUntilFinishedAsync(stream);
+        Assert.IsType<GameFinished>(events[^1]);
+        Assert.Single(events, e => e is GameFinished);
+        Assert.Equal(2, players.Created);
+    }
+
+    private static async Task<List<IGameEvent>> ReadUntilFinishedAsync(IAsyncEnumerable<IGameEvent> stream)
+    {
+        var seen = new List<IGameEvent>();
+        await foreach (var e in stream)
+        {
+            seen.Add(e);
+            if (e is GameFinished)
+            {
+                break;
+            }
+        }
+
+        return seen;
+    }
+
     private static async Task<PlayerMove> WaitForever(MoveRequest request, CancellationToken ct)
     {
         await Task.Delay(Timeout.Infinite, ct);
