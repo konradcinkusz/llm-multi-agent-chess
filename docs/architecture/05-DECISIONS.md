@@ -141,3 +141,18 @@ incompatible shapes.
 03-TARGET-ARCHITECTURE §3, and every `Add…()` registration call in `Program.cs` as a stub in
 its own file. Every later task owns a disjoint set of files (06-TASKS, "Owns"). A task that
 needs to change a frozen contract stops and reports to the supervisor instead.
+
+## ADR-011 — Broadcast mode: a scheduled, sequential, paced 24-hour channel
+
+**Context.** The owner will run the arena as a 24/7 YouTube channel. Today the app can start single
+games and round-robin tournaments, but cannot (a) be planned ahead for a wall-clock window, (b) pace
+games so humans can follow them, or (c) present one clean page for OBS.
+**Decision.** Add a *schedule* aggregate (03 §9): a pure planner builds 24 h of slots from the chosen
+models; a dedicated broadcast runner plays them one at a time with a per-move delay and a gap between
+games; a chrome-less `/broadcast` page is the OBS Browser Source. Broadcast games are normal rated
+games. The app does not stream video (dependency budget); OBS does.
+**Consequences.** Cost: a 24 h day at 4 s/move is roughly 20–30 games of ~80 plies — ~2 000 Copilot
+requests × the model multiplier; the planner shows the estimate before saving, and premium models
+should be chosen knowingly. Reliability: backoff + skip policy so one failure never ends the stream.
+Restart: a running schedule resumes; the interrupted game is excluded from ratings. Copilot rate
+limits are the dominant operational risk and are handled by the failure policy, not by retries inside a move.
