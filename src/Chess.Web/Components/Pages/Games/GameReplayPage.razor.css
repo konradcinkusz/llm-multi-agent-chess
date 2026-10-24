@@ -1,0 +1,82 @@
+/* The replay (03 §6): the board first, the moves and details beside it when the screen is wide enough. */
+
+.replay-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+}
+
+@media (min-width: 900px) {
+    .replay-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+        align-items: start;
+    }
+}
+
+.replay-board {
+    max-width: 520px;
+    border-radius: 4px;
+}
+
+.replay-board:focus-visible {
+    outline: 3px solid #2a78d6;
+    outline-offset: 2px;
+}
+
+.replay-board ::deep .chess-board {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.replay-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 4px;
+}
+
+.replay-ply {
+    min-width: 9em;
+}
+
+.replay-notice {
+    padding: 8px 12px;
+    border-left: 3px solid #c58b2a;
+}
+
+.pgn-download {
+    display: inline-block;
+    margin-top: 8px;
+}
+
+.moves-scroll {
+    max-height: 420px;
+    overflow: auto;
+}
+
+.moves-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.moves-table th,
+.moves-table td {
+    padding: 4px 8px;
+    text-align: left;
+}
+
+.moves-table tr.current {
+    background: rgba(42, 120, 214, 0.15);
+}
+
+.move-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
