@@ -1,6 +1,44 @@
+using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.Configuration;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.Chess_Api>("api");
-builder.AddProject<Projects.Chess_Web>("web");
+// The fake profile (launchSettings "fake", or ARENA_FAKE=1) needs no Docker: the API runs the fake
+// LLM gateway on the InMemory provider and no Postgres is started. E2E tests use it too.
+var fake = builder.Configuration["ARENA_FAKE"] is "1" or "true";
+
+var api = builder.AddProject<Projects.Chess_Api>("api")
+    .WithHttpEndpoint(port: 5080, targetPort: 5080, name: "http", isProxied: false)
+    .WithHttpHealthCheck("/health");
+
+var web = builder.AddProject<Projects.Chess_Web>("web")
+    .WithHttpEndpoint(port: 5070, targetPort: 5070, name: "http", isProxied: false)
+    .WithExternalHttpEndpoints()
+    .WithReference(api)
+    .WaitFor(api);
+
+if (fake)
+{
+    api.WithEnvironment("Llm__Provider", "Fake")
+        .WithEnvironment("Database__Provider", "InMemory");
+}
+else
+{
+    // An existing Postgres (ConnectionStrings:chess in AppHost user secrets) replaces the container.
+    var database = builder.Configuration.GetConnectionString("chess") is not null
+        ? builder.AddConnectionString("chess")
+        : builder.AddPostgres("postgres", password: builder.AddParameter("postgres-password", new GenerateParameterDefault { MinLength = 32 }, secret: true))
+            .WithDataVolume("chess-arena-pg")
+            .AddDatabase("chess");
+
+    api.WithReference(database)
+        .WaitFor(database);
+
+    // Optional: without it the Copilot runtime uses the login already on this machine.
+    if (builder.Configuration["Parameters:copilot-github-token"] is { Length: > 0 })
+    {
+        api.WithEnvironment("Copilot__GitHubToken", builder.AddParameter("copilot-github-token", secret: true));
+    }
+}
 
 builder.Build().Run();

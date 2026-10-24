@@ -1,0 +1,7 @@
+# Optional: run with `pre-commit install`. scripts/setup-hooks.sh installs the same
+# gitleaks check as a plain git hook when the pre-commit tool is not wanted.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
