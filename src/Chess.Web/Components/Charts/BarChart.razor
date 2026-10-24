@@ -1,0 +1,87 @@
+@using static Chess.Web.Components.Charts.ChartGeometry
+
+<ChartFrame Title="@Title" Description="@Description">
+    @if (Items.Count == 0)
+    {
+        <p class="chart-empty">No data.</p>
+    }
+    else
+    {
+        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+            @foreach (var tick in _ticks)
+            {
+                <line class="chart-grid" x1="@Num(PlotLeft)" y1="@Num(_scale.Map(tick))" x2="@Num(PlotRight)" y2="@Num(_scale.Map(tick))" />
+                <ChartText class="chart-tick" x="@Num(PlotLeft - 8)" y="@Num(_scale.Map(tick) + 4)" text-anchor="end">@Num(tick)</ChartText>
+            }
+
+            @for (var i = 0; i < Items.Count; i++)
+            {
+                var item = Items[i];
+                var x = PlotLeft + i * _band + Gap / 2;
+                var top = _scale.Map(item.Value);
+                var centre = x + (_band - Gap) / 2;
+                <g class="chart-bar" data-bar="@item.Label">
+                    <path d="@VerticalBar(x, top, _band - Gap, PlotBottom - top)" style="fill: @Colour">
+                        <title>@item.Label: @Fixed(item.Value, ValueFormat)</title>
+                    </path>
+                    <ChartText class="chart-value" x="@Num(centre)" y="@Num(top - 6)" text-anchor="middle">@Fixed(item.Value, ValueFormat)</ChartText>
+                    <ChartText class="chart-tick" x="@Num(centre)" y="@Num(PlotBottom + 16)" text-anchor="middle">@item.Label</ChartText>
+                </g>
+            }
+
+            <line class="chart-baseline" x1="@Num(PlotLeft)" y1="@Num(PlotBottom)" x2="@Num(PlotRight)" y2="@Num(PlotBottom)" />
+        </svg>
+        <ChartTable Headers="_tableHeaders" Rows="_tableRows" />
+    }
+</ChartFrame>
+
+@code {
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>The categories, drawn left to right in the given order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<CategoryValue> Items { get; set; } = [];
+
+    /// <summary>Upper end of the value axis; defaults to the largest value.</summary>
+    [Parameter]
+    public double? Max { get; set; }
+
+    /// <summary>Fill of every bar. A single series takes the first categorical slot.</summary>
+    [Parameter]
+    public string Colour { get; set; } = ChartPalette.Series(0);
+
+    [Parameter]
+    public string ValueFormat { get; set; } = "0.##";
+
+    private const double Width = 640;
+    private const double Height = 300;
+    private const double PlotLeft = 44;
+    private const double PlotRight = Width - 10;
+    private const double PlotTop = 24;
+    private const double PlotBottom = 240;
+
+    private LinearScale _scale;
+    private double _band;
+    private IReadOnlyList<double> _ticks = [];
+    private string _viewBox = "";
+    private IReadOnlyList<string> _tableHeaders = [];
+    private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
+
+    protected override void OnParametersSet()
+    {
+        var largest = Max ?? Items.Select(i => i.Value).DefaultIfEmpty(1).Max();
+        var (low, high, ticks) = NiceAxis(0, largest);
+        _scale = new LinearScale(low, high, PlotBottom, PlotTop);
+        _ticks = ticks;
+        _band = Items.Count == 0 ? 0 : (PlotRight - PlotLeft) / Items.Count;
+        _viewBox = $"0 0 {Num(Width)} {Num(Height)}";
+
+        _tableHeaders = ["Category", "Value"];
+        _tableRows = Items.Select(i => (IReadOnlyList<string>)new[] { i.Label, Fixed(i.Value, ValueFormat) }).ToList();
+    }
+}

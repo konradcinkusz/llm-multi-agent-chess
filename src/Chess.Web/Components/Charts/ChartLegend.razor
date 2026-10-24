@@ -1,0 +1,15 @@
+@if (Items.Count >= 2)
+{
+    <ul class="chart-legend" aria-label="Legend">
+        @foreach (var item in Items)
+        {
+            <li><span class="chart-swatch" style="background: @item.Color"></span>@item.Name</li>
+        }
+    </ul>
+}
+
+@code {
+    /// <summary>One entry per series. Nothing renders below two entries: a single series is named by the title.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ChartLegendItem> Items { get; set; } = [];
+}

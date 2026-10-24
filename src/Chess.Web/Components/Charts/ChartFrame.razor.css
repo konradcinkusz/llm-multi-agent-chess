@@ -1,0 +1,180 @@
+/* Chart tokens (03 §6.1). Light values are the default; dark values apply under prefers-color-scheme.
+   Charts read colour only through these custom properties, so the two themes never diverge. */
+.chart-frame {
+    --chart-surface: #fcfcfb;
+    --chart-ink: #0b0b0b;
+    --chart-ink-2: #52514e;
+    --chart-muted: #898781;
+    --chart-grid: #e1e0d9;
+    --chart-baseline: #c3c2b7;
+    --chart-neutral: #898781;
+    --chart-accent: var(--chart-series-0);
+    --chart-series-0: #2a78d6;
+    --chart-series-1: #eb6834;
+    --chart-series-2: #1baf7a;
+    --chart-series-3: #eda100;
+    --chart-series-4: #e87ba4;
+    --chart-series-5: #008300;
+    --chart-series-6: #6250d6;
+    --chart-series-7: #e34948;
+    --chart-diverge-low: #2a78d6;
+    --chart-diverge-high: #e34948;
+    --chart-diverge-mid: #f0efec;
+
+    margin: 0 0 24px;
+    padding: 0;
+    background: var(--chart-surface);
+    color: var(--chart-ink);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+    .chart-frame {
+        --chart-surface: #1a1a19;
+        --chart-ink: #f0efec;
+        --chart-ink-2: #c3c2b7;
+        --chart-muted: #898781;
+        --chart-grid: #2c2c2a;
+        --chart-baseline: #383835;
+        --chart-neutral: #898781;
+        --chart-series-0: #3987e5;
+        --chart-series-1: #d95926;
+        --chart-series-2: #199e70;
+        --chart-series-3: #c98500;
+        --chart-series-4: #d55181;
+        --chart-series-5: #008300;
+        --chart-series-6: #9085e9;
+        --chart-series-7: #e66767;
+        --chart-diverge-low: #3987e5;
+        --chart-diverge-high: #e66767;
+        --chart-diverge-mid: #383835;
+    }
+}
+
+.chart-frame .chart-title {
+    margin: 0 0 8px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.chart-frame .chart-description {
+    margin: 0 0 8px;
+    color: var(--chart-ink-2);
+}
+
+.chart-frame .chart-empty {
+    color: var(--chart-ink-2);
+}
+
+.chart-frame ::deep .chart-svg {
+    display: block;
+    width: 100%;
+    max-width: 720px;
+    height: auto;
+    overflow: visible;
+}
+
+.chart-frame ::deep .chart-grid {
+    stroke: var(--chart-grid);
+    stroke-width: 1;
+}
+
+.chart-frame ::deep .chart-baseline {
+    stroke: var(--chart-baseline);
+    stroke-width: 1;
+}
+
+.chart-frame ::deep .chart-tick {
+    fill: var(--chart-muted);
+    font-size: 11px;
+}
+
+.chart-frame ::deep .chart-axis-title {
+    fill: var(--chart-ink-2);
+    font-size: 11px;
+}
+
+.chart-frame ::deep .chart-label {
+    fill: var(--chart-ink);
+    font-size: 12px;
+}
+
+.chart-frame ::deep .chart-value {
+    fill: var(--chart-ink);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-frame ::deep .chart-whisker {
+    stroke: var(--chart-ink-2);
+    stroke-width: 1.5;
+}
+
+.chart-frame ::deep .chart-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.chart-frame ::deep .chart-ring {
+    stroke: var(--chart-surface);
+    stroke-width: 2;
+}
+
+.chart-frame ::deep .chart-hit {
+    fill: transparent;
+}
+
+.chart-frame ::deep .chart-hole {
+    fill: none;
+    stroke: var(--chart-grid);
+}
+
+.chart-frame ::deep .chart-muted-cell {
+    opacity: 0.4;
+}
+
+.chart-frame ::deep .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chart-frame ::deep .chart-legend li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chart-frame ::deep .chart-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.chart-frame ::deep .chart-table {
+    margin-top: 8px;
+}
+
+.chart-frame ::deep .chart-table summary {
+    color: var(--chart-ink-2);
+    cursor: pointer;
+}
+
+.chart-frame ::deep .chart-table table {
+    margin-top: 6px;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-frame ::deep .chart-table th,
+.chart-frame ::deep .chart-table td {
+    padding: 4px 12px 4px 0;
+    border-bottom: 1px solid var(--chart-grid);
+    text-align: left;
+}

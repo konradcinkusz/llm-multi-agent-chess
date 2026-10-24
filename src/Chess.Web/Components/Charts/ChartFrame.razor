@@ -1,0 +1,21 @@
+<figure class="chart-frame">
+    <figcaption class="chart-title">@Title</figcaption>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p class="chart-description">@Description</p>
+    }
+    @ChildContent
+</figure>
+
+@code {
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    /// <summary>Optional sentence that says how to read the chart.</summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}
