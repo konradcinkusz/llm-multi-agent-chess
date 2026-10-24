@@ -16,6 +16,7 @@ builder.AddMoveQualityPipeline();
 builder.AddBroadcast();
 
 var app = builder.Build();
+app.UseOriginGuard();
 app.MapDefaultEndpoints();
 var api = app.MapGroup("/api");
 api.MapCatalogEndpoints();
