@@ -132,10 +132,49 @@ public sealed class GameRunner(
         }
     }
 
+    /// <summary>
+    /// Plays one game to its end in the caller's task, outside the queue, for a broadcast slot (03 §9.1). The game is
+    /// aborted when <paramref name="abort"/> is cancelled and recorded as aborted, as a queued game is.
+    /// </summary>
+    /// <returns>
+    /// The end that was recorded, or null when the game was not played to an end: it could not be loaded or played, or
+    /// the host is stopping (the game is then left started, and the start-up sweep closes it).
+    /// </returns>
+    public async Task<GameEnd?> PlayToEndAsync(Guid gameId, GameRunHooks? hooks, CancellationToken abort, CancellationToken stoppingToken)
+    {
+        var slot = new GameSlot();
+        if (!_slots.TryAdd(gameId, slot))
+        {
+            throw new InvalidOperationException($"Game {gameId} is already queued or running.");
+        }
+
+        using var registration = abort.Register(slot.Abort);
+        try
+        {
+            return await PlayGameAsync(gameId, slot, hooks, stoppingToken);
+        }
+        finally
+        {
+            _slots.TryRemove(gameId, out _);
+        }
+    }
+
     private async Task RunGameAsync(Guid gameId, CancellationToken stoppingToken)
     {
+        try
+        {
+            await PlayGameAsync(gameId, _slots[gameId], null, stoppingToken);
+        }
+        finally
+        {
+            _slots.TryRemove(gameId, out _);
+        }
+    }
+
+    /// <returns>The end that was recorded, or null when the game was not played to an end (see <see cref="PlayToEndAsync"/>).</returns>
+    private async Task<GameEnd?> PlayGameAsync(Guid gameId, GameSlot slot, GameRunHooks? hooks, CancellationToken stoppingToken)
+    {
         // Only the play itself is cancelled by an abort, so a game aborted while queued is still recorded as aborted.
-        var slot = _slots[gameId];
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, slot.Token);
         try
         {
@@ -144,25 +183,23 @@ public sealed class GameRunner(
             if (game is null || game.FinishedAt is not null)
             {
                 logger.LogWarning("Game {GameId} is missing or already finished; not playing it", gameId);
-                return;
+                return null;
             }
 
-            var run = new GameRun(db, game, players, analyzer, events, options.Value, clock);
+            var run = new GameRun(db, game, hooks?.Players ?? players, analyzer, events, options.Value, clock, hooks?.Pacer);
             var end = await PlayOrEndAsync(run, gameId, slot, stoppingToken, cancellation.Token);
             if (end is null)
             {
-                return;
+                return null;
             }
 
             await FinishAsync(run, end, gameId, stoppingToken);
+            return end;
         }
         catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
         {
             logger.LogError(ex, "Game {GameId} could not be played", gameId);
-        }
-        finally
-        {
-            _slots.TryRemove(gameId, out _);
+            return null;
         }
     }
 
