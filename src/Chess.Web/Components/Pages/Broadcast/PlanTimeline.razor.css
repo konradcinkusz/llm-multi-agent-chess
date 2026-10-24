@@ -1,0 +1,46 @@
+/* The preview timeline (03 §9.4). Text follows the page colour, so light and dark themes both read. */
+
+.plan-timeline {
+    margin: 8px 0 4px;
+}
+
+.plan-timeline svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    color: CanvasText;
+}
+
+.plan-axis line {
+    stroke: currentColor;
+    stroke-opacity: 0.25;
+}
+
+.plan-axis text {
+    fill: currentColor;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.plan-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.875rem;
+}
+
+.plan-legend li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.plan-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}

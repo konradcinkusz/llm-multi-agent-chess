@@ -1,0 +1,11 @@
+@* One hour mark of the preview timeline. A component, because a <text> element with attributes is not allowed inside a Razor code block. *@
+<line x1="@X" y1="0" x2="@X" y2="@AxisY" />
+<text x="@X" y="@(AxisY + 16)" text-anchor="middle">@Label</text>
+
+@code {
+    [Parameter, EditorRequired] public double X { get; set; }
+
+    [Parameter, EditorRequired] public double AxisY { get; set; }
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+}

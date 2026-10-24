@@ -1,0 +1,463 @@
+@page "/broadcast"
+@layout BroadcastLayout
+@using System.Globalization
+@using Chess.Web.Api
+@using Chess.Web.Components.Layout
+@using Chess.Web.Components.Pages.Play
+@using Chess.Web.Components.Shared
+@implements IDisposable
+@inject ArenaApiClient Api
+@inject GameEventsClient Events
+@inject IHttpClientFactory HttpClients
+
+<PageTitle>LLM Chess 24h · Broadcast</PageTitle>
+
+<div class="bc-stage @ThemeClass" data-testid="broadcast-stage">
+    <header class="bc-head">
+        <h1 class="bc-title" data-testid="broadcast-title">@LiveBroadcastView.Title(_slot?.Index, _totalGames)</h1>
+        <div class="bc-head-right">
+            @if (_now is null || _linkError is not null)
+            {
+                <p class="bc-link" data-testid="broadcast-link">@LinkText</p>
+            }
+            <p class="bc-clock" data-testid="broadcast-clock">@DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture)</p>
+        </div>
+    </header>
+
+    <section class="bc-game" aria-label="Current game">
+        <div class="bc-player" data-testid="broadcast-black">
+            <span class="bc-swatch" style="background: @ColourOf(_live?.Summary.Black.ModelId)"></span>
+            <span>@PlayerName(_live?.Summary.Black)</span>
+        </div>
+
+        <div class="bc-board-frame">
+            <div class="bc-board" data-testid="broadcast-board">
+                <ChessBoardSvg Fen="@BoardFen" LastMove="@LastMove" />
+            </div>
+
+            @if (_now?.Notice is { } notice)
+            {
+                <div class="bc-card bc-notice" data-testid="broadcast-notice" role="status">
+                    <h2>Technical break</h2>
+                    <p>@notice</p>
+                </div>
+            }
+            else if (_now is { Current: null })
+            {
+                <div class="bc-card" data-testid="broadcast-intermission" role="status">
+                    <h2>@InterludeTitle</h2>
+                    <p>@IntermissionLine</p>
+                </div>
+            }
+        </div>
+
+        <div class="bc-player" data-testid="broadcast-white">
+            <span class="bc-swatch" style="background: @ColourOf(_live?.Summary.White.ModelId)"></span>
+            <span>@PlayerName(_live?.Summary.White)</span>
+        </div>
+
+        <p class="bc-status" data-testid="broadcast-status" role="status">@StatusLine</p>
+    </section>
+
+    <aside class="bc-side">
+        <section class="bc-panel" data-testid="broadcast-leaderboard" aria-label="Leaderboard">
+            <h2>Leaderboard</h2>
+            <ol class="bc-table">
+                <li class="bc-table-head" aria-hidden="true">
+                    <span></span><span></span><span></span><span>Score</span><span>Rating</span>
+                </li>
+                @foreach (var (model, rank) in Leaders.Select((item, index) => (item, index + 1)))
+                {
+                    <li data-model="@model.Model">
+                        <span class="bc-rank">@rank</span>
+                        <span class="bc-swatch" style="background: @ColourOf(model.Model)"></span>
+                        <span class="bc-name">@ModelName(model.Model)@if (model.Provisional)
+                            {
+                                <span class="bc-prov"> · provisional</span>
+                            }</span>
+                        <span class="bc-num">@model.ArenaScore.ToString("0.0", CultureInfo.InvariantCulture)</span>
+                        <span class="bc-num">@(model.Provisional ? "—" : Math.Round(model.Rating).ToString("0", CultureInfo.InvariantCulture))</span>
+                    </li>
+                }
+            </ol>
+            @if (Leaders.Count == 0)
+            {
+                <p class="bc-muted">Ratings appear after the first game.</p>
+            }
+        </section>
+
+        <div class="bc-lower">
+            <section class="bc-panel" data-testid="broadcast-moves" aria-label="Moves">
+                <h2>Moves</h2>
+                <ol class="bc-moves">
+                    @foreach (var row in MoveTail)
+                    {
+                        <li data-move="@row.Number">
+                            <span class="bc-num-move">@(row.Number).</span>
+                            <span class="bc-san">@row.White</span>
+                            <span class="bc-san">@row.Black</span>
+                        </li>
+                    }
+                </ol>
+            </section>
+
+            <section class="bc-panel" data-testid="broadcast-upnext" aria-label="Up next">
+                <h2>Up next</h2>
+                @if (_now is { Next.Count: > 0 } now)
+                {
+                    <ol class="bc-next">
+                        @foreach (var slot in now.Next)
+                        {
+                            <li>
+                                <span class="bc-time">@LiveBroadcastView.StartLabel(slot.PlannedStart)</span>
+                                <span class="bc-name">@PlayerName(slot.White) vs @PlayerName(slot.Black)</span>
+                            </li>
+                        }
+                    </ol>
+                }
+                else
+                {
+                    <p class="bc-muted">Nothing scheduled after this game.</p>
+                }
+            </section>
+        </div>
+    </aside>
+</div>
+
+@code {
+    /// <summary>
+    /// The name <c>AddHttpClient&lt;ArenaApiClient&gt;</c> registers its client under. The broadcast reads use that client's
+    /// base address, service discovery and resilience handler, so they need no registration of their own.
+    /// </summary>
+    private const string ArenaClientName = "ArenaApiClient";
+
+    /// <summary>The first wait before reconnecting a stream that closed early. It doubles up to <see cref="MaxReconnectDelay"/>.</summary>
+    private static readonly TimeSpan MaxReconnectDelay = TimeSpan.FromSeconds(30);
+
+    /// <summary>The <c>?theme=</c> option: <c>light</c> for a light background, anything else is the dark default.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "theme")]
+    public string? Theme { get; set; }
+
+    /// <summary>The <c>?top=</c> option: how many models the leaderboard shows (default 8).</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "top")]
+    public int? Top { get; set; }
+
+    /// <summary>How often the page reads <c>/api/broadcast/now</c>.</summary>
+    [Parameter]
+    public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>The first wait before reconnecting a live stream.</summary>
+    [Parameter]
+    public TimeSpan ReconnectDelay { get; set; } = TimeSpan.FromSeconds(2);
+
+    private readonly CancellationTokenSource _lifetime = new();
+    private CancellationTokenSource? _follow;
+    private LiveBroadcastClient? _broadcast;
+
+    private IReadOnlyList<ModelDto> _models = [];
+    private IReadOnlyList<string> _modelIds = [];
+    private LeaderboardDto? _leaderboard;
+    private LiveNowNext? _now;
+    private string? _linkError;
+    private LiveSlot? _slot;
+    private LiveGame? _live;
+    private int? _totalGames;
+
+    private bool IsLight => string.Equals(Theme, "light", StringComparison.OrdinalIgnoreCase);
+
+    private string ThemeClass => IsLight ? "bc-light" : "bc-dark";
+
+    private LiveBroadcastClient Broadcast => _broadcast ??= new LiveBroadcastClient(HttpClients.CreateClient(ArenaClientName));
+
+    private IReadOnlyList<ModelRating> Leaders => LiveBroadcastView.Leaderboard(_leaderboard?.Models ?? [], LiveBroadcastView.ClampTop(Top));
+
+    private IReadOnlyList<MoveRow> MoveTail => _live is null ? [] : LiveBroadcastView.MoveTail(_live.Moves);
+
+    private string BoardFen => _live?.CurrentFen ?? LiveGame.StartFen;
+
+    /// <summary>The square pair of the last move, drawn as the board highlight.</summary>
+    private BoardMove? LastMove => _live is { Moves.Count: > 0 } live
+        ? LiveBoardHighlight.Of(live.Moves.Count > 1 ? live.Moves[^2].FenAfter : LiveGame.StartFen, live.Moves[^1].FenAfter, live.Moves[^1].San)
+        : null;
+
+    private string LinkText => _now is null && _linkError is null ? "Connecting to the arena…" : "Reconnecting to the arena…";
+
+    private string StatusLine => _live switch
+    {
+        null => string.Empty,
+        { Outcome: { } outcome } => $"Result {outcome.Result}",
+        { Thinking: { } thinking } => $"Move {(thinking.Ply + 1) / 2} · {ModelName(thinking.ModelId)} is thinking…",
+        _ => "Game in progress.",
+    };
+
+    /// <summary>The heading of the card shown while no game is on: off air, paused, or between two games.</summary>
+    private string InterludeTitle => _now?.Status switch
+    {
+        "idle" => "Off air",
+        "paused" => "Paused",
+        _ => "Intermission",
+    };
+
+    private string IntermissionLine
+    {
+        get
+        {
+            if (_now is { Next.Count: > 0 } now)
+            {
+                var next = now.Next[0];
+                return $"Next game at {LiveBroadcastView.StartLabel(next.PlannedStart)}: {PlayerName(next.White)} vs {PlayerName(next.Black)}.";
+            }
+
+            return _now?.Status switch
+            {
+                "idle" => "No broadcast is running.",
+                "paused" => "The broadcast will continue when it is resumed.",
+                _ => "The schedule has no further games.",
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _models = await Api.GetModelsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            // Names fall back to the model ids until the next start.
+        }
+
+        _modelIds = _models.Select(model => model.Id).Order(StringComparer.Ordinal).ToList();
+        await RefreshLeaderboardAsync(_lifetime.Token);
+
+        _ = PollNowAsync(_lifetime.Token);
+        _ = TickClockAsync(_lifetime.Token);
+    }
+
+    private async Task PollNowAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(PollInterval);
+        try
+        {
+            do
+            {
+                await RefreshNowAsync(ct);
+            }
+            while (await timer.WaitForNextTickAsync(ct));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The page has gone.
+        }
+    }
+
+    private async Task TickClockAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try
+        {
+            do
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+            while (await timer.WaitForNextTickAsync(ct));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The page has gone.
+        }
+    }
+
+    private async Task RefreshNowAsync(CancellationToken ct)
+    {
+        try
+        {
+            var now = await Broadcast.GetNowAsync(ct);
+            await InvokeAsync(() => ApplyNow(now));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The last view stays on screen with the link line until a poll succeeds.
+            await InvokeAsync(() =>
+            {
+                _linkError = ex.Message;
+                StateHasChanged();
+            });
+        }
+    }
+
+    /// <summary>Runs on the render thread. A new running game is followed; the same one is left alone.</summary>
+    private void ApplyNow(LiveNowNext now)
+    {
+        _now = now;
+        _linkError = null;
+        if (now.Current is { GameId: { } gameId } current && gameId != _live?.GameId)
+        {
+            FollowGame(current, gameId);
+        }
+
+        StateHasChanged();
+    }
+
+    private void FollowGame(LiveSlot slot, Guid gameId)
+    {
+        // Cancel only: the previous game's readers may still hold its token.
+        _follow?.Cancel();
+        _follow = new CancellationTokenSource();
+
+        _slot = slot;
+        // The placeholder summary carries the players from the slot; the load replaces it with the server's.
+        _live = new LiveGame(new GameSummaryDto(gameId, null, slot.White, slot.Black, true, "running", "*", null, 0,
+            slot.PlannedStart, null));
+        _ = FollowAsync(gameId, _follow.Token);
+        _ = RefreshScheduleAsync(_follow.Token);
+    }
+
+    /// <summary>
+    /// Opens the stream first, then loads the game (03 §5.1), as the live game page does. When the game is over the
+    /// leaderboard is read again, so the ratings include the game that just ended.
+    /// </summary>
+    private async Task FollowAsync(Guid gameId, CancellationToken ct)
+    {
+        try
+        {
+            var reading = ReadStreamAsync(gameId, ct);
+            await LoadAsync(gameId, ct);
+            await reading;
+            await RefreshLeaderboardAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The broadcast moved on to another game, or the page has gone.
+        }
+    }
+
+    private async Task ReadStreamAsync(Guid gameId, CancellationToken ct)
+    {
+        var delay = ReconnectDelay;
+        while (true)
+        {
+            try
+            {
+                await foreach (var message in Events.StreamAsync(gameId, ct))
+                {
+                    delay = ReconnectDelay;
+
+                    // ComponentBase.InvokeAsync has no Func<T> overload, so the result comes back through a local.
+                    var result = ApplyResult.Unknown;
+                    await InvokeAsync(() => result = ApplyEvent(gameId, message, ct));
+                    if (result == ApplyResult.Gap)
+                    {
+                        await LoadAsync(gameId, ct);
+                    }
+
+                    if (message.Type == "GameFinished")
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A stream that cannot be read is retried below, the same as one that closed early.
+            }
+
+            // The stream closed before the game finished, or could not be opened: load the game as it is, then reconnect.
+            await LoadAsync(gameId, ct);
+            var over = false;
+            await InvokeAsync(() => over = IsOver(gameId));
+            if (over)
+            {
+                return;
+            }
+
+            await Task.Delay(delay, ct);
+            delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, MaxReconnectDelay.Ticks));
+        }
+    }
+
+    private async Task LoadAsync(Guid gameId, CancellationToken ct)
+    {
+        try
+        {
+            var detail = await Api.GetGameAsync(gameId, ct);
+            await InvokeAsync(() =>
+            {
+                if (!ct.IsCancellationRequested && _live is { } live && live.GameId == gameId)
+                {
+                    live.Load(detail);
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The next stream event or the next reconnect loads the game again.
+        }
+    }
+
+    /// <summary>Runs on the render thread. Events for a game the page has left are dropped.</summary>
+    private ApplyResult ApplyEvent(Guid gameId, GameEventMessage message, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested || _live is not { } live || live.GameId != gameId)
+        {
+            return ApplyResult.Unknown;
+        }
+
+        var result = live.Apply(message);
+        StateHasChanged();
+        return result;
+    }
+
+    private bool IsOver(Guid gameId) => _live is not { } live || live.GameId != gameId || live.IsFinished;
+
+    private async Task RefreshLeaderboardAsync(CancellationToken ct)
+    {
+        try
+        {
+            var board = await Api.GetLeaderboardAsync(ct);
+            await InvokeAsync(() =>
+            {
+                _leaderboard = board;
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The last table stays on screen; the next finished game reads it again.
+        }
+    }
+
+    private async Task RefreshScheduleAsync(CancellationToken ct)
+    {
+        try
+        {
+            var schedules = await Broadcast.GetSchedulesAsync(ct);
+            var active = schedules.FirstOrDefault(schedule => schedule.Status is "running" or "paused");
+            await InvokeAsync(() =>
+            {
+                _totalGames = active?.SlotsTotal;
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The header keeps the last game count it had.
+        }
+    }
+
+    private string PlayerName(PlayerSpec? player) => player is null ? "—" : ModelName(player.ModelId);
+
+    private string ModelName(string modelId) => _models.FirstOrDefault(model => model.Id == modelId)?.DisplayName ?? modelId;
+
+    private string ColourOf(string? modelId) =>
+        modelId is null ? "transparent" : LiveBroadcastView.Colour(modelId, _modelIds, IsLight);
+
+    public void Dispose()
+    {
+        // Cancel only: disposing a source a reader may still hold a token from can throw in those readers.
+        _lifetime.Cancel();
+        _follow?.Cancel();
+    }
+}

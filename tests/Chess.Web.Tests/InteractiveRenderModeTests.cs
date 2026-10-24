@@ -31,4 +31,10 @@ public class InteractiveRenderModeTests
     {
         Assert.Contains("<HeadOutlet @rendermode=\"InteractiveServer\"", AppRazor());
     }
+
+    [Fact]
+    public void Scoped_component_styles_bundle_is_linked()
+    {
+        Assert.Contains("Chess.Web.styles.css", AppRazor());
+    }
 }

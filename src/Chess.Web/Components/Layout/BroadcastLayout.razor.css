@@ -1,0 +1,8 @@
+/* A fixed full-viewport frame: nothing in it can scroll, and the pointer is hidden for OBS. */
+.broadcast-layout {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: #000;
+    cursor: none;
+}
