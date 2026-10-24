@@ -1,7 +1,7 @@
 # 04 — Migration plan
 
 How the repository gets from [01-CURRENT-STATE](01-CURRENT-STATE.md) to
-[03-TARGET-ARCHITECTURE](03-TARGET-ARCHITECTURE.md). The work is split into **30 atomic
+[03-TARGET-ARCHITECTURE](03-TARGET-ARCHITECTURE.md). The work is split into **32 atomic
 tasks** ([06-TASKS](06-TASKS.md)), each small enough for one implementation session
 (Claude Haiku 5.5) and one pull request, and each owning a disjoint set of files so that tasks
 in the same wave can run in parallel without merge conflicts (ADR-010).
@@ -31,17 +31,19 @@ flowchart LR
     T13 --> T22[T2.2 game runner]
     T22 --> T23[T2.3 games API + SSE] & T24[T2.4 tournaments] & T28[T2.8 move quality]
     T17 --> T28
-    T13 & T16 --> T25[T2.5 ratings API]
+    T13 & T16 --> T25[T2.5 ratings API] & T29[T2.9 snapshots + breakdown]
     T11 & T14 --> T26[T2.6 models + status]
     T13 --> T27[T2.7 attempts API]
     T19 & T23 & T26 --> T31[T3.1 live game page]
-    T19 & T25 --> T32[T3.2 leaderboard] & T33[T3.3 head-to-head]
+    T19 --> T30[T3.0 chart components]
+    T30 & T25 & T29 --> T32[T3.2 Results page]
+    T19 & T25 --> T33[T3.3 head-to-head]
     T19 & T24 --> T34[T3.4 tournaments UI]
     T19 & T23 --> T35[T3.5 archive + replay]
     T19 & T27 --> T36[T3.6 attempts UI]
     T12 & T31 & T35 --> T41[T4.1 E2E]
     T21 & T22 --> T42[T4.2 AI evals]
-    T31 & T32 & T33 & T34 & T35 & T36 --> T43[T4.3 docs]
+    T30 & T31 & T32 & T33 & T34 & T35 & T36 --> T43[T4.3 docs]
     T41 & T42 & T43 --> T44[T4.4 final review]
 ```
 
@@ -49,8 +51,8 @@ flowchart LR
 |---|---|---|---|
 | 0 | T0.1 → T0.2 | 1 (sequential) | `main` builds; `dotnet test` green; every contract from 03 §3 and §5.1 exists |
 | 1 | T1.1 – T1.10 | up to 10 (recommended ≤ 6 at once) | each PR green; after the last merge, `main` green |
-| 2 | T2.1 – T2.8 | up to 8, each as soon as its dependencies are merged | — |
-| 3 | T3.1 – T3.6 | up to 6 | — |
+| 2 | T2.1 – T2.9 | up to 9, each as soon as its dependencies are merged | — |
+| 3 | T3.0 – T3.6 | up to 7 (T3.2 after T3.0) | — |
 | 4 | T4.1 – T4.4 | 3, then T4.4 alone | review finds no blocking item |
 
 A task starts **as soon as all its dependencies are merged**, not when its whole wave is

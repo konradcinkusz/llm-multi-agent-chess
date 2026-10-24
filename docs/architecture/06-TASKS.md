@@ -32,15 +32,17 @@ Legacy reference: the last state of the old code is commit `f0f5845`; port from 
 | T2.6 | Models + status endpoints, health checks | T1.1, T1.4 | todo |
 | T2.7 | Attempts (prompt log) endpoint | T1.3 | todo |
 | T2.8 | Post-game move-quality pipeline | T1.7, T2.2 | todo |
+| T2.9 | Rating snapshots + results breakdown endpoints | T1.3, T1.6 | todo |
 | T3.1 | UI: live game page | T1.9, T2.3, T2.6 | todo |
-| T3.2 | UI: leaderboard | T1.9, T2.5 | todo |
-| T3.3 | UI: head-to-head + matrix | T1.9, T2.5 | todo |
+| T3.0 | UI: SVG chart components | T1.9 | todo |
+| T3.2 | UI: Results page — Big Picture + charts | T3.0, T2.5, T2.9 | todo |
+| T3.3 | UI: head-to-head comparison | T1.9, T2.5 | todo |
 | T3.4 | UI: tournaments | T1.9, T2.4 | todo |
 | T3.5 | UI: game archive + replay | T1.9, T2.3 | todo |
 | T3.6 | UI: attempts log | T1.9, T2.7 | todo |
 | T4.1 | E2E (Playwright) on the AppHost with the fake gateway | T1.2, T3.1, T3.5 | todo |
 | T4.2 | AI evals: offline scenario suite + live smoke script | T2.1, T2.2 | todo |
-| T4.3 | README, CLAUDE.md, CHANGELOG final | T3.1 – T3.6 | todo |
+| T4.3 | README, CLAUDE.md, CHANGELOG final | T3.0 – T3.6 | todo |
 | T4.4 | Final architecture review | T4.1, T4.2, T4.3 | todo |
 
 Common *Verify* for every .NET task (abbreviated **V-NET** below):
@@ -119,6 +121,7 @@ dotnet test Chess.sln
    builder.AddGameRunner();
    builder.AddTournaments();
    builder.AddRatings();
+   builder.AddResults();
    builder.AddCatalog();
    builder.AddAttempts();
    builder.AddMoveQualityPipeline();
@@ -130,6 +133,7 @@ dotnet test Chess.sln
    api.MapGameEndpoints();
    api.MapTournamentEndpoints();
    api.MapRatingEndpoints();
+   api.MapResultEndpoints();
    api.MapAttemptEndpoints();
    app.Run();
 
@@ -143,6 +147,7 @@ dotnet test Chess.sln
    `Chess.Analysis/AnalysisServiceCollectionExtensions.cs`, `Chess.Api/Players/PlayersExtensions.cs`,
    `Chess.Api/Games/GameRunnerExtensions.cs`, `Chess.Api/Games/GameEndpoints.cs`,
    `Chess.Api/Tournaments/TournamentExtensions.cs`, `Chess.Api/Ratings/RatingExtensions.cs`,
+   `Chess.Api/Results/ResultsExtensions.cs`,
    `Chess.Api/Catalog/CatalogExtensions.cs`, `Chess.Api/Attempts/AttemptExtensions.cs`,
    `Chess.Api/Quality/QualityPipelineExtensions.cs`.
    `appsettings.json`: Kestrel endpoint `http://127.0.0.1:5080`; sections `Arena`
@@ -192,7 +197,8 @@ database `chess`; secret parameter `postgres-password` and optional secret param
 `WithHttpHealthCheck("/health")`, a fixed HTTP endpoint on port 5080 (`IsProxied = false`),
 env `Copilot__GitHubToken` from the parameter only when set; `Chess.Web` named `web` with
 `WithReference(api)`, `WaitFor(api)`, fixed port 5070, `WithExternalHttpEndpoints()`.
-An `--fake` launch profile (or `ARENA_FAKE=1` env) that sets `Llm__Provider=Fake` and
+If the connection string `chess` is configured on the AppHost (user secrets), use
+`AddConnectionString("chess")` instead of the container (existing Postgres). An `--fake` launch profile (or `ARENA_FAKE=1` env) that sets `Llm__Provider=Fake` and
 `Database__Provider=InMemory` on `api` and omits Postgres — used by E2E and by owners without
 Docker.
 **Done when:** `dotnet run --project src/Chess.AppHost` starts the three resources locally; the
@@ -205,7 +211,7 @@ forbids long-running processes, and say so).
 
 **Owns:** `src/Chess.Api/Persistence/**`; deletes `src/Chess.Api/{Entities,Data,Migrations}/**`;
 `tests/Chess.Api.Tests/Persistence/**`.
-**Do:** Entities and `ArenaDbContext` for the four tables of 03 §4 (snake_case names, `jsonb`
+**Do:** Entities and `ArenaDbContext` for the five tables of 03 §4 (snake_case names, `jsonb`
 for `tournaments.models` with a value converter for InMemory). `AddArenaPersistence()`:
 `Database:Provider` = `PostgreSQL` (connection string `ConnectionStrings:chess`, from Aspire;
 `EnableRetryOnFailure(10, 30s)`, command timeout 60 s) or `InMemory`; register
@@ -217,8 +223,8 @@ Delete the two old migrations and generate a fresh `InitialCreate` with
 mark games with `started_at != null && finished_at == null` as `result="*"`,
 `termination="interrupted"`, `finished_at=now` (03 §7).
 **Done when:** round-trip test for each entity on InMemory; the interrupted-game sweep has a
-test; `dotnet ef migrations script` produces the four tables.
-**Verify:** V-NET; `dotnet tool restore && dotnet ef migrations script -p src/Chess.Api | grep -c "CREATE TABLE"` → `4` (add a `.config/dotnet-tools.json` with `dotnet-ef` inside the owned task if missing — allowed exception).
+test; `dotnet ef migrations script` produces the five tables.
+**Verify:** V-NET; `dotnet tool restore && dotnet ef migrations script -p src/Chess.Api | grep -c "CREATE TABLE"` → `5` (add a `.config/dotnet-tools.json` with `dotnet-ef` inside the owned task if missing — allowed exception).
 
 ### T1.4 — Copilot SDK gateway
 
@@ -312,8 +318,8 @@ caught by the gitleaks job (show the failing run, then drop the commit).
    Delete `wwwroot/index.html`, `sample-data/`, `Counter`, `Weather`, `Home`, the old
    `Services/`, `Models/`, and the old pages (they are ported in wave 3 from `f0f5845`).
 2. `MainLayout` + `NavMenu` with links to every route of 03 §6, and one placeholder page per
-   route, each in its own folder: `Components/Pages/{Play,Leaderboard,HeadToHead,Tournaments,Games,Admin}/`
-   (wave 3 tasks own those folders). A status strip in the layout showing `GET /api/status`.
+   route, each in its own folder: `Components/Pages/{Results,Play,HeadToHead,Tournaments,Games,Admin}/` and an empty
+   `Components/Charts/` (wave 3 tasks own those folders). `Results` is the first navigation item. A status strip in the layout showing `GET /api/status`.
 3. `Api/ApiContracts.cs` — copies of 03 §5.1 records (and of `ModelRating`,
    `PairwiseCoefficient` as local records). `Api/ArenaApiClient.cs` — typed client with one
    method per row of 03 §5 (base address `http://api`, service discovery). `Api/GameEventsClient.cs`
@@ -450,6 +456,19 @@ Background, one game at a time.
 leaves rows untouched.
 **Verify:** V-NET.
 
+### T2.9 — Rating snapshots + results breakdown
+
+**Owns:** `src/Chess.Api/Results/**` (incl. the `AddResults` / `MapResultEndpoints` stubs
+from T0.2), `tests/Chess.Api.Tests/Results/**`.
+**Do:** `RatingSnapshotService : BackgroundService` — every 15 s, finds finished rated games
+newer than the newest `rating_snapshots.after_game_id`; for each, in finish order, computes
+the report over all rated games up to and including it (`BootstrapSamples` 200) and appends
+one row per model (`formula_version = "1"`). Idempotent across restarts. Endpoints
+`GET /api/ratings/history` and `GET /api/results/breakdown` per 03 §5 / §5.1.
+**Done when:** 3 finished games → 3 snapshot batches; restart does not duplicate; breakdown
+counts W/D/L/forfeits correctly from a fixture.
+**Verify:** V-NET.
+
 ---
 
 ## Wave 3 — Blazor pages (each task owns one folder under `src/Chess.Web/Components/Pages/`)
@@ -465,16 +484,27 @@ board (`ChessBoardSvg`) updated from the SSE stream, move list, attempt/forfeit 
 Gateway not ready → banner with login instructions, only `random` selectable.
 **Done when:** bUnit: events update board and move list; ply de-duplication per 03 §5.1.
 
-### T3.2 — Leaderboard (`Pages/Leaderboard/`, `/leaderboard`)
-Table: rank, model, arena score, R with interval, games, score %, legality %, ACPL / MQ
-(column hidden when unavailable), provisional badge, avg latency and tokens (from a
-`?includeCost` field if present, else omitted). White advantage and total games in the header.
-Explanatory footnote linking `docs/RATING.md`.
+### T3.0 — SVG chart components (`Components/Charts/`)
+Pure Razor components, no JS, each with bUnit tests on the generated SVG: `RankedBarChart`
+(horizontal, sorted, whiskers, highlighted item, hatched flag, direct labels), `LineChart`
+(x numeric, multiple series, end-of-line labels, legend), `Heatmap` (diverging scale with a
+neutral midpoint value, cell labels, muted cells), `StackedBar100` (horizontal, 2 px gaps),
+`BarChart` (single series), `ScatterPlot` (labelled points). Shared `ChartPalette` with the
+light/dark colours of 03 §6.1 as CSS custom properties, `ChartTheme.css`, an SVG `<title>` per
+mark for hover tooltips, and a `ChartTable` fallback. Follow every chart rule in 03 §6.1.
+
+### T3.2 — Results page (`Pages/Results/`, `/results`)
+Exactly the seven sections of 03 §6.1, in that order, using T3.0 components and
+`/api/ratings`, `/api/ratings/pairwise` (leader vs #2), `/api/ratings/matrix`,
+`/api/ratings/history`, `/api/results/breakdown`. The Big Picture headline and chart must be
+visible without scrolling at 1366×768. Empty state (no rated games): explain and link to
+`/tournaments`. Tournament filter in one row above the Big Picture.
+**Done when:** bUnit: section order; headline names the top model; "not yet significantly
+ahead" when the RQC interval contains 0.5; empty state.
 
 ### T3.3 — Head-to-head (`Pages/HeadToHead/`, `/head-to-head`)
 Two pickers → RQC with interval, verbal reading per RATING.md §5 (incl. *not significant*),
-expected score, quality share, Elo-equivalent, direct record. Below: matrix heatmap of RQC for
-all models (pure CSS colour scale; diverging around 0.5).
+expected score, quality share, Elo-equivalent, direct record and the list of their direct games.
 
 ### T3.4 — Tournaments (`Pages/Tournaments/`, `/tournaments`, `/tournaments/{id}`)
 Create form (multi-select models, games per pair, concurrency) with the premium-request
@@ -500,7 +530,8 @@ legal; expandable prompt/reply.
 Start the AppHost with the fake profile via `Aspire.Hosting.Testing`
 (`DistributedApplicationTestingBuilder`) — allowed new package, pin it in the same PR
 (supervisor-approved exception). Journeys: start a random-vs-fake game on `/` and see it finish;
-open it in `/games/{id}` and step to the last move; leaderboard shows both players. Web-first
+open it in `/games/{id}` and step to the last move; `/results` shows the Big Picture headline
+and chart first, with both players in it. Web-first
 assertions only, `data-testid` locators (add them in pages only if missing — `## Blocked` instead
 of editing pages).
 **Verify:** `dotnet test tests/Chess.E2E` (Playwright Chromium is preinstalled in cloud sessions).

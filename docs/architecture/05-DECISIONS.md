@@ -108,7 +108,11 @@ games (first-legal-move fallback), games live in a browser connection, and nothi
 - Strength is a Bradley–Terry fit (order-independent, with first-move advantage), not
   incremental Elo; the relative coefficient RQC blends expected score (0.75) with move quality
   (0.25). Full definition and test vectors: [`docs/RATING.md`](../RATING.md).
-- Ratings are computed on read from the games table by a pure function — never stored.
+- The current leaderboard is computed on read from the games table by a pure function. Its
+  history is persisted (`rating_snapshots`, one row per model after each finished rated game,
+  with `formula_version`) so the rating-over-time chart survives restarts — added 2026-10-24
+  when the owner required that everything is stored in Postgres. Snapshots are never fed back
+  into a calculation.
 **Consequences.** Changing the formula needs no migration; every number is reproducible. At
 thousands of games the fit is still milliseconds; if it ever is not, cache by
 `(max game id, options hash)`.
