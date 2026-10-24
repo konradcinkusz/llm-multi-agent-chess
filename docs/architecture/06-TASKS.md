@@ -43,7 +43,8 @@ Legacy reference: the last state of the old code is commit `f0f5845`; port from 
 | T4.1 | E2E (Playwright) on the AppHost with the fake gateway | T1.2, T3.1, T3.5 | todo |
 | T4.2 | AI evals: offline scenario suite + live smoke script | T2.1, T2.2 | todo |
 | T4.3 | README, CLAUDE.md, CHANGELOG final | T3.0 – T3.6 | todo |
-| T4.4 | Final architecture review | T4.1, T4.2, T4.3 | todo |
+| T4.5 | GitHub Pages one-pager + deploy workflow | T4.3 | todo |
+| T4.4 | Final architecture review | T4.1, T4.2, T4.3, T4.5 | todo |
 
 Common *Verify* for every .NET task (abbreviated **V-NET** below):
 
@@ -552,7 +553,30 @@ plies, prints result, attempts and latency.
 `docs/architecture/0*-*.md`.
 README: what it is, prerequisites (.NET 10, Docker, Copilot CLI logged in, optional Stockfish),
 `dotnet run --project src/Chess.AppHost`, the fake profile, how ratings work (link RATING.md),
-cost warning, troubleshooting by `/health` state. Accurate against the code — every command run.
+the Results page, cost warning, troubleshooting by `/health` state, project layout, link to
+`docs/architecture/`. Accurate against the code — every command run.
+Follow the architecture-standards guides (attach or fetch
+`konradcinkusz/architecture-standards`): **README-BADGES** (`docs/guides/README-BADGES.md` —
+header metadata row and footer block, every badge a titled link, owner/repo substituted from
+`git remote`, never badge what the repo does not have: CI badge for `ci.yml`, license, .NET 10)
+and **REPO-BASELINE** §8 (documentation staleness: no claim the code does not back). Remove the
+GitHub repository description's Streamlit wording from the README and state the new
+description at the top of the PR so the supervisor can update the repo settings.
+
+### T4.5 — GitHub Pages one-pager
+**Owns:** `docs/index.html`, `docs/assets/**`, `.github/workflows/deploy-pages.yml`.
+Follow architecture-standards' **generate-github-page** procedure exactly
+(`plugins/architecture-core/skills/generate-github-page/SKILL.md` in
+`konradcinkusz/architecture-standards`, with its bundled
+`assets/ONE-PAGER-TEMPLATE.html`): derive owner/repo/Pages URL from `git remote` and echo the
+table in the PR; copy the template's CSS verbatim and fill only the `{{TOKENS}}` /
+`<!-- CUSTOMIZE -->` parts from the final README (T4.3); stats only for numbers verifiable in
+the repo (e.g. test count, tasks, endpoints) — otherwise delete the row; one usage shape
+(`.code` quickstart: `git clone …` + `dotnet run --project src/Chess.AppHost`); documents list
+linking `docs/RATING.md` and `docs/architecture/`; real license line; no logo unless one exists.
+Copy `.github/workflows/deploy-pages.yml` from architecture-standards **verbatim**. Run the
+skill's §8 verification (no `{{`/`CUSTOMIZE` left, links resolve). State in the PR the one
+manual step — Settings → Pages → Source → "GitHub Actions" — for the owner.
 
 ### T4.4 — Final architecture review
 **Owns:** `docs/architecture/ARCHITECTURE_REVIEW.md`, board statuses in this file,
