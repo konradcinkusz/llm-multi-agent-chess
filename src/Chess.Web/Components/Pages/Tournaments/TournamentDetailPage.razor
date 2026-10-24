@@ -251,7 +251,12 @@ else
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                await InvokeAsync(() => ReloadAsync());
+                // The fields change on a timer thread, outside any UI event: re-render explicitly.
+                await InvokeAsync(async () =>
+                {
+                    await ReloadAsync();
+                    StateHasChanged();
+                });
                 if (_tournament is not { } tournament || !TournamentFormat.IsRunning(tournament.Status))
                 {
                     return;
