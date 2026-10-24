@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Aspire saves generated parameter values (the Postgres password) to these user secrets, so the
+         password survives restarts and matches the existing chess-arena-pg volume. Do not change it. -->
+    <UserSecretsId>c1d96d68-6b3f-4d2b-836b-856c08bc44e8</UserSecretsId>
     <!-- The Aspire CLI bundle is not needed to run the AppHost; the Verify build treats warnings as errors. -->
     <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>

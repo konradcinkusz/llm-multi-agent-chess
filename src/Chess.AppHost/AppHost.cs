@@ -25,6 +25,9 @@ if (fake)
 else
 {
     // An existing Postgres (ConnectionStrings:chess in AppHost user secrets) replaces the container.
+    // Aspire 13.6 saves a GenerateParameterDefault value to user secrets only when the AppHost has a
+    // UserSecretsId (IUserSecretsManager.IsAvailable; the "PersistentContainerWithoutUserSecrets"
+    // warning). Without it a new password is generated per run and the existing volume rejects it.
     var database = builder.Configuration.GetConnectionString("chess") is not null
         ? builder.AddConnectionString("chess")
         : builder.AddPostgres("postgres", password: builder.AddParameter("postgres-password", new GenerateParameterDefault { MinLength = 32 }, secret: true))
