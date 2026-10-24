@@ -1,0 +1,11 @@
+@inherits LayoutComponentBase
+
+@* The OBS Browser Source (03 §9.4): no header, no navigation, no status strip. The page draws its own frame. *@
+@* App.razor links only app.css, so the isolated (scoped) styles of this page are linked here. Scoped rules match only the elements of their own component, so nothing else on the page changes. *@
+<HeadContent>
+    <link rel="stylesheet" href="Chess.Web.styles.css" />
+</HeadContent>
+
+<div class="broadcast-layout">
+    @Body
+</div>
