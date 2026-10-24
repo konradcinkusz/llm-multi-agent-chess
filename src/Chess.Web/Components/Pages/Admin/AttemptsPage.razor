@@ -1,6 +1,268 @@
 @page "/admin/attempts"
+@using System.Text.Json
+@using Chess.Web.Api
+@inject ArenaApiClient Api
 
 <PageTitle>Attempts · LLM Chess Arena</PageTitle>
 
-<h1>Attempts</h1>
-<p>Placeholder. The attempts log is built in T3.6.</p>
+<div class="admin-page">
+    <header class="admin-header">
+        <h1>Attempts</h1>
+        <p class="subtitle">Every prompt sent to a model and the reply it gave, newest first</p>
+    </header>
+
+    <form class="filter-bar" @onsubmit="ApplyFilters" @onsubmit:preventDefault="true">
+        <div class="filter-group">
+            <label for="attempts-game">Game ID:</label>
+            <input id="attempts-game" type="text" class="game-id-input" @bind="_gameIdInput"
+                   placeholder="paste game GUID…" aria-describedby="attempts-game-error" />
+        </div>
+
+        <div class="filter-group">
+            <label for="attempts-model">Model:</label>
+            <select id="attempts-model" @bind="_modelInput">
+                <option value="">All models</option>
+                @foreach (var model in _models)
+                {
+                    <option value="@model.Id">@model.DisplayName</option>
+                }
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="attempts-legal">Reply:</label>
+            <select id="attempts-legal" @bind="_legalInput">
+                <option value="all">All replies</option>
+                <option value="legal">Legal only</option>
+                <option value="illegal">Illegal only</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn">Apply</button>
+        <button type="button" class="btn btn-clear" @onclick="ClearFilters">Clear</button>
+    </form>
+
+    @if (_gameError is not null)
+    {
+        <p id="attempts-game-error" class="field-error" role="alert">@_gameError</p>
+    }
+
+    @if (_error is not null)
+    {
+        <p class="error-msg" role="alert">@_error</p>
+    }
+    else if (_loading)
+    {
+        <p class="loading-msg" role="status">Loading attempts...</p>
+    }
+    else if (_result is not null)
+    {
+        @if (_result.Items.Count == 0)
+        {
+            <p class="empty-msg">No attempts match these filters. Attempts are recorded when a player makes a move.</p>
+        }
+        else if (Visible.Count == 0)
+        {
+            <p class="empty-msg">No attempts on this page match the reply filter.</p>
+        }
+        else
+        {
+            <ol class="attempt-list">
+                @foreach (var attempt in Visible)
+                {
+                    <li class="attempt @(attempt.Legal ? "" : "failed-attempt")">
+                        <details>
+                            <summary class="attempt-header">
+                                <span class="ply-badge">Ply @attempt.Ply</span>
+                                <span class="color-badge @(IsWhite(attempt.Ply) ? "white-badge" : "black-badge")">@ColorOf(attempt.Ply)</span>
+                                <span class="model-tag">@attempt.ModelId</span>
+                                <span class="san">@(attempt.ParsedSan ?? "no move")</span>
+                                <span class="attempt-number">Attempt @attempt.Number</span>
+                                @if (!attempt.Legal)
+                                {
+                                    <span class="fail-tag">ILLEGAL</span>
+                                }
+                                <span class="latency">@attempt.LatencyMs ms</span>
+                            </summary>
+
+                            <div class="attempt-meta">
+                                <a href="/games/@attempt.GameId">Game @Short(attempt.GameId)</a>
+                                <span class="date-sm">@attempt.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                            </div>
+
+                            <div class="attempt-section">
+                                <div class="section-label">PROMPT</div>
+                                <pre class="prompt-text">@attempt.Prompt</pre>
+                            </div>
+
+                            <div class="attempt-section">
+                                <div class="section-label @(attempt.Legal ? "success-label" : "fail-label")">
+                                    REPLY @(attempt.Legal ? "(legal)" : "(illegal)")
+                                </div>
+                                @if (attempt.RawReply is not null)
+                                {
+                                    <pre class="reply-text @(attempt.Legal ? "valid-reply" : "invalid-reply")">@attempt.RawReply</pre>
+                                }
+                                else
+                                {
+                                    <p class="no-reply">No reply was recorded.</p>
+                                }
+                                @if (attempt.Error is not null)
+                                {
+                                    <p class="error-text">Error: @attempt.Error</p>
+                                }
+                            </div>
+                        </details>
+                    </li>
+                }
+            </ol>
+
+            @if (_applied.Legal != "all")
+            {
+                <p class="note">The reply filter applies to the attempts on this page only.</p>
+            }
+        }
+
+        <nav class="pagination" aria-label="Attempts pages">
+            <button type="button" @onclick="PrevPage" disabled="@(_page <= 1)">&#x2190; Prev</button>
+            <span>Page @_page of @PageCount</span>
+            <button type="button" @onclick="NextPage" disabled="@(_page >= PageCount)">Next &#x2192;</button>
+        </nav>
+    }
+</div>
+
+@code {
+    // The API filters by game and model; the reply (legal/illegal) filter is applied to the rows of the page it
+    // returns, because ArenaApiClient.GetAttemptsAsync does not send the legal parameter.
+    private sealed record Filters(Guid? GameId, string? Model, string Legal);
+
+    private IReadOnlyList<ModelDto> _models = [];
+    private Filters _applied = new(null, null, "all");
+    private PageDto<AttemptDto>? _result;
+    private string? _error;
+    private string? _gameError;
+    private bool _loading = true;
+    private int _page = 1;
+    private int _loadId;
+
+    // Form state, applied only when the user presses Apply.
+    private string _gameIdInput = "";
+    private string _modelInput = "";
+    private string _legalInput = "all";
+
+    private IReadOnlyList<AttemptDto> Visible => _result is null ? [] : _applied.Legal switch
+    {
+        "legal" => _result.Items.Where(a => a.Legal).ToList(),
+        "illegal" => _result.Items.Where(a => !a.Legal).ToList(),
+        _ => _result.Items,
+    };
+
+    private int PageCount => _result is { PageSize: > 0 } r ? Math.Max(1, (r.Total + r.PageSize - 1) / r.PageSize) : 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The model list only feeds the filter; the log still loads when the models endpoint is unavailable.
+        try
+        {
+            _models = await Api.GetModelsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        {
+            _models = [];
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ApplyFilters()
+    {
+        var text = _gameIdInput.Trim();
+        Guid? gameId = null;
+        if (text.Length > 0)
+        {
+            if (!Guid.TryParse(text, out var parsed))
+            {
+                _gameError = "Game ID must be a GUID, as shown in the games list.";
+                return;
+            }
+
+            gameId = parsed;
+        }
+
+        _gameError = null;
+        _applied = new Filters(gameId, _modelInput.Length == 0 ? null : _modelInput, _legalInput);
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ClearFilters()
+    {
+        _gameIdInput = "";
+        _modelInput = "";
+        _legalInput = "all";
+        _gameError = null;
+        _applied = new Filters(null, null, "all");
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+            await LoadAsync();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (_page < PageCount)
+        {
+            _page++;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        // A newer request supersedes an older one still in flight, so a slow response cannot overwrite the filters on screen.
+        var loadId = ++_loadId;
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Api.GetAttemptsAsync(_applied.GameId, _applied.Model, _page);
+            if (loadId != _loadId)
+            {
+                return;
+            }
+
+            _result = result;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        {
+            if (loadId != _loadId)
+            {
+                return;
+            }
+
+            _result = null;
+            _error = "The attempts could not be loaded. Is the API running?";
+        }
+        finally
+        {
+            if (loadId == _loadId)
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    // Attempts carry no side of their own: ply 1 is White's first move, so odd plies are White's (as on the API).
+    private static bool IsWhite(int ply) => ply % 2 == 1;
+
+    private static string ColorOf(int ply) => IsWhite(ply) ? "White" : "Black";
+
+    private static string Short(Guid id) => id.ToString("D")[..8] + "…";
+}
