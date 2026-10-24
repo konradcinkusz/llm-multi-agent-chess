@@ -200,13 +200,16 @@ public class ArenaDbContextMappingTests
     }
 
     [Fact]
-    public void Model_maps_the_five_tables_with_snake_case_columns()
+    public void Model_maps_every_table_with_snake_case_columns()
     {
         using var context = NewContext(Guid.NewGuid().ToString());
         var entities = context.Model.GetEntityTypes().ToList();
 
         Assert.Equal(
-            new[] { "games", "move_attempts", "moves", "rating_snapshots", "tournaments" },
+            new[]
+            {
+                "broadcast_schedules", "broadcast_slots", "games", "move_attempts", "moves", "rating_snapshots", "tournaments",
+            },
             entities.Select(e => e.GetTableName()).OrderBy(n => n).ToArray());
 
         var columns = entities.SelectMany(e => e.GetProperties()).Select(p => p.GetColumnName()).ToList();
