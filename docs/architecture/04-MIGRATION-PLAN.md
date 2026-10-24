@@ -79,7 +79,14 @@ These are repeated verbatim in the session prompt (§4).
    T1.8 has merged there is no CI: merge once the *Verify* commands pass. If CI fails, fix and
    push again until green. If `main` moved and the PR conflicts or is behind, merge `main` into
    your branch, re-run *Verify*, push, and wait for green again.
-9. Never merge with `## Blocked`. Do not edit `06-TASKS.md`; the supervisor keeps the board.
+9. **Every project is in `Chess.sln`, and every runnable project is in the AppHost.** A task
+   that creates a `.csproj` adds it to `Chess.sln` in the same PR (this is allowed even though
+   `Chess.sln` is otherwise shared). A runnable project (`Microsoft.NET.Sdk.Web` or an
+   executable) is also declared in `src/Chess.AppHost/AppHost.cs` with `WithReference` /
+   `WaitFor` / `WithHttpHealthCheck`; if `AppHost.cs` is outside your *Owns*, open the PR with
+   `## Blocked` and the exact lines to add. CI (T1.8) fails on any `.csproj` missing from the
+   solution.
+10. Never merge with `## Blocked`. Do not edit `06-TASKS.md`; the supervisor keeps the board.
 
 ## 4. Session prompt (the supervisor sends this, filling `<ID>`)
 
@@ -105,7 +112,9 @@ If you are blocked, open the PR anyway with a "## Blocked" section and do not me
 4. Keep the board in 06-TASKS current with small supervisor PRs, merged when green.
 5. A `## Blocked` PR: decide; if a contract changes, the supervisor changes it on `main` first
    (one small PR), then closes the blocked PR and re-launches the task.
-6. A session that ends without a merged PR: read its transcript, then relaunch the task with
+6. **Archive every finished implementer session** (`archive_session`) as soon as its PR is
+   merged and audited, or once it is relaunched under a new session.
+7. A session that ends without a merged PR: read its transcript, then relaunch the task with
    the reason added to the prompt, or take the fix into a follow-up task.
 
 ## 6. Risks
