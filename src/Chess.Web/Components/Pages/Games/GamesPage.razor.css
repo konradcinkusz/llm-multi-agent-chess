@@ -1,0 +1,39 @@
+/* The game archive (03 §6): filters above the table; the table scrolls sideways on a phone instead of widening the page. */
+
+.games-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin-bottom: 12px;
+}
+
+.games-filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.games-table-scroll {
+    overflow-x: auto;
+}
+
+.games-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.games-table th,
+.games-table td {
+    padding: 6px 8px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.3);
+}
+
+.games-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}

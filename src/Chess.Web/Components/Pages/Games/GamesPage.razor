@@ -1,19 +1,158 @@
 @page "/games"
-@page "/games/{Id:guid}"
+@using Chess.Web.Api
+@implements IDisposable
+@inject ArenaApiClient Api
 
 <PageTitle>Games · LLM Chess Arena</PageTitle>
 
 <h1>Games</h1>
-@if (Id is { } id)
+
+<div class="games-filters">
+    <label>
+        Model
+        <select id="games-filter-model" data-testid="games-filter-model" @bind="_model" @bind:after="ApplyFilterAsync">
+            <option value="">Any model</option>
+            @foreach (var model in _models)
+            {
+                <option value="@model.Id">@model.DisplayName</option>
+            }
+        </select>
+    </label>
+
+    <label>
+        Status
+        <select id="games-filter-status" data-testid="games-filter-status" @bind="_status" @bind:after="ApplyFilterAsync">
+            <option value="">Any status</option>
+            <option value="queued">Queued</option>
+            <option value="running">Running</option>
+            <option value="finished">Finished</option>
+        </select>
+    </label>
+</div>
+
+@if (_modelsError is not null)
 {
-    <p>Placeholder for replay of game @id. Built in T3.5.</p>
+    <p class="status-error" role="alert">Could not load the models for the filter: @_modelsError</p>
+}
+
+@if (_listError is not null)
+{
+    <p class="status-error" role="alert" data-testid="games-error">Could not load the games: @_listError</p>
+}
+
+@if (_page is null)
+{
+    @if (_listError is null)
+    {
+        <p>Loading games…</p>
+    }
+}
+else if (_page.Items.Count == 0)
+{
+    <p data-testid="games-empty">
+        @(Filtered ? "No games match these filters." : "No games yet. Start one on the Live game page.")
+    </p>
 }
 else
 {
-    <p>Placeholder. The game archive is built in T3.5.</p>
+    var pageCount = GameArchive.PageCount(_page.Total);
+
+    <div class="games-table-scroll">
+        <table class="games-table" data-testid="games-table">
+            <thead>
+                <tr>
+                    <th>Played</th>
+                    <th>White</th>
+                    <th>Black</th>
+                    <th>Result</th>
+                    <th>Termination</th>
+                    <th>Plies</th>
+                    <th>State</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var game in _page.Items)
+                {
+                    <tr data-testid="game-row" data-game-id="@game.Id">
+                        <td><a href="/games/@game.Id">@GameFormat.When(game.CreatedAt)</a></td>
+                        <td>@game.White.ModelId</td>
+                        <td>@game.Black.ModelId</td>
+                        <td>@game.Result</td>
+                        <td>@GameFormat.Termination(game.Termination)</td>
+                        <td>@game.PlyCount</td>
+                        <td>@GameFormat.State(game.State)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <nav class="games-pager" aria-label="Pages of games">
+        <button id="games-prev" data-testid="games-prev" type="button" disabled="@(_pageNumber <= 1)" @onclick="PreviousPageAsync">Previous</button>
+        <span data-testid="games-page">Page @_pageNumber of @pageCount · @_page.Total @(_page.Total == 1 ? "game" : "games")</span>
+        <button id="games-next" data-testid="games-next" type="button" disabled="@(_pageNumber >= pageCount)" @onclick="NextPageAsync">Next</button>
+    </nav>
 }
 
 @code {
-    [Parameter]
-    public Guid? Id { get; set; }
+    private readonly CancellationTokenSource _cts = new();
+
+    private IReadOnlyList<ModelDto> _models = [];
+    private string? _modelsError;
+    private PageDto<GameSummaryDto>? _page;
+    private string? _listError;
+    private string _model = "";
+    private string _status = "";
+    private int _pageNumber = 1;
+
+    private bool Filtered => _model.Length > 0 || _status.Length > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _models = await Api.GetModelsAsync(_cts.Token);
+        }
+        catch (HttpRequestException ex)
+        {
+            _modelsError = ex.Message;
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>A new filter starts the archive again from its first page.</summary>
+    private async Task ApplyFilterAsync()
+    {
+        _pageNumber = 1;
+        await LoadAsync();
+    }
+
+    private Task PreviousPageAsync() => GoToPageAsync(_pageNumber - 1);
+
+    private Task NextPageAsync() => GoToPageAsync(_pageNumber + 1);
+
+    private async Task GoToPageAsync(int page)
+    {
+        _pageNumber = page;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _page = await Api.GetGamesAsync(_pageNumber, GameArchive.PageSize, Filter(_model), Filter(_status), _cts.Token);
+            _listError = null;
+        }
+        catch (HttpRequestException ex)
+        {
+            _listError = ex.Message;
+        }
+    }
+
+    /// <summary>The empty choice means no filter, so the API receives no parameter for it.</summary>
+    private static string? Filter(string choice) => choice.Length == 0 ? null : choice;
+
+    public void Dispose() => _cts.Cancel();
 }

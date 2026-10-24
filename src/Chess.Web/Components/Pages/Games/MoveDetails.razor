@@ -1,0 +1,35 @@
+@using Chess.Web.Api
+
+<section class="move-details" data-testid="move-details" aria-labelledby="move-details-heading">
+    @if (Move is { } move)
+    {
+        <h2 id="move-details-heading">@(move.Ply). @GameFormat.Side(move.Color) played @move.San</h2>
+        <dl>
+            <dt>Attempts</dt>
+            <dd data-testid="move-attempts">@move.Attempts</dd>
+
+            <dt>Latency</dt>
+            <dd data-testid="move-latency">@GameFormat.Latency(move.LatencyMs)</dd>
+
+            <dt>Tokens</dt>
+            <dd data-testid="move-tokens">@GameFormat.Tokens(move.InputTokens, move.OutputTokens)</dd>
+
+            <dt>Centipawn loss</dt>
+            <dd data-testid="move-cpl">@GameFormat.CentipawnLoss(move.CentipawnLoss)</dd>
+
+            <dt>Best move</dt>
+            <dd data-testid="move-best">@(move.BestSan ?? "not analysed")</dd>
+        </dl>
+    }
+    else
+    {
+        <h2 id="move-details-heading">Start position</h2>
+        <p>No move has been played yet.</p>
+    }
+</section>
+
+@code {
+    /// <summary>The move that reached the position on the board; null at the start position.</summary>
+    [Parameter]
+    public MoveDto? Move { get; set; }
+}
