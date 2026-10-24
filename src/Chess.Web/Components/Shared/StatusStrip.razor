@@ -1,0 +1,39 @@
+@using Chess.Web.Api
+@inject ArenaApiClient Api
+
+<div class="status-strip" role="status">
+    @if (status is not null)
+    {
+        <span>Copilot: <strong>@status.Copilot</strong> (@status.CopilotDetail)</span>
+        <span>Database: <strong>@status.Database</strong></span>
+        <span>Stockfish: <strong>@status.Stockfish</strong></span>
+    }
+    else if (unavailable)
+    {
+        <span class="status-error">API unavailable: @detail</span>
+    }
+    else
+    {
+        <span>Checking services…</span>
+    }
+</div>
+
+@code {
+    private StatusDto? status;
+    private bool unavailable;
+    private string? detail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            status = await Api.GetStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            // The strip reports on the API; it must never take the page down with it.
+            unavailable = true;
+            detail = ex.Message;
+        }
+    }
+}

@@ -1,0 +1,19 @@
+@page "/games"
+@page "/games/{Id:guid}"
+
+<PageTitle>Games · LLM Chess Arena</PageTitle>
+
+<h1>Games</h1>
+@if (Id is { } id)
+{
+    <p>Placeholder for replay of game @id. Built in T3.5.</p>
+}
+else
+{
+    <p>Placeholder. The game archive is built in T3.5.</p>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+}
