@@ -24,6 +24,26 @@ public class HeadToHeadPageTests
     private const string GptVsRandom =
         """{"a":"gpt","b":"random","expectedScore":0.9,"qualityShare":0.8,"rqc":0.88,"rqcLow":0.84,"rqcHigh":0.92,"eloEquivalent":400.1,"headToHeadGames":0,"headToHeadScore":null}""";
 
+    // One game: every bootstrap resample is the same, so the interval is a point well away from one half.
+    private const string GptVsClaudeOneGame =
+        """{"a":"gpt","b":"claude","expectedScore":0.7,"qualityShare":0.7,"rqc":0.7,"rqcLow":0.7,"rqcHigh":0.7,"eloEquivalent":147,"headToHeadGames":1,"headToHeadScore":1}""";
+
+    private const string Ratings =
+        """
+        {"models":[
+          {"model":"gpt","rating":120,"ciLow":100,"ciHigh":140,"games":30,"score":0.7,"legality":0.99,"moveQuality":null,"quality":0.99,"arenaScore":66,"provisional":false},
+          {"model":"claude","rating":90,"ciLow":70,"ciHigh":110,"games":30,"score":0.3,"legality":0.95,"moveQuality":null,"quality":0.95,"arenaScore":34,"provisional":false}],
+         "whiteAdvantage":12,"games":60,"moveQualityAvailable":false}
+        """;
+
+    private const string RatingsWithProvisionalClaude =
+        """
+        {"models":[
+          {"model":"gpt","rating":120,"ciLow":100,"ciHigh":140,"games":30,"score":0.7,"legality":0.99,"moveQuality":null,"quality":0.99,"arenaScore":66,"provisional":false},
+          {"model":"claude","rating":90,"ciLow":40,"ciHigh":140,"games":6,"score":0.3,"legality":0.95,"moveQuality":null,"quality":0.95,"arenaScore":34,"provisional":true}],
+         "whiteAdvantage":12,"games":36,"moveQualityAvailable":false}
+        """;
+
     private static string Games(params string[] items) =>
         $$"""{"items":[{{string.Join(',', items)}}],"page":1,"pageSize":100,"total":{{items.Length}}}""";
 
@@ -40,6 +60,7 @@ public class HeadToHeadPageTests
         {
             ["/api/models"] = Ok(Models),
             ["/api/ratings/pairwise?a=gpt&b=claude"] = Ok(GptVsClaude),
+            ["/api/ratings"] = Ok(Ratings),
             ["/api/games?page=1&pageSize=100&model=gpt"] = Ok(Games(PairGame, OtherGame)),
         });
         using var ctx = new BunitContext();
@@ -52,7 +73,8 @@ public class HeadToHeadPageTests
         Assert.Contains("(95 % interval 0.55 – 0.69)", cut.Markup);
         Assert.Contains("+82.4 Elo for gpt against claude", cut.Markup);
         Assert.Contains("2 direct games; gpt scored 0.75 per game.", cut.Markup);
-        Assert.Equal(new[] { "/api/models", "/api/ratings/pairwise?a=gpt&b=claude", "/api/games?page=1&pageSize=100&model=gpt" },
+        Assert.DoesNotContain("Not yet significant", cut.Markup);
+        Assert.Equal(new[] { "/api/models", "/api/ratings/pairwise?a=gpt&b=claude", "/api/ratings", "/api/games?page=1&pageSize=100&model=gpt" },
             handler.Requests.Select(r => r.Target).ToArray());
 
         var rows = cut.FindAll("table.h2h-games tbody tr");
@@ -65,12 +87,54 @@ public class HeadToHeadPageTests
     }
 
     [Fact]
+    public void SaysTooFewGamesInsteadOfSignificantWhenAModelIsProvisional()
+    {
+        var handler = Api(new Dictionary<string, Reply>
+        {
+            ["/api/models"] = Ok(Models),
+            ["/api/ratings/pairwise?a=gpt&b=claude"] = Ok(GptVsClaude),
+            ["/api/ratings"] = Ok(RatingsWithProvisionalClaude),
+            ["/api/games?page=1&pageSize=100&model=gpt"] = Ok(Games()),
+        });
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<HeadToHeadPage>();
+
+        // The interval (0.55 – 0.69) excludes one half, yet the reading must not call it significant.
+        cut.WaitForAssertion(() => Assert.Contains(
+            "gpt is slightly better than claude. Not yet significant: too few games (need 20 rated games per model).",
+            cut.Markup));
+        Assert.Contains("0.62 for gpt", cut.Markup);
+    }
+
+    [Fact]
+    public void ASingleGamePairHasNoIntervalToClaimALeadFrom()
+    {
+        var handler = Api(new Dictionary<string, Reply>
+        {
+            ["/api/models"] = Ok(Models),
+            ["/api/ratings/pairwise?a=gpt&b=claude"] = Ok(GptVsClaudeOneGame),
+            ["/api/ratings"] = Ok(Ratings),
+            ["/api/games?page=1&pageSize=100&model=gpt"] = Ok(Games()),
+        });
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<HeadToHeadPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains("Not significant: the 95 % interval has no width.", cut.Markup));
+        Assert.DoesNotContain("Not yet significant: too few games", cut.Markup);
+    }
+
+    [Fact]
     public void LeavesTheDirectGamesOutWhenTheArchiveDoesNotAnswer()
     {
         var handler = Api(new Dictionary<string, Reply>
         {
             ["/api/models"] = Ok(Models),
             ["/api/ratings/pairwise?a=gpt&b=claude"] = Ok(GptVsClaude),
+            ["/api/ratings"] = Ok(Ratings),
             ["/api/games?page=1&pageSize=100&model=gpt"] = Fail(HttpStatusCode.NotFound),
         });
         using var ctx = new BunitContext();
@@ -92,6 +156,7 @@ public class HeadToHeadPageTests
             ["/api/models"] = Ok(Models),
             ["/api/ratings/pairwise?a=gpt&b=claude"] = Ok(GptVsClaude),
             ["/api/ratings/pairwise?a=gpt&b=random"] = Ok(GptVsRandom),
+            ["/api/ratings"] = Ok(Ratings),
             ["/api/games?page=1&pageSize=100&model=gpt"] = Ok(Games()),
         });
         using var ctx = new BunitContext();
@@ -113,6 +178,7 @@ public class HeadToHeadPageTests
         {
             ["/api/models"] = Ok(Models),
             ["/api/ratings/pairwise?a=gpt&b=claude"] = Ok(GptVsClaude),
+            ["/api/ratings"] = Ok(Ratings),
             ["/api/games?page=1&pageSize=100&model=gpt"] = Ok(Games()),
         });
         using var ctx = new BunitContext();

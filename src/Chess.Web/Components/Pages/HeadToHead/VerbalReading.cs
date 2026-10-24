@@ -1,4 +1,5 @@
 using Chess.Web.Api;
+using Chess.Web.Components.Pages.Shared;
 
 namespace Chess.Web.Components.Pages.HeadToHead;
 
@@ -21,10 +22,11 @@ public static class VerbalReading
         };
     }
 
-    /// <summary>Significant only when the 95 % interval excludes 0.5, whatever the point value.</summary>
-    public static bool IsSignificant(double low, double high) => low > 0.5 || high < 0.5;
-
-    public static string Sentence(PairwiseCoefficient pair)
+    /// <summary>
+    /// The reading of the pair. Not significant results say why: too few games for a provisional model, a point
+    /// interval, or an interval that contains 0.5 (see <see cref="Significance"/>).
+    /// </summary>
+    public static string Sentence(PairwiseCoefficient pair, bool bothEstablished)
     {
         var strength = Strength(pair.Rqc);
         var sentence = strength switch
@@ -34,9 +36,19 @@ public static class VerbalReading
             _ => $"{Leader(pair)} is {strength} than {Trailer(pair)}.",
         };
 
-        return IsSignificant(pair.RqcLow, pair.RqcHigh)
-            ? sentence
-            : sentence + " Not significant: the 95 % interval contains 0.5.";
+        if (Significance.IsSignificant(pair, bothEstablished))
+        {
+            return sentence;
+        }
+
+        if (!bothEstablished)
+        {
+            return $"{sentence} {Significance.TooFewGames}";
+        }
+
+        return pair.RqcHigh - pair.RqcLow > Significance.Tolerance
+            ? sentence + " Not significant: the 95 % interval contains 0.5."
+            : sentence + " Not significant: the 95 % interval has no width.";
     }
 
     private static string Leader(PairwiseCoefficient pair) => pair.Rqc >= 0.5 ? pair.A : pair.B;

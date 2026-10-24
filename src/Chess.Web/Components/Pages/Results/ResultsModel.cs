@@ -1,6 +1,7 @@
 using System.Globalization;
 using Chess.Web.Api;
 using Chess.Web.Components.Charts;
+using Chess.Web.Components.Pages.Shared;
 
 namespace Chess.Web.Components.Pages.Results;
 
@@ -32,9 +33,6 @@ public sealed record ResultsReport(
 /// </summary>
 public static class ResultsModel
 {
-    /// <summary>RQC of one half means equal strength (RATING.md §5).</summary>
-    public const double Equal = 0.5;
-
     /// <summary>Stacked outcome segments. Forfeit losses are a part of the losses, shown in their own slot.</summary>
     public const int WinsSlot = 2;
     public const int DrawsSlot = 0;
@@ -46,8 +44,9 @@ public static class ResultsModel
     /// <summary>Half the width of a 95 % interval: the "±" printed next to a rating.</summary>
     public static double HalfWidth(double low, double high) => (high - low) / 2;
 
-    /// <summary>The leader's RQC interval against #2 lies entirely above one half (RATING.md §5).</summary>
-    public static bool SignificantlyAhead(PairwiseCoefficient pairwise) => pairwise.RqcLow > Equal;
+    /// <summary>The leader's RQC against #2 is significant under the shared rule (RATING.md §5).</summary>
+    public static bool SignificantlyAhead(PairwiseCoefficient pairwise, bool bothEstablished) =>
+        Significance.IsSignificant(pairwise, bothEstablished);
 
     /// <summary>
     /// Whisker of each model's arena score: 100 × the mean of its pairwise RQC bounds. The API gives no interval for the
@@ -61,15 +60,20 @@ public static class ResultsModel
                 group => (Low: 100 * group.Average(c => c.RqcLow), High: 100 * group.Average(c => c.RqcHigh)),
                 StringComparer.Ordinal);
 
-    /// <summary>The sentence under the headline. Null when there is no #2 to compare with.</summary>
-    public static string? Verdict(PairwiseCoefficient? pairwise, string? second)
+    /// <summary>
+    /// The sentence under the headline. Null when there is no #2 to compare with. A lead that is not significant only
+    /// because a model is provisional says so in the words of <see cref="Significance.TooFewGames"/>.
+    /// </summary>
+    public static string? Verdict(PairwiseCoefficient? pairwise, string? second, bool bothEstablished)
     {
         if (pairwise is null || second is null) return null;
-        var reading = SignificantlyAhead(pairwise)
+        var significant = SignificantlyAhead(pairwise, bothEstablished);
+        var reading = significant
             ? "Significantly ahead of"
             : "Not yet significantly ahead of";
-        return $"{reading} #2 ({second}): RQC {Number(pairwise.Rqc, "0.00")}, " +
-               $"95 % interval {Number(pairwise.RqcLow, "0.00")} to {Number(pairwise.RqcHigh, "0.00")}.";
+        var sentence = $"{reading} #2 ({second}): RQC {Number(pairwise.Rqc, "0.00")}, " +
+                       $"95 % interval {Number(pairwise.RqcLow, "0.00")} to {Number(pairwise.RqcHigh, "0.00")}.";
+        return significant || bothEstablished ? sentence : $"{sentence} {Significance.TooFewGames}";
     }
 
     public static ResultsReport Build(ResultsInputs input)
@@ -103,7 +107,7 @@ public static class ResultsModel
             .ToList();
 
         var heat = input.Matrix.Cells
-            .Select(cell => new HeatCell(cell.A, cell.B, cell.Rqc, Muted: !IntervalExcludesHalf(cell)))
+            .Select(cell => new HeatCell(cell.A, cell.B, cell.Rqc, Muted: !Significance.IntervalShowsLead(cell.RqcLow, cell.RqcHigh)))
             .ToList();
 
         var withBreakdown = order.Where(breakdown.ContainsKey).Select(m => breakdown[m]).ToList();
@@ -139,7 +143,7 @@ public static class ResultsModel
         return new ResultsReport(
             ranking,
             bars,
-            ranking.Count > 1 ? Verdict(input.LeaderVsSecond, order[1]) : null,
+            ranking.Count > 1 ? Verdict(input.LeaderVsSecond, order[1], Significance.BothEstablished(ranking, order[0], order[1])) : null,
             lines,
             folded,
             input.Matrix.Models,
@@ -149,7 +153,4 @@ public static class ResultsModel
             acpl,
             scatter);
     }
-
-    /// <summary>True when the whole interval lies on one side of one half; a cell whose interval contains it is muted.</summary>
-    private static bool IntervalExcludesHalf(PairwiseCoefficient cell) => cell.RqcLow > Equal || cell.RqcHigh < Equal;
 }

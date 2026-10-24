@@ -2,6 +2,7 @@
 @using System.Globalization
 @using System.Net
 @using Chess.Web.Api
+@using Chess.Web.Components.Pages.Shared
 @inject ArenaApiClient Api
 @implements IDisposable
 
@@ -60,7 +61,7 @@ else
     {
         <section aria-labelledby="h2h-reading">
             <h2 id="h2h-reading">Reading</h2>
-            <p class="h2h-reading"><strong>@VerbalReading.Sentence(pair)</strong></p>
+            <p class="h2h-reading"><strong>@VerbalReading.Sentence(pair, bothEstablished)</strong></p>
             <p class="muted">
                 The coefficient uses every game in the arena, not only the games between these two.
                 The direct record is shown next to it, never instead of it.
@@ -139,6 +140,7 @@ else
     private string? a;
     private string? b;
     private PairwiseCoefficient? pair;
+    private bool bothEstablished;
     private string? pairError;
     private IReadOnlyList<GameSummaryDto>? directGames;
     private CancellationTokenSource? cts;
@@ -170,6 +172,7 @@ else
         var ct = cts.Token;
 
         pair = null;
+        bothEstablished = false;
         pairError = null;
         directGames = null;
 
@@ -183,12 +186,15 @@ else
         try
         {
             var coefficient = await Api.GetPairwiseAsync(first, second, ct);
+            // The provisional flags come from the leaderboard: a lead needs both models to have enough games (RATING.md §5).
+            var board = await Api.GetLeaderboardAsync(ct);
             if (ct.IsCancellationRequested)
             {
                 return;
             }
 
             pair = coefficient;
+            bothEstablished = Significance.BothEstablished(board.Models, first, second);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
