@@ -19,13 +19,13 @@ public sealed class FakeGatewayEndpointTests(FakeGatewayApp app) : IClassFixture
     }
 
     [Fact]
-    public async Task StatusReportsTheFakeGatewayAsHealthy()
+    public async Task StatusReportsTheFakeGatewayStateAndDetail()
     {
         var response = await app.CreateClient().GetAsync("/api/status");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var status = await response.Content.ReadFromJsonAsync<StatusDto>();
-        Assert.Equal("healthy", status!.Copilot);
+        Assert.Equal("Fake", status!.Copilot);
         Assert.Equal("Fake gateway: no Copilot runtime", status.CopilotDetail);
     }
 }
@@ -45,13 +45,13 @@ public sealed class NotAuthenticatedEndpointTests(NotAuthenticatedApp app) : ICl
     }
 
     [Fact]
-    public async Task StatusReportsTheMissingSignInAsDegradedWithItsDetail()
+    public async Task StatusReportsTheMissingSignInAsNotAuthenticatedWithItsDetail()
     {
         var response = await app.CreateClient().GetAsync("/api/status");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var status = await response.Content.ReadFromJsonAsync<StatusDto>();
-        Assert.Equal("degraded", status!.Copilot);
+        Assert.Equal("NotAuthenticated", status!.Copilot);
         Assert.Equal(NotAuthenticatedApp.Detail, status.CopilotDetail);
     }
 }
