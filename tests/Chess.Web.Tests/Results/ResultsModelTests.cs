@@ -28,15 +28,16 @@ public class ResultsModelTests
     [Fact]
     public void TheVerdictIsNotSignificantWhenTheIntervalContainsOneHalf()
     {
-        var verdict = ResultsModel.Verdict(Pair("alpha", "beta", 0.58, 0.45, 0.70), "beta");
+        var verdict = ResultsModel.Verdict(Pair("alpha", "beta", 0.58, 0.45, 0.70), "beta", bothEstablished: true);
 
         Assert.StartsWith("Not yet significantly ahead of #2 (beta)", verdict);
+        Assert.DoesNotContain("too few games", verdict);
     }
 
     [Fact]
     public void TheVerdictIsSignificantWhenTheWholeIntervalIsAboveOneHalf()
     {
-        var verdict = ResultsModel.Verdict(Pair("alpha", "beta", 0.7, 0.55, 0.82), "beta");
+        var verdict = ResultsModel.Verdict(Pair("alpha", "beta", 0.7, 0.55, 0.82), "beta", bothEstablished: true);
 
         Assert.StartsWith("Significantly ahead of #2 (beta)", verdict);
     }
@@ -45,7 +46,59 @@ public class ResultsModelTests
     public void AnIntervalThatStartsExactlyAtOneHalfIsNotSignificant()
     {
         // RQC_low = 0.5 leaves 0.5 inside the interval, so the lead is not yet significant.
-        Assert.False(ResultsModel.SignificantlyAhead(Pair("alpha", "beta", 0.6, 0.5, 0.7)));
+        Assert.False(ResultsModel.SignificantlyAhead(Pair("alpha", "beta", 0.6, 0.5, 0.7), bothEstablished: true));
+    }
+
+    [Fact]
+    public void ADegenerateSingleGameIntervalIsNeverSignificant()
+    {
+        // One game: every bootstrap resample is the same, so the interval is a point at 0.6 that excludes 0.5 by a wide margin.
+        var pair = Pair("alpha", "beta", 0.6, 0.6, 0.6);
+
+        Assert.False(ResultsModel.SignificantlyAhead(pair, bothEstablished: true));
+        Assert.StartsWith("Not yet significantly ahead of #2 (beta)", ResultsModel.Verdict(pair, "beta", bothEstablished: true));
+    }
+
+    [Fact]
+    public void AProvisionalModelIsNeverSignificantEvenWithAWideSeparation()
+    {
+        var pair = Pair("alpha", "beta", 0.9, 0.85, 0.95);
+
+        var verdict = ResultsModel.Verdict(pair, "beta", bothEstablished: false);
+
+        Assert.False(ResultsModel.SignificantlyAhead(pair, bothEstablished: false));
+        Assert.StartsWith("Not yet significantly ahead of #2 (beta)", verdict);
+        Assert.EndsWith("Not yet significant: too few games (need 20 rated games per model).", verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ANotYetSignificantVerdictWithEstablishedModelsDoesNotBlameTheSampleSize()
+    {
+        var verdict = ResultsModel.Verdict(Pair("alpha", "beta", 0.58, 0.45, 0.70), "beta", bothEstablished: true);
+
+        Assert.DoesNotContain("too few games", verdict);
+    }
+
+    [Fact]
+    public void ATinySampleIsNotSignificantInTheReportEvenWhenTheIntervalIsClear()
+    {
+        var report = Build(
+            models: [Model("alpha", 120, 66, provisional: true), Model("beta", 90, 40, provisional: true)],
+            pair: Pair("alpha", "beta", 0.9, 0.85, 0.95));
+
+        Assert.StartsWith("Not yet significantly ahead of #2 (beta)", report.Verdict);
+        Assert.Contains("Not yet significant: too few games", report.Verdict);
+    }
+
+    [Fact]
+    public void AnEstablishedLeadWithAnIntervalAboveOneHalfIsSignificantInTheReport()
+    {
+        var report = Build(
+            models: [Model("alpha", 120, 66), Model("beta", 90, 40)],
+            pair: Pair("alpha", "beta", 0.62, 0.55, 0.70));
+
+        Assert.StartsWith("Significantly ahead of #2 (beta)", report.Verdict);
+        Assert.DoesNotContain("too few games", report.Verdict);
     }
 
     [Fact]

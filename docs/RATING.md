@@ -105,6 +105,21 @@ Reading guide shown in the UI: 0.50 – 0.55 *indistinguishable*, 0.55 – 0.65 
 0.65 – 0.80 *clearly better*, > 0.80 *dominant* — and *not significant* whenever the interval
 contains 0.5, whatever the point value.
 
+### When the UI may say "significantly"
+
+A pairwise result is called *significant* only when **all** of these hold, and the UI applies
+this one rule everywhere (`Components/Pages/Shared/Significance.cs`):
+
+- **(a)** the 95 % interval excludes 0.5 by a real margin: `RqcLow > 0.5 + 1e-6` or
+  `RqcHigh < 0.5 − 1e-6`;
+- **(b)** the interval is not degenerate: `RqcHigh − RqcLow > 1e-6`. With one game every bootstrap
+  resample is identical, so the interval collapses to a point and would otherwise pass (a) on
+  floating-point noise;
+- **(c)** neither model is provisional (§6): each has at least 20 rated games.
+
+When a result is not significant only because of (c), the UI says so: "Not yet significant: too
+few games (need 20 rated games per model)."
+
 ## 6. Leaderboard and confidence
 
 - **Arena score** `AS_i = 100 · mean_{j ≠ i} RQC(i, j)` over every other rated model. 50 is the
