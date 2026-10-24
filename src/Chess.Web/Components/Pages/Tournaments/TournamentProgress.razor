@@ -1,0 +1,12 @@
+<span class="tournament-progress">
+    <progress value="@Finished" max="@Math.Max(Total, 1)" aria-label="Games finished"></progress>
+    <span>@Finished of @Total games</span>
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public int Finished { get; set; }
+
+    [Parameter, EditorRequired]
+    public int Total { get; set; }
+}

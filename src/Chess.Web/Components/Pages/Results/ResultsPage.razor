@@ -1,0 +1,242 @@
+@page "/results"
+@using Chess.Web.Api
+@using Chess.Web.Components.Charts
+@implements IDisposable
+@inject ArenaApiClient Api
+@inject IHttpClientFactory HttpClients
+
+<PageTitle>Results · LLM Chess Arena</PageTitle>
+
+<h1 class="results-title">Results</h1>
+
+<div class="results-filter">
+    <label for="results-scope">Show</label>
+    <select id="results-scope" @onchange="OnScopeChanged" disabled="@_loading">
+        <option value="" selected="@(_tournamentId is null)">All games</option>
+        @foreach (var tournament in _tournaments)
+        {
+            <option value="@tournament.Id" selected="@(_tournamentId == tournament.Id)">@tournament.Name</option>
+        }
+    </select>
+    @if (_loading)
+    {
+        <span class="results-status" role="status">Loading…</span>
+    }
+</div>
+
+@if (_error is not null)
+{
+    <p class="results-error" role="alert">Results unavailable: @_error</p>
+}
+else if (_report is null)
+{
+    <p>Loading results…</p>
+}
+else if (_report.Ranking.Count == 0)
+{
+    <section class="results-section results-empty" data-section="empty" aria-labelledby="empty-heading">
+        <h2 id="empty-heading">No rated games yet</h2>
+        <p>Results come from rated games. <a href="/tournaments">Start a tournament on the Tournaments page</a>, and the rankings appear here as its games finish.</p>
+    </section>
+}
+else
+{
+    var leader = _report.Ranking[0];
+    var second = _report.Ranking.Count > 1 ? _report.Ranking[1] : null;
+
+    @* 1. Big Picture: the headline and the ranked bars are the first thing on the page (03 §6.1). *@
+    <section class="results-section big-picture" data-section="big-picture" aria-labelledby="big-picture-heading">
+        <h2 id="big-picture-heading">Big picture</h2>
+        <p class="headline">
+            Best overall: <strong>@leader.Model</strong>@(leader.Provisional ? " (provisional)" : "") — arena score @ResultsModel.Number(leader.ArenaScore, "0.0"),
+            rating @ResultsModel.Number(leader.Rating, "0") ± @ResultsModel.Number(ResultsModel.HalfWidth(leader.CiLow, leader.CiHigh), "0").
+        </p>
+        @if (_report.Verdict is { } verdict)
+        {
+            <p class="verdict">@verdict</p>
+        }
+        <RankedBarChart Title="Arena score by model"
+                        Description="Arena score is 100 × the mean RQC against every other model; 50 is the average of the field. Whiskers approximate the 95 % interval from the pairwise RQC intervals."
+                        Items="_report.Bars" Min="0" Max="100" ValueFormat="0.0" />
+    </section>
+
+    @* 2. Rating over time. *@
+    <section class="results-section" data-section="rating-history" aria-labelledby="rating-history-heading">
+        <h2 id="rating-history-heading">Rating over time</h2>
+        <LineChart Title="Rating by rated games played"
+                   Description="@(_tournamentId is null ? "Every rated game, all tournaments." : "Snapshots cover all rated games; the tournament filter does not apply to this chart.")"
+                   XTitle="Rated games played" YTitle="Rating" Series="_report.Lines" />
+        @if (_report.Folded.Count > 0)
+        {
+            <button type="button" class="results-more" aria-expanded="@_showFolded" @onclick="() => _showFolded = !_showFolded">
+                +@_report.Folded.Count more
+            </button>
+            @if (_showFolded)
+            {
+                <p class="results-folded">
+                    Not drawn, because the palette has eight colours: @string.Join(", ", _report.Folded). Their ratings are in the table below.
+                </p>
+            }
+        }
+    </section>
+
+    @* 3. Head-to-head matrix. *@
+    <section class="results-section" data-section="head-to-head" aria-labelledby="head-to-head-heading">
+        <h2 id="head-to-head-heading">Head-to-head matrix</h2>
+        <Heatmap Title="RQC for every pairing"
+                 Description="Row model against column model. Above 0.50 the row model is stronger. Muted cells have an interval that includes 0.50, so the difference is not significant."
+                 Labels="_report.HeatLabels" Cells="_report.Heat" Midpoint="0.5" Min="0" Max="1" ValueFormat="0.00" />
+    </section>
+
+    @* 4. Results breakdown. *@
+    <section class="results-section" data-section="breakdown" aria-labelledby="breakdown-heading">
+        <h2 id="breakdown-heading">Results breakdown</h2>
+        <StackedBar100 Title="Outcomes per model" Description="Share of each model's rated games: wins, draws, losses and forfeit losses." Rows="_report.Outcomes" />
+    </section>
+
+    @* 5. Move quality: two separate bar charts, never a dual axis. *@
+    <section class="results-section" data-section="move-quality" aria-labelledby="move-quality-heading">
+        <h2 id="move-quality-heading">Move quality</h2>
+        <div class="move-quality">
+            <BarChart Title="First-attempt legality"
+                      Description="Share of moves that were legal on the first attempt."
+                      Items="_report.Legality" Max="100" ValueFormat="0" Colour="@ChartPalette.Neutral" />
+            @if (_report.Acpl is { } acpl)
+            {
+                <BarChart Title="Average centipawn loss"
+                          Description="Lower is better. Measured by Stockfish, so shown only where engine data exists."
+                          Items="acpl" ValueFormat="0" Colour="@ChartPalette.Neutral" />
+            }
+        </div>
+    </section>
+
+    @* 6. Strength vs cost. *@
+    <section class="results-section" data-section="strength-cost" aria-labelledby="strength-cost-heading">
+        <h2 id="strength-cost-heading">Strength vs cost</h2>
+        <ScatterPlot Title="Rating against latency"
+                     Description="Latency and cost are shown here, not in the rating: a fast model that plays badly does not gain from being fast."
+                     XTitle="Average latency per move (s)" YTitle="Rating" Points="_report.Scatter" />
+    </section>
+
+    @* 7. Full table: the leaderboard as a table, the accessible view of the same numbers. *@
+    <section class="results-section" data-section="table" aria-labelledby="table-heading">
+        <h2 id="table-heading">Leaderboard table</h2>
+        <p class="results-note">
+            White advantage: @ResultsModel.Number(_board!.WhiteAdvantage, "0") rating points over @_board.Games rated games.
+            Ranked by arena score, then rating; provisional models sort after the others.
+        </p>
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Model</th>
+                    <th scope="col" class="num">Arena score</th>
+                    <th scope="col" class="num">Rating</th>
+                    <th scope="col" class="num">95 % interval</th>
+                    <th scope="col" class="num">Games</th>
+                    <th scope="col" class="num">Legality</th>
+                    <th scope="col" class="num">Move quality</th>
+                    <th scope="col" class="num">Quality</th>
+                    <th scope="col">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < _report.Ranking.Count; i++)
+                {
+                    var row = _report.Ranking[i];
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>@row.Model</td>
+                        <td class="num">@ResultsModel.Number(row.ArenaScore, "0.0")</td>
+                        <td class="num">@ResultsModel.Number(row.Rating, "0")</td>
+                        <td class="num">@ResultsModel.Number(row.CiLow, "0") to @ResultsModel.Number(row.CiHigh, "0")</td>
+                        <td class="num">@row.Games</td>
+                        <td class="num">@Percent(row.Legality)</td>
+                        <td class="num">@(row.MoveQuality is { } mq ? Percent(mq) : "—")</td>
+                        <td class="num">@ResultsModel.Number(row.Quality, "0.00")</td>
+                        <td>@(row.Provisional ? "Provisional" : "Established")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    private TournamentRatingsClient _ratings = null!;
+    private IReadOnlyList<TournamentDto> _tournaments = [];
+    private Guid? _tournamentId;
+    private ResultsReport? _report;
+    private LeaderboardDto? _board;
+    private string? _error;
+    private bool _loading;
+    private bool _showFolded;
+    private CancellationTokenSource? _cts;
+
+    protected override Task OnInitializedAsync()
+    {
+        _ratings = new TournamentRatingsClient(HttpClients.CreateClient(TournamentRatingsClient.ClientName));
+        return LoadAsync(_tournamentId);
+    }
+
+    private Task OnScopeChanged(ChangeEventArgs args)
+    {
+        Guid? selected = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
+        _tournamentId = selected;
+        _showFolded = false;
+        return LoadAsync(selected);
+    }
+
+    /// <summary>Loads one scope. A newer scope cancels the load still running, so a late answer never overwrites the page.</summary>
+    private async Task LoadAsync(Guid? tournamentId)
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
+        _loading = true;
+        _error = null;
+        try
+        {
+            var boardTask = _ratings.GetLeaderboardAsync(tournamentId, ct);
+            var allTask = Api.GetLeaderboardAsync(ct);
+            var tournamentsTask = Api.GetTournamentsAsync(ct);
+            await Task.WhenAll(boardTask, allTask, tournamentsTask);
+            _tournaments = tournamentsTask.Result;
+            var board = boardTask.Result;
+            var models = allTask.Result.Models.Select(m => m.Model).ToList();
+
+            var matrix = await _ratings.GetRatingMatrixAsync(tournamentId, ct);
+            var breakdown = await Api.GetResultsBreakdownAsync(tournamentId, ct);
+            PairwiseCoefficient? leaderVsSecond = board.Models.Count > 1
+                ? await _ratings.GetPairwiseAsync(board.Models[0].Model, board.Models[1].Model, tournamentId, ct)
+                : null;
+
+            // The history is not scoped by tournament, so only the models that get a palette colour are fetched.
+            var drawn = ChartPalette.AssignSlots(models).Keys.ToList();
+            var histories = await Task.WhenAll(drawn.Select(async model =>
+                (Model: model, Points: await Api.GetRatingHistoryAsync(model, ct))));
+
+            _board = board;
+            _report = ResultsModel.Build(new ResultsInputs(board, models, matrix, breakdown, leaderVsSecond,
+                histories.ToDictionary(h => h.Model, h => h.Points, StringComparer.Ordinal)));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loading = false;
+    }
+
+    private static string Percent(double fraction) => ResultsModel.Number(100 * fraction, "0") + "%";
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

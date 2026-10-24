@@ -1,0 +1,267 @@
+@page "/tournaments/{Id:guid}"
+@using System.Net
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Results
+@implements IDisposable
+@inject ArenaApiClient Api
+@inject IHttpClientFactory HttpClients
+
+<PageTitle>Tournament · LLM Chess Arena</PageTitle>
+
+<p class="back"><a href="/tournaments">← All tournaments</a></p>
+
+@if (_notFound)
+{
+    <h1>Tournament not found</h1>
+    <p class="status-error" role="alert">No tournament has the id @Id.</p>
+}
+else if (_tournament is null)
+{
+    @if (_tournamentError is not null)
+    {
+        <p class="status-error" role="alert">Could not load the tournament: @_tournamentError</p>
+    }
+    else
+    {
+        <p>Loading tournament…</p>
+    }
+}
+else
+{
+    <h1>@_tournament.Name</h1>
+
+    <dl class="tournament-facts">
+        <dt>Status</dt>
+        <dd>@TournamentFormat.Status(_tournament.Status)</dd>
+        <dt>Models</dt>
+        <dd>@string.Join(", ", _tournament.Models)</dd>
+        <dt>Games per pair</dt>
+        <dd>@_tournament.GamesPerPair</dd>
+        <dt>Created</dt>
+        <dd>@TournamentFormat.When(_tournament.CreatedAt)</dd>
+        @if (_tournament.FinishedAt is { } finished)
+        {
+            <dt>Finished</dt>
+            <dd>@TournamentFormat.When(finished)</dd>
+        }
+    </dl>
+
+    <div class="tournament-actions">
+        <TournamentProgress Finished="_tournament.GamesFinished" Total="_tournament.GamesTotal" />
+        @if (TournamentFormat.IsRunning(_tournament.Status))
+        {
+            <CancelTournament TournamentId="Id" Cancelled="ReloadAsync" />
+        }
+    </div>
+
+    <section class="tournament-section" aria-labelledby="leaderboard-heading">
+        <h2 id="leaderboard-heading">Leaderboard</h2>
+        <p class="muted">Only the rated games of this tournament count. Ranked by arena score, as on the Results page.</p>
+
+        @if (_boardError is not null)
+        {
+            <p class="status-error" role="alert">Could not load the leaderboard: @_boardError</p>
+        }
+        else if (_board is null)
+        {
+            <p>Loading the leaderboard…</p>
+        }
+        else if (_board.Models.Count == 0)
+        {
+            <p>No rated games have finished yet.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table id="tournament-leaderboard">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Model</th>
+                            <th>Arena score</th>
+                            <th>Rating</th>
+                            <th>95 % interval</th>
+                            <th>Games</th>
+                            <th>Legal first try</th>
+                            <th>Quality</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ var rank = 0; }
+                        @foreach (var model in RankedModels)
+                        {
+                            rank++;
+                            <tr>
+                                <td>@rank</td>
+                                <td>@model.Model</td>
+                                <td>@TournamentFormat.Fixed(model.ArenaScore, "0.00")</td>
+                                <td>@TournamentFormat.Fixed(model.Rating, "0")</td>
+                                <td>@TournamentFormat.Fixed(model.CiLow, "0") – @TournamentFormat.Fixed(model.CiHigh, "0")</td>
+                                <td>@model.Games</td>
+                                <td>@TournamentFormat.Percent(model.Legality)</td>
+                                <td>@TournamentFormat.Fixed(model.Quality, "0.00")</td>
+                                <td>@(model.Provisional ? "provisional" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="tournament-section" aria-labelledby="games-heading">
+        <h2 id="games-heading">Games</h2>
+
+        @if (_gamesError is not null)
+        {
+            <p class="status-error" role="alert">Could not load the games: @_gamesError</p>
+        }
+        else if (_games is null)
+        {
+            <p>Loading games…</p>
+        }
+        else if (_games.Count == 0)
+        {
+            <p>No games yet.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table id="tournament-games">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>White</th>
+                            <th>Black</th>
+                            <th>State</th>
+                            <th>Result</th>
+                            <th>Termination</th>
+                            <th>Plies</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var index = 0; index < _games.Count; index++)
+                        {
+                            var game = _games[index];
+                            <tr>
+                                <td>@(index + 1)</td>
+                                <td>@game.White.ModelId</td>
+                                <td>@game.Black.ModelId</td>
+                                <td>@game.State</td>
+                                <td>@game.Result</td>
+                                <td>@(game.Termination ?? "–")</td>
+                                <td>@game.PlyCount</td>
+                                <td><a href="/games/@game.Id">Open</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private readonly CancellationTokenSource _cts = new();
+    private TournamentRatingsClient _ratings = null!;
+    private Task? _poller;
+
+    private TournamentDto? _tournament;
+    private string? _tournamentError;
+    private bool _notFound;
+    private IReadOnlyList<GameSummaryDto>? _games;
+    private string? _gamesError;
+    private LeaderboardDto? _board;
+    private string? _boardError;
+
+    private IEnumerable<ModelRating> RankedModels =>
+        (_board?.Models ?? []).OrderByDescending(model => model.ArenaScore).ThenBy(model => model.Model, StringComparer.Ordinal);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _ratings ??= new TournamentRatingsClient(HttpClients.CreateClient(TournamentRatingsClient.ClientName));
+
+        // The same instance is reused when only the id changes, so the page starts from nothing again.
+        _tournament = null;
+        _tournamentError = null;
+        _notFound = false;
+        _games = null;
+        _gamesError = null;
+        _board = null;
+        _boardError = null;
+
+        await ReloadAsync();
+        if (_poller is null or { IsCompleted: true })
+        {
+            _poller = PollAsync();
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        var ct = _cts.Token;
+        try
+        {
+            _tournament = await Api.GetTournamentAsync(Id, ct);
+            _tournamentError = null;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            _notFound = true;
+            return;
+        }
+        catch (HttpRequestException ex)
+        {
+            _tournamentError = ex.Message;
+            return;
+        }
+
+        try
+        {
+            _games = await TournamentGames.LoadAsync(Api, Id, ct);
+            _gamesError = null;
+        }
+        catch (HttpRequestException ex)
+        {
+            _gamesError = ex.Message;
+        }
+
+        try
+        {
+            _board = await _ratings.GetLeaderboardAsync(Id, ct);
+            _boardError = null;
+        }
+        catch (HttpRequestException ex)
+        {
+            _boardError = ex.Message;
+        }
+    }
+
+    // Reloads while the tournament is running, so the progress and the leaderboard move on their own.
+    private async Task PollAsync()
+    {
+        var ct = _cts.Token;
+        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(() => ReloadAsync());
+                if (_tournament is not { } tournament || !TournamentFormat.IsRunning(tournament.Status))
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    public void Dispose() => _cts.Cancel();
+}

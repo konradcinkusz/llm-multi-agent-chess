@@ -1,0 +1,93 @@
+/* Results page (03 §6.1). Sections stack in one column; the Big Picture sits at the top so it is visible at 1366×768. */
+
+.results-title {
+    margin: 0 0 8px;
+    font-size: 1.5rem;
+}
+
+.results-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.results-status {
+    opacity: 0.75;
+}
+
+.results-error {
+    color: #c0392b;
+}
+
+.results-section {
+    margin: 0 0 24px;
+}
+
+.results-section h2 {
+    margin: 0 0 8px;
+    font-size: 1.125rem;
+}
+
+.big-picture {
+    margin-bottom: 16px;
+}
+
+.headline {
+    margin: 0 0 4px;
+    font-size: 1.125rem;
+}
+
+.verdict {
+    margin: 0 0 8px;
+    color: color-mix(in srgb, CanvasText 80%, transparent);
+}
+
+.results-note {
+    margin: 0 0 8px;
+    font-size: 0.875rem;
+    opacity: 0.85;
+}
+
+.results-more {
+    margin: 0 0 8px;
+    padding: 2px 8px;
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+.results-folded {
+    font-size: 0.875rem;
+}
+
+.move-quality {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.results-table th,
+.results-table td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.results-table .num {
+    text-align: right;
+}
+
+@media (max-width: 600px) {
+    .results-table {
+        display: block;
+        overflow-x: auto;
+    }
+}

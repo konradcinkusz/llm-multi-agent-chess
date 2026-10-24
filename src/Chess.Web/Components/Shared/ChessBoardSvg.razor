@@ -1,0 +1,66 @@
+<svg class="chess-board" viewBox="0 0 800 800" role="img" aria-label="Chess board" xmlns="http://www.w3.org/2000/svg">
+@{
+    var pieces = FenBoard.Parse(Fen);
+}
+@for (var row = 0; row < 8; row++)
+{
+    for (var col = 0; col < 8; col++)
+    {
+        var file = Flipped ? 7 - col : col;
+        var rank = Flipped ? row : 7 - row;
+        var square = FenBoard.Square(file, rank);
+        var isDark = (file + rank) % 2 == 0;
+        var x = col * 100;
+        var y = row * 100;
+        var isLastMove = LastMove is not null && (LastMove.From == square || LastMove.To == square);
+
+        <rect data-square="@square" x="@x" y="@y" width="100" height="100" fill="@(isDark ? DarkSquare : LightSquare)" />
+
+        @if (isLastMove)
+        {
+            <rect data-highlight="@square" class="last-move" x="@x" y="@y" width="100" height="100" fill="#f6f669" fill-opacity="0.6" />
+        }
+
+        @if (pieces.TryGetValue(square, out var piece))
+        {
+            @SvgText(new() { ["data-piece"] = piece, ["x"] = x + 50, ["y"] = y + 50, ["text-anchor"] = "middle", ["dominant-baseline"] = "central", ["font-size"] = 80, ["fill"] = "#1a1a1a" }, FenBoard.Symbol(piece))
+        }
+
+        @if (col == 0)
+        {
+            @SvgText(new() { ["class"] = "coord", ["x"] = 6, ["y"] = y + 18, ["font-size"] = 16, ["fill"] = isDark ? LightSquare : DarkSquare }, (rank + 1).ToString())
+        }
+
+        @if (row == 7)
+        {
+            @SvgText(new() { ["class"] = "coord", ["x"] = x + 94, ["y"] = 794, ["text-anchor"] = "end", ["font-size"] = 16, ["fill"] = isDark ? LightSquare : DarkSquare }, ((char)('a' + file)).ToString())
+        }
+    }
+}
+</svg>
+
+@code {
+    private const string LightSquare = "#f0d9b5";
+    private const string DarkSquare = "#b58863";
+
+    /// <summary>FEN of the position to draw. Only the piece-placement field is used.</summary>
+    [Parameter, EditorRequired]
+    public string Fen { get; set; } = "";
+
+    /// <summary>The last move, highlighted on both squares. Null draws no highlight.</summary>
+    [Parameter]
+    public BoardMove? LastMove { get; set; }
+
+    /// <summary>When true, Black is at the bottom (rank 1 at the top).</summary>
+    [Parameter]
+    public bool Flipped { get; set; }
+
+    // Razor reserves the <text> tag and rejects attributes on it, so the SVG text element is built directly.
+    private static RenderFragment SvgText(Dictionary<string, object> attributes, string content) => builder =>
+    {
+        builder.OpenElement(0, "text");
+        builder.AddMultipleAttributes(1, attributes);
+        builder.AddContent(2, content);
+        builder.CloseElement();
+    };
+}

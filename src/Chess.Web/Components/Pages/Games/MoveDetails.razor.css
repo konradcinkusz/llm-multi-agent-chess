@@ -1,0 +1,23 @@
+/* Details of the move on the board (03 §6): the attempts, latency and analysis the archive keeps for each move. */
+
+.move-details {
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    border-left: 3px solid #2a78d6;
+}
+
+.move-details h2 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.move-details dl {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 4px 12px;
+    margin: 0;
+}
+
+.move-details dd {
+    margin: 0;
+}

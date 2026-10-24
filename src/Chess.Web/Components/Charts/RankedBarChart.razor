@@ -1,0 +1,139 @@
+@using static Chess.Web.Components.Charts.ChartGeometry
+
+<ChartFrame Title="@Title" Description="@Description">
+    @if (_bars.Count == 0)
+    {
+        <p class="chart-empty">No data.</p>
+    }
+    else
+    {
+        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+            <defs>
+                <pattern id="@HatchNeutral" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="6" stroke-width="2" style="stroke: @ChartPalette.Neutral" />
+                </pattern>
+                <pattern id="@HatchAccent" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="6" stroke-width="2" style="stroke: @ChartPalette.Accent" />
+                </pattern>
+            </defs>
+
+            @foreach (var tick in _ticks)
+            {
+                <line class="chart-grid" x1="@Num(_scale.Map(tick))" y1="@Num(PlotTop)" x2="@Num(_scale.Map(tick))" y2="@Num(PlotBottom)" />
+                <ChartText class="chart-tick" x="@Num(_scale.Map(tick))" y="@Num(PlotBottom + 16)" text-anchor="middle">@Num(tick)</ChartText>
+            }
+            <line class="chart-baseline" x1="@Num(PlotLeft)" y1="@Num(PlotTop)" x2="@Num(PlotLeft)" y2="@Num(PlotBottom)" />
+
+            @for (var i = 0; i < _bars.Count; i++)
+            {
+                var bar = _bars[i];
+                var barY = PlotTop + i * RowHeight + (RowHeight - BarHeight) / 2;
+                var mid = barY + BarHeight / 2;
+                var end = _scale.Map(bar.Value);
+                var reach = _scale.Map(bar.High ?? bar.Value);
+                <g class="chart-bar" data-bar="@bar.Label">
+                    <ChartText class="chart-label" x="@Num(PlotLeft - 8)" y="@Num(mid + 4)" text-anchor="end">@DisplayLabel(bar)</ChartText>
+                    <path d="@HorizontalBar(PlotLeft, barY, end - PlotLeft, BarHeight, true)" style="@BarStyle(bar)">
+                        <title>@Tooltip(bar)</title>
+                    </path>
+                    @if (bar.Low is double low && bar.High is double high)
+                    {
+                        <line class="chart-whisker" x1="@Num(_scale.Map(low))" y1="@Num(mid)" x2="@Num(_scale.Map(high))" y2="@Num(mid)" />
+                        <line class="chart-whisker" x1="@Num(_scale.Map(low))" y1="@Num(mid - 5)" x2="@Num(_scale.Map(low))" y2="@Num(mid + 5)" />
+                        <line class="chart-whisker" x1="@Num(_scale.Map(high))" y1="@Num(mid - 5)" x2="@Num(_scale.Map(high))" y2="@Num(mid + 5)" />
+                    }
+                    <ChartText class="chart-value" x="@Num(reach + 8)" y="@Num(mid + 4)">@Fixed(bar.Value, ValueFormat)</ChartText>
+                </g>
+            }
+        </svg>
+        <ChartTable Headers="_tableHeaders" Rows="_tableRows" />
+    }
+</ChartFrame>
+
+@code {
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>The bars, in any order; they are drawn best-first.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<RankedBar> Items { get; set; } = [];
+
+    /// <summary>Lower end of the value axis.</summary>
+    [Parameter]
+    public double Min { get; set; }
+
+    /// <summary>Upper end of the value axis. Defaults to the largest value or interval end.</summary>
+    [Parameter]
+    public double? Max { get; set; }
+
+    /// <summary>Number format of the direct value labels and the table, e.g. "0.00".</summary>
+    [Parameter]
+    public string ValueFormat { get; set; } = "0.00";
+
+    private const double Width = 640;
+    private const double LabelWidth = 200;
+    private const double PlotLeft = LabelWidth + 8;
+    private const double PlotRight = Width - 60;
+    private const double PlotTop = 8;
+    private const double RowHeight = 30;
+    private const double BarHeight = 18;
+
+    private readonly string _id = "rb" + Guid.NewGuid().ToString("N")[..8];
+    private string HatchNeutral => _id + "-neutral";
+    private string HatchAccent => _id + "-accent";
+
+    private double PlotBottom => PlotTop + _bars.Count * RowHeight;
+
+    private List<RankedBar> _bars = [];
+    private IReadOnlyList<double> _ticks = [];
+    private LinearScale _scale;
+    private string _viewBox = "";
+    private IReadOnlyList<string> _tableHeaders = [];
+    private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
+
+    protected override void OnParametersSet()
+    {
+        _bars = Items.OrderByDescending(b => b.Value).ThenBy(b => b.Label, StringComparer.Ordinal).ToList();
+
+        var largest = Max ?? _bars.Select(b => b.High ?? b.Value).DefaultIfEmpty(Min + 1).Max();
+        var (low, high, ticks) = NiceAxis(Min, largest);
+        _scale = new LinearScale(low, high, PlotLeft, PlotRight);
+        _ticks = ticks;
+        _viewBox = $"0 0 {Num(Width)} {Num(PlotBottom + 28)}";
+
+        _tableHeaders = ["Model", "Value", "Low", "High", "Provisional"];
+        _tableRows = _bars.Select(b => (IReadOnlyList<string>)new[]
+        {
+            b.Label,
+            Fixed(b.Value, ValueFormat),
+            b.Low is double lo ? Fixed(lo, ValueFormat) : "",
+            b.High is double hi ? Fixed(hi, ValueFormat) : "",
+            b.Provisional ? "yes" : "",
+        }).ToList();
+    }
+
+    private static string DisplayLabel(RankedBar bar) => bar.Provisional ? $"{bar.Label} (provisional)" : bar.Label;
+
+    private string Tooltip(RankedBar bar)
+    {
+        var text = $"{bar.Label}: {Fixed(bar.Value, ValueFormat)}";
+        if (bar.Low is double low && bar.High is double high)
+            text += $" (interval {Fixed(low, ValueFormat)}–{Fixed(high, ValueFormat)})";
+        if (bar.Provisional)
+            text += ", provisional";
+        return text;
+    }
+
+    private string BarStyle(RankedBar bar)
+    {
+        var colour = bar.Highlighted ? ChartPalette.Accent : ChartPalette.Neutral;
+        if (!bar.Provisional)
+            return $"fill: {colour}";
+        var hatch = bar.Highlighted ? HatchAccent : HatchNeutral;
+        return $"fill: url(#{hatch}); stroke: {colour}; stroke-width: 1";
+    }
+}
