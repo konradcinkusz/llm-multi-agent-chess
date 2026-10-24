@@ -238,7 +238,12 @@
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                await InvokeAsync(() => LoadTournamentsAsync(ct));
+                // The fields change on a timer thread, outside any UI event: re-render explicitly.
+                await InvokeAsync(async () =>
+                {
+                    await LoadTournamentsAsync(ct);
+                    StateHasChanged();
+                });
             }
         }
         catch (OperationCanceledException)
