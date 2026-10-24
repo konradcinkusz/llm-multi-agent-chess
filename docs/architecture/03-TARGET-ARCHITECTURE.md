@@ -232,10 +232,20 @@ public interface IMoveQualityAnalyzer
 | `moves` | `game_id`, `ply` (unique together), `color`, `san`, `fen_after`, `attempts`, `latency_ms`, `input_tokens?`, `output_tokens?`, `centipawn_loss?`, `best_san?`, `played_at` |
 | `move_attempts` | `game_id`, `ply`, `number`, `prompt`, `raw_reply?`, `parsed_san?`, `legal`, `latency_ms`, `error?`, `created_at` (replaces `PromptLogs`) |
 | `tournaments` | `id`, `name`, `models` (jsonb string[]), `games_per_pair`, `max_concurrency`, `status`, `created_at`, `finished_at?` |
+| `rating_snapshots` | `id`, `taken_at`, `after_game_id`, `rated_games`, `model`, `rating`, `ci_low`, `ci_high`, `arena_score`, `games`, `provisional`, `formula_version` — one row per model, appended after every finished rated game |
 
-The rating is **not stored**: it is recomputed from finished, rated games on read (pure
-function, cheap at this scale), so the formula can change without a data migration and every
-number on screen is reproducible from the games table.
+**Everything is persisted in Postgres** (owner requirement, 2026-10-24): games, every move,
+every LLM attempt with its prompt and reply, tournaments, and the rating history. The default
+run (`dotnet run --project src/Chess.AppHost`) always uses the Aspire-managed Postgres container
+with the named volume `chess-arena-pg`, so data survives restarts of the app and of the
+container. `InMemory` exists only for tests and the `fake` launch profile. An existing Postgres
+can be used instead by setting the AppHost connection string `chess` (`ConnectionStrings:chess`
+in AppHost user secrets) — then no container is started.
+
+The **current** leaderboard is still recomputed from the games table on read (pure function),
+so every number on screen is reproducible from stored games. `rating_snapshots` is the
+persisted history of those computations, for the rating-over-time chart; it is written, never
+read back into a calculation.
 
 ## 5. API (minimal API, `/api` prefix, JSON, RFC 7807 errors)
 
@@ -253,6 +263,8 @@ number on screen is reproducible from the games table.
 | `GET /api/ratings` | leaderboard (`ModelRating[]`, white advantage, n games) | T2.5 |
 | `GET /api/ratings/pairwise?a=&b=` | `PairwiseCoefficient` | T2.5 |
 | `GET /api/ratings/matrix` | RQC for every ordered pair | T2.5 |
+| `GET /api/ratings/history?model` | `RatingHistoryPointDto[]` from `rating_snapshots`, oldest first | T2.9 |
+| `GET /api/results/breakdown?tournamentId` | `ModelResultsDto[]`: W/D/L, forfeits, latency, tokens per model | T2.9 |
 | `GET /api/attempts?gameId&model&page` | prompt/attempt log (admin view) | T2.7 |
 
 ### 5.1 API DTOs (`Chess.Api/Contracts/ApiContracts.cs`, frozen in wave 0)
@@ -279,6 +291,11 @@ public sealed record ModelDto(string Id, string DisplayName, double? PremiumMult
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);
 public sealed record LeaderboardDto(IReadOnlyList<Chess.Rating.ModelRating> Models, double WhiteAdvantage, int Games, bool MoveQualityAvailable);
 public sealed record MatrixDto(IReadOnlyList<string> Models, IReadOnlyList<Chess.Rating.PairwiseCoefficient> Cells);
+public sealed record RatingHistoryPointDto(DateTimeOffset TakenAt, int RatedGames, string Model, double Rating,
+    double CiLow, double CiHigh, double ArenaScore, bool Provisional);
+public sealed record ModelResultsDto(string Model, int Games, int Wins, int Draws, int Losses, int ForfeitLosses,
+    int Moves, double FirstAttemptLegalRate, double AvgLatencyMs, double? AvgInputTokens, double? AvgOutputTokens,
+    double? AverageCentipawnLoss);
 public sealed record AttemptDto(Guid GameId, int Ply, int Number, string ModelId, string Prompt, string? RawReply,
     string? ParsedSan, bool Legal, long LatencyMs, string? Error, DateTimeOffset CreatedAt);
 ```
@@ -303,8 +320,43 @@ and there is no CORS — without a second stack:
 - Live updates: `GameEventsClient` reads `GET /api/games/{id}/events` as a stream
   (`HttpCompletionOption.ResponseHeadersRead`, line-by-line SSE parsing) and raises C# events
   the page re-renders on. No SignalR client package, no hub on the API.
-- Pages: `/` live game · `/leaderboard` · `/head-to-head` · `/tournaments` (+ `/{id}`) ·
-  `/games` (+ `/{id}` replay) · `/admin/attempts`.
+- Pages: `/results` (**first item in the navigation**) · `/` live game · `/head-to-head` ·
+  `/tournaments` (+ `/{id}`) · `/games` (+ `/{id}` replay) · `/admin/attempts`.
+- Charts are pure Razor SVG components in `Components/Charts/` (no JS library), following the
+  dataviz rules in §6.1.
+
+### 6.1 The Results page (`/results`) — "who is best" before any scrolling
+
+Order on the page is fixed; everything renders top to bottom in one column:
+
+1. **Big Picture** (above the fold, full width). A headline sentence —
+   *"Best overall: **{model}** — arena score {AS}, rating {R} ± {CI}"* plus *"significantly
+   ahead of #2 ({model2}, RQC {x})"* or *"not yet significantly ahead of #2"* when the RQC
+   interval vs #2 contains 0.5 — followed by a **horizontal ranked bar chart** of arena score for
+   every model, sorted best-first, with the 95 % interval as a whisker, the leader's bar in the
+   accent colour and all others in one neutral series colour, provisional models hatched and
+   labelled, the value direct-labelled at the end of each bar. Filter row above it: all games /
+   one tournament.
+2. **Rating over time** — line chart from `/api/ratings/history`, x = rated games played, one
+   line per model (≤ 8, the rest folded into a "+N more" toggle), legend + direct label at the
+   line end.
+3. **Head-to-head matrix** — RQC heatmap, row model vs column model, diverging colour scale
+   with a neutral grey at 0.5, cell text value, non-significant cells muted.
+4. **Results breakdown** — horizontal 100 % stacked bar per model: wins / draws / losses /
+   forfeit losses.
+5. **Move quality** — two separate bar charts (never a dual axis): first-attempt legality %
+   and ACPL (the second only when Stockfish data exists).
+6. **Strength vs cost** — scatter of rating (y) against average latency per move (x), one
+   neutral colour, every point direct-labelled with the model name.
+7. **Full table** — the leaderboard as a table (accessible view of the same data).
+
+Chart rules (from the dataviz guidance): one axis per chart; colour follows the model, never
+its rank (slot assigned by the model id's position in the alphabetically sorted list of all
+models ever rated, so filtering does not repaint); categorical palette in fixed order
+`#2a78d6 #eb6834 #1baf7a #eda100 #e87ba4 #008300 #6250d6 #e34948` (dark mode:
+`#3987e5 #d95926 #199e70 #c98500 #d55181 #008300 #9085e9 #e66767`); text in text colours,
+never the series colour; 2 px lines, bars with 4 px rounded data-end; recessive grid; every
+mark has an SVG `<title>` tooltip (hover) and the page has a table view; light and dark themes.
 - Components kept from ChessBlazor where they still fit (`MoveHistory`, `StatusBadge`,
   `AnalysisPanel`); `ChessBoard` becomes a pure SVG component from FEN instead of fetching
   `/board-svg`. Template leftovers (`Counter`, `Weather`, `Home`, `sample-data`) are deleted.
