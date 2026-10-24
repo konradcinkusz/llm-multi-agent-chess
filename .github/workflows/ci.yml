@@ -28,8 +28,9 @@ jobs:
       - name: Build (warnings as errors)
         run: dotnet build Chess.sln -warnaserror
 
+      # The browser journeys (Chess.E2E) need a Chromium, so they run only in the e2e job, which installs one first.
       - name: Test
-        run: dotnet test Chess.sln --no-build --logger trx --results-directory TestResults
+        run: dotnet test Chess.sln --no-build --filter "FullyQualifiedName!~Chess.E2E" --logger trx --results-directory TestResults
 
       - name: Upload test results
         if: always()

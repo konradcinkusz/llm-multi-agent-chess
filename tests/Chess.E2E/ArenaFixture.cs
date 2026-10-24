@@ -31,6 +31,10 @@ public sealed class ArenaFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // The browser is launched before the AppHost starts, so a machine without Chromium fails at once.
+        _playwright = await Playwright.CreateAsync();
+        _browser = await LaunchChromiumAsync(_playwright);
+
         // The AppHost starts the API as a child process, which inherits this environment (Arena:MaxPlies).
         _previousMaxPlies = Environment.GetEnvironmentVariable("Arena__MaxPlies");
         Environment.SetEnvironmentVariable("Arena__MaxPlies", MaxPlies.ToString(CultureInfo.InvariantCulture));
@@ -47,8 +51,6 @@ public sealed class ArenaFixture : IAsyncLifetime
         WebUrl = _app.GetEndpoint("web");
         await WaitUntilServingAsync(WebUrl, ct);
 
-        _playwright = await Playwright.CreateAsync();
-        _browser = await LaunchChromiumAsync(_playwright);
         Assertions.SetDefaultExpectTimeout(15_000);
     }
 
@@ -109,32 +111,29 @@ public sealed class ArenaFixture : IAsyncLifetime
         modelId == Players.Random ? new { kind = "random", modelId } : new { kind = "llm", modelId };
 
     /// <summary>
-    /// The Chromium named by E2E_CHROMIUM_PATH when it is set (a build that is already on the machine, e.g. a cloud
-    /// session whose Playwright cache holds another revision). Otherwise the Playwright cache, and when that is missing,
-    /// one install followed by a second launch. A failed install fails the run; nothing is skipped.
+    /// The Chromium named by E2E_CHROMIUM_PATH when it is set (a build already on the machine, e.g. a cloud session whose
+    /// Playwright cache holds another revision), otherwise the Playwright cache. The journeys never download a browser:
+    /// when neither holds one, the run fails here and says what to run.
     /// </summary>
     private static async Task<IBrowser> LaunchChromiumAsync(IPlaywright playwright)
     {
         var executablePath = Environment.GetEnvironmentVariable("E2E_CHROMIUM_PATH");
-        if (!string.IsNullOrEmpty(executablePath))
+        var options = new BrowserTypeLaunchOptions
         {
-            return await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { ExecutablePath = executablePath });
-        }
+            ExecutablePath = string.IsNullOrEmpty(executablePath) ? null : executablePath,
+        };
 
         try
         {
-            return await playwright.Chromium.LaunchAsync();
+            return await playwright.Chromium.LaunchAsync(options);
         }
-        catch (PlaywrightException)
+        catch (PlaywrightException ex)
         {
-            var exitCode = Microsoft.Playwright.Program.Main(["install", "chromium"]);
-            if (exitCode != 0)
-            {
-                throw new InvalidOperationException(
-                    $"'playwright install chromium' failed with exit code {exitCode}. Set E2E_CHROMIUM_PATH to a Chromium executable to use an existing build.");
-            }
-
-            return await playwright.Chromium.LaunchAsync();
+            throw new InvalidOperationException(
+                "Chromium could not be launched for the browser journeys. Either install the Playwright build once with "
+                + "`pwsh tests/Chess.E2E/bin/Debug/net10.0/playwright.ps1 install chromium`, or point E2E_CHROMIUM_PATH at an "
+                + "existing Chromium and run: E2E_CHROMIUM_PATH=<path to chromium> dotnet test tests/Chess.E2E",
+                ex);
         }
     }
 
