@@ -14,11 +14,11 @@ public sealed record PairwiseCoefficient(string A, string B, double ExpectedScor
     int HeadToHeadGames, double? HeadToHeadScore);
 public sealed record RatingReport(IReadOnlyList<ModelRating> Models, double WhiteAdvantage, int Games);
 
-// T0.2 creates this class with both methods throwing NotImplementedException; T1.6 implements them.
+// Signatures frozen by T0.2; bodies implemented by T1.6 in RatingEngine (RATING.md §3–§6).
 public static class RatingCalculator
 {
     public static RatingReport Compute(IReadOnlyList<GameOutcome> games,
-        IReadOnlyList<PlayerMoveStats> stats, RatingOptions options) => throw new NotImplementedException();
+        IReadOnlyList<PlayerMoveStats> stats, RatingOptions options) => RatingEngine.Compute(games, stats, options);
     public static PairwiseCoefficient Pairwise(RatingReport report, IReadOnlyList<GameOutcome> games, string a, string b)
-        => throw new NotImplementedException();
+        => RatingEngine.Pairwise(report, games, a, b);
 }
