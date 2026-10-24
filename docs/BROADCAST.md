@@ -8,8 +8,9 @@ the stream key. Design: [ADR-011](architecture/05-DECISIONS.md) and [03 §9](arc
 
 ## Before the first day
 
-- The app runs on the machine that will stream, with the Copilot login it already uses. Check `http://localhost:5080/health`:
-  `copilot` must say `Ready`.
+- The app runs on the machine that will stream, with the Copilot login it already uses. Check `http://localhost:5080/api/status`:
+  `"copilot"` must be `"Ready"`. The states and what to do about each are in the README's
+  [troubleshooting section](../README.md#troubleshooting-the-health-states).
 - Docker is running (the app starts Postgres in a container).
 - OBS is installed. The machine does not sleep (see [Keep the machine awake](#keep-the-machine-awake-and-the-app-running-24-h)).
 
@@ -31,7 +32,7 @@ running; detach with `Ctrl-b d` in tmux and reattach with `tmux attach`.
 1. Open `http://localhost:5070/broadcast/plan`.
 2. Pick the models. Each model shows its premium multiplier. `Random` is always available and costs nothing.
 3. Set the start time and the duration (24 h by default), the pacing (move delay 4000 ms and game gap 20 s by default), and the seed.
-4. Press **Generate**. The timeline of every slot and the premium-request estimate per model appear **before anything is saved**.
+4. Press **Generate preview**. The timeline of every slot and the premium-request estimate per model appear **before anything is saved**.
 5. Edit if needed: **Up**, **Down** and **Delete** change the order of the slots.
 6. Press **Save draft**. Nothing runs yet.
 7. Press **Start**. The day plays from the start time; the button is offered only for the saved draft with no unsaved edits.
@@ -117,8 +118,8 @@ The app does not stream. Set up the stream in OBS and YouTube:
 ## Keep the machine awake and the app running 24 h
 
 - **Disable sleep and hibernation.** On Windows, in Settings → System → Power, set sleep and hibernate to **Never** for plugged-in
-  use. On macOS, in System Settings → Energy (or Battery and Power), turn off sleep when the display is off; `caffeinate -dims` in a
-  terminal keeps the machine awake while it runs. Keep the display from sleeping as well, since a sleeping display can freeze the capture.
+  use. On macOS, in System Settings → Energy (or Battery and Power), turn off sleep when the display is off; the built-in
+  `caffeinate` tool keeps the machine awake while it runs. Keep the display from sleeping as well, since a sleeping display can freeze the capture.
 - **Keep the terminal running** with `dotnet run --project src/Chess.AppHost` in a terminal multiplexer, so it survives closing the window.
 - **Keep Docker running** so Postgres is available.
 - **Plug in the machine.** A laptop on battery is put to sleep by the OS regardless of the setting above.

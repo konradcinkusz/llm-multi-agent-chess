@@ -180,6 +180,7 @@ Latency:   820 ms average per request
 
 The connection string is passed only to the API process and never printed. The API is stopped when the script exits.
 
-**Status.** The script passes `shellcheck` and every refusal path above was exercised. It has not been run against a
-live Copilot login. It needs the game endpoints of 03 §5 (`POST /api/games`, `GET /api/games/{id}`, owned by T2.3),
-which are not on `main` yet, so it cannot complete until T2.3 is merged.
+**Status.** Every refusal path above was exercised: running it with no arguments exits 2 with the usage line. It has not
+been run against a live Copilot login, so the one-game result above is not yet observed. The game endpoints it calls
+(`POST /api/games`, `GET /api/games/{id}`) are on `main`, so the owner's live run is the remaining step. `shellcheck` is not
+installed here, so the shell lint was not re-run for this status.

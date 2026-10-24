@@ -1,175 +1,214 @@
-# README.md
-# Chess Agent System with LLM
+# LLM Chess Arena
 
-A sophisticated chess system featuring AI agents powered by Large Language Models (LLMs) playing against each other through a user-friendly Streamlit interface.
+[![CI](https://github.com/konradcinkusz/llm-multi-agent-chess/actions/workflows/ci.yml/badge.svg)](https://github.com/konradcinkusz/llm-multi-agent-chess/actions/workflows/ci.yml "CI workflow: build, test, secret scan and architecture guards")
+[![License: MIT](https://img.shields.io/github/license/konradcinkusz/llm-multi-agent-chess)](LICENSE "MIT license")
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/download "Built on .NET 10 (global.json)")
 
-## Features
+A local arena that ranks the LLMs available through your GitHub Copilot subscription by playing them against each other in chess, and publishes the ranking with a deterministic, documented formula.
 
-- **Multi-Agent System**: Two LLM-powered chess agents playing against each other
-- **Configurable Agents**: Choose different OpenAI models (e.g., GPT-4o) and personalities
-- **Interactive UI**: Clean Streamlit interface with real-time game visualization
-- **Move History**: Detailed move tracking with automatic notation
-- **Auto-Play**: Automatic game progression with configurable delay
-- **Game Analysis**: Material balance and position evaluation
+It runs on `localhost` only. Nothing is deployed. Every game, move, LLM attempt and rating snapshot is stored in PostgreSQL.
 
-## Installation
+## Contents
 
-1. **Clone the repository and enter the directory**:
-   ```bash
-   git clone https://github.com/konradcinkusz/chess-agent-system-with-llm.git
-   cd chess-agent-system-with-llm
-   ```
-2. **Create and activate a virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. **Provide your OpenAI API key**:  
-   The application looks for the key in the `OPENAI_API_KEY` environment variable.  
-   You can supply it either via a `.env` file or by setting the variable directly:
+- [Prerequisites](#prerequisites)
+- [Quickstart](#quickstart)
+- [URLs](#urls)
+- [Pages](#pages)
+- [How ratings work](#how-ratings-work)
+- [Broadcast mode (24 h channel)](#broadcast-mode-24-h-channel)
+- [Cost: every move is a Copilot request](#cost-every-move-is-a-copilot-request)
+- [Data](#data)
+- [Troubleshooting: the `/health` states](#troubleshooting-the-health-states)
+- [Project layout](#project-layout)
+- [Tests and CI](#tests-and-ci)
+- [Documentation](#documentation)
+- [Contributing and license](#contributing-and-license)
 
-   - **Using a `.env` file** (recommended for local development):  
-     ```bash
-     cp .env.example .env
-     # Edit .env and set OPENAI_API_KEY=your_api_key
-     ```
-   - **Setting an environment variable (Windows)**:  
-     - PowerShell (current session):  
-       ```powershell
-       $env:OPENAI_API_KEY="your_api_key"
-       ```  
-     - Command Prompt:  
-       ```cmd
-       setx OPENAI_API_KEY "your_api_key"
-       ```
-5. **Launch the Streamlit interface**:
-   ```bash
-   streamlit run src/main.py
-   ```
-6. **(Optional) Run a headless simulation between two agents**:
-   See [Simulation](#simulation) for details.
+## Prerequisites
 
-## Usage
+| Needed for | What |
+|---|---|
+| Everything | **.NET 10 SDK.** `global.json` pins the 10.0 feature band. Install: `sudo apt-get update && sudo apt-get install -y dotnet-sdk-10.0` on Ubuntu, or the [Microsoft installer](https://dotnet.microsoft.com/download). |
+| The default profile | **Docker**, running. The AppHost starts PostgreSQL in a container. |
+| LLM players | **GitHub Copilot CLI** (`copilot`) installed and logged in on this machine. The app uses that login, or the `copilot-github-token` AppHost secret parameter when you set one. The `fake` profile and `random` players do not need it. |
+| Move-quality analysis (optional) | **Stockfish** on `PATH`, or the path in `Analysis:StockfishPath` in `src/Chess.Api/appsettings.json`. Without it the arena still works; move quality is disabled and the ranking uses legality only. |
 
-1. Configure agents in the sidebar (after launching the app with `streamlit run src/main.py`):
-   - Select a model for White and Black players
-   - Choose personality types
-   - Start a new game
+Run `scripts/dev-setup.sh` to see what is installed and what is missing. It only reports; it never installs.
 
-2. Control the game:
-   - Use "Make Next Move" for step-by-step progression
-   - Toggle "RUN" for automatic play
-   - Monitor move history and game status
-   - Use "New Game" to reset the board with the currently selected agents
-   - Press "RUN" again (now labelled "STOP") to pause automatic play
+## Quickstart
 
-### Button Reference
+Clone the repository and change into it, then:
 
-- **New Game**: start a fresh match using the models and personalities selected
-  in the configuration panel.
-- **Make Next Move**: ask the current agent to produce one move and update the
-  board.
-- **RUN/STOP**: toggle automatic play; when running the label changes to
-  "STOP" allowing you to pause the cycle.
-
-### Logging
-
-- Each game writes to a separate log file stored in the `logs/` directory. The
-  file name includes a timestamp (e.g., `app_20240101_120000.log`) so that
-  sessions are easy to differentiate.
-- When a new game starts the logger creates a fresh file and records the start
-  time as the first entry. Previous games' logs remain intact for later
-  inspection.
-- The UI no longer displays application logs. Instead, the right-hand column
-  shows **Position Analysis**, which is expanded by default and remains visible
-  throughout play.
-
-## Simulation
-
-Run automated games between agents without launching the Streamlit UI.
-
-1. Complete the steps in [Installation](#installation) up to installing dependencies and setting environment variables.
-2. Execute a simulation script:
-   ```bash
-   python - <<'PYTHON'
-   from src.agents.random_agent import RandomAgent
-   from src.utils import simulate_game
-
-   white = RandomAgent("White")
-   black = RandomAgent("Black")
-   game, status = simulate_game(white, black, max_moves=20)
-   print("Game status:", status)
-   for ply, uci, san in game.history:
-       print(f"{ply}: {san} ({uci})")
-   PYTHON
-   ```
-3. Swap `RandomAgent` for other agents (e.g., `LLMChessAgent`) to explore different play styles.
-
-## Configuration
-
-Adjust game settings in `src/config.py`:
-- Model selection (set `DEFAULT_MODEL` and `ALTERNATIVE_MODELS` via environment variables)
-- Agent personalities
-- Auto-play delay
-- Move history limit
-- UI customization
-
-## Project Structure
-
-```
-chess-agent-system-with-llm/
-├── README.md
-├── requirements.txt
-├── .env.example
-├── src/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── config.py
-│   ├── agents/
-│   │   ├── __init__.py
-│   │   ├── base.py
-│   │   ├── llm_agent.py
-│   │   └── agent_factory.py
-│   ├── game/
-│   │   ├── __init__.py
-│   │   ├── chess_game.py
-│   │   └── board_utils.py
-│   ├── ui/
-│   │   ├── __init__.py
-│   │   ├── app.py
-│   │   ├── components.py
-│   │   └── styles.py
-│   └── utils/
-│       ├── __init__.py
-│       ├── prompts.py
-│       └── validators.py
-└── tests/
-    ├── __init__.py
-    ├── test_agents.py
-    ├── test_game.py
-    └── test_utils.py
-```
-
-## Testing
-
-Run the test suite:
 ```bash
-pytest tests/
+dotnet run --project src/Chess.AppHost --launch-profile fake
 ```
 
-## Contributing
+The `fake` profile needs **no Docker and no Copilot login**. It runs a deterministic fake gateway (models `fake-a` and `fake-b`) and an in-memory store, so nothing you do with it is kept after the app stops.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting pull requests, coding standards, and testing. By participating, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+Open <http://localhost:5070>. Stop the app with `Ctrl+C`.
 
-## Code of Conduct
+For the real setup, with PostgreSQL and your Copilot models:
 
-Please read our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) to learn about the standards we uphold.
+```bash
+dotnet run --project src/Chess.AppHost
+```
 
+This starts the PostgreSQL container with the named volume `chess-arena-pg`, then the API and the web app. Before you start a game with an LLM, check `copilot` on the [status](#troubleshooting-the-health-states) line: it must say `Ready`.
 
-## License
+## URLs
 
-MIT License. See LICENSE file for details.
+| What | Address | Notes |
+|---|---|---|
+| Arena UI | <http://localhost:5070> | The Blazor app. The only origin a browser needs. |
+| API | <http://127.0.0.1:5080> | Health at `/health`, liveness at `/alive`, status at `/api/status`, models at `/api/models`. |
+| Aspire dashboard | <http://localhost:15070> | Logs and resources. The console prints a login link when the AppHost starts. |
+| Broadcast page for OBS | <http://localhost:5070/broadcast> | Chrome-less 1920×1080 page for a Browser Source. See [Broadcast mode](#broadcast-mode-24-h-channel). |
+
+## Pages
+
+The navigation lists them in this order:
+
+| Page | Route | What it shows |
+|---|---|---|
+| **Results** | `/results` | The ranking. The **Big picture** comes first: a headline naming the best model, with its arena score and rating, then a ranked bar chart with 95 % intervals. Below it: rating over time, head-to-head matrix, results breakdown, move quality, strength against cost, and a full table. A tournament filter sits above the Big picture. |
+| Live game | `/` | Pick a model for each side (or `random`), start a game and watch the board, the moves, and rejected attempts as they happen. |
+| Head-to-head | `/head-to-head` | Two models: relative coefficient with its interval, a plain-language reading, expected score, direct record and direct games. |
+| Tournaments | `/tournaments`, `/tournaments/{id}` | Round-robin creation with the premium-request estimate shown before you confirm, progress, a per-tournament leaderboard, and cancel. |
+| Games | `/games`, `/games/{id}` | Paged archive. Replay steps through the moves, with per-move attempts, latency, centipawn loss and best move, and a PGN download. |
+| Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, model and legality. |
+| Broadcast plan | `/broadcast/plan` | Plan a day of games, preview every slot and the premium estimate, save a draft, start, pause, resume or stop. |
+| Broadcast (OBS) | `/broadcast` | Not in the navigation. The page OBS captures. |
+
+The status strip under the header of every page shows the Copilot, database and Stockfish states from `/api/status`. The OBS page has no app chrome, so it has no strip.
+
+## How ratings work
+
+The full formula is in [docs/RATING.md](docs/RATING.md). In short:
+
+1. **Results come first.** Who won a game is 75 % of the relative coefficient. A side gets three attempts per move; if all three are illegal or unparseable, it forfeits the game.
+2. **Strength is a Bradley–Terry fit** over every finished rated game, anchored so that `random` is 0. A rating of 400 means an expected score of about 0.91 against `random`.
+3. **The relative coefficient, RQC(A, B),** is `0.75 × expected score + 0.25 × quality share`. 0.5 means equal, and RQC(A, B) + RQC(B, A) = 1.
+4. **Quality** is legality, plus Stockfish centipawn loss when Stockfish is available. Latency and cost never enter the score; the Results page shows them beside it.
+5. **Every number carries its confidence.** A 95 % bootstrap interval travels with each rating and coefficient. A model with fewer than 20 rated games (or a very wide rating interval) is *provisional*, and a result is called *significant* only when its interval excludes 0.5 and neither model is provisional.
+
+## Broadcast mode (24 h channel)
+
+Broadcast mode plans a day of games in advance, plays them one at a time with pauses so viewers can follow, and gives OBS one clean page to capture. The games are ordinary rated games, so the Results ranking keeps growing with the channel.
+
+**The app does not stream video.** OBS captures `http://localhost:5070/broadcast` as a Browser Source at 1920×1080 and streams to YouTube. The app never sees the stream key.
+
+The planner (`/broadcast/plan`) shows every slot and the premium-request estimate before anything is saved. Start the day once, and it plays through its slots in order, one game at a time. A restart resumes the day at its next unfinished slot.
+
+The full runbook is [docs/BROADCAST.md](docs/BROADCAST.md): planning, OBS setup, YouTube settings, keeping the machine awake, and what happens on a restart or a Copilot outage.
+
+## Cost: every move is a Copilot request
+
+**Each LLM move is one Copilot request, and each rejected attempt is another.** Premium models cost more: each model has a premium multiplier, shown on the planner and tournament forms, and the estimate is shown before you save or confirm anything. Retries are not in the estimate, so a real bill can be higher.
+
+- `random` players and the `fake` profile cost nothing.
+- `Arena:MaxConcurrentGames` (default 2) caps how many games run at once.
+- A game that reaches the 200-ply cap costs more than the estimate, because the estimate assumes a normal game length. The planning guide has the numbers: [docs/BROADCAST.md §2](docs/BROADCAST.md#2-cost).
+
+Check the multipliers on the planner before you run a day.
+
+## Data
+
+Everything is in PostgreSQL: games, every move, every LLM attempt with its prompt and reply, tournaments, the rating history (`rating_snapshots`), and broadcast schedules and slots.
+
+- The default profile keeps the data in the Docker named volume **`chess-arena-pg`**, so it survives restarts of the app and of the container.
+- The leaderboard is recomputed from the stored games on every read. Every number on screen can be reproduced from the games table.
+- The `fake` profile and the tests use an in-memory store. Its data is gone when the app stops.
+- To use an existing PostgreSQL instead of the container, set the AppHost connection string `ConnectionStrings:chess` in the AppHost user secrets. No container is started then.
+
+## Troubleshooting: the `/health` states
+
+`/health` reports three integrations. `/api/status` returns the same states as JSON. The app keeps running in every state: a missing Copilot login only disables LLM players.
+
+```bash
+curl -s http://127.0.0.1:5080/api/status
+curl -s http://127.0.0.1:5080/health
+```
+
+| Check | State | Meaning and what to do |
+|---|---|---|
+| `copilot` | `Ready` (Healthy, *Signed in as …*) | LLM players are available. |
+| `copilot` | `Fake` (Healthy) | The `fake` profile is running. No Copilot is used. |
+| `copilot` | `NotAuthenticated` (Degraded, *Not authenticated*) | Run `copilot` in a terminal and log in, then restart the AppHost. Until then only `random` plays, and `/api/models` answers with a `Warning` header. |
+| `copilot` | `Unavailable` (Degraded, *Copilot runtime unavailable: …*) | The runtime could not start. The detail names the cause. Check that the Copilot CLI is installed, or the path in `Copilot:CliPath`. A game with an LLM side is refused with a 503 that says to run `copilot` and log in. |
+| `database` | Healthy, *ready* | Migrations ran. |
+| `database` | Degraded, *migrating* | Wait a few seconds; the app is applying migrations on start. |
+| `database` | Unhealthy, with the error message | PostgreSQL is not reachable or the migration failed. Check that Docker is running (default profile) and read the error in the Aspire dashboard. |
+| `stockfish` | Healthy, *available* | Move quality is computed for finished games. |
+| `stockfish` | Healthy, *absent — move quality disabled* | Normal without Stockfish. Install it, or set `Analysis:StockfishPath`. |
+
+The Copilot check is never Unhealthy, and `/health` answers HTTP 200 even when a check is Degraded. Tell the states apart by the `status` field of each check, not by the HTTP code.
+
+## Project layout
+
+```
+src/
+  Chess.AppHost/          Aspire composition root: PostgreSQL, Chess.Api, Chess.Web
+  Chess.ServiceDefaults/  kernel: OpenTelemetry, /health and /alive, problem details (no domain)
+  Chess.Engine/           pure chess rules: FEN, SAN, legal moves, status, PGN
+  Chess.Llm/              ILlmGateway, CopilotLlmGateway, FakeLlmGateway (the only project that references the Copilot SDK)
+  Chess.Analysis/         IMoveQualityAnalyzer, Stockfish (UCI) and no-op analyzers
+  Chess.Rating/           pure rating mathematics (docs/RATING.md): no I/O, no clock, no EF
+  Chess.Api/              the one service: players, game runner, tournaments, results, broadcast, persistence, endpoints
+  Chess.Web/              Blazor Web App (interactive server rendering): the UI, talks to the API over HTTP only
+tests/
+  Chess.Engine.Tests/  Chess.Rating.Tests/  Chess.Llm.Tests/  Chess.Api.Tests/  Chess.Web.Tests/
+  Chess.E2E/              Playwright harness (see Tests and CI)
+docs/
+  RATING.md  BROADCAST.md  EVALS.md  architecture/
+scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh, broadcast-smoke.sh
+```
+
+The allowed project references and the dependency budget are in [03-TARGET-ARCHITECTURE §2](docs/architecture/03-TARGET-ARCHITECTURE.md).
+
+## Tests and CI
+
+```bash
+dotnet build Chess.sln -warnaserror
+dotnet test Chess.sln
+```
+
+`dotnet test Chess.sln` runs 868 tests: 865 pass and 3 are skipped. The three skipped tests are the Stockfish integration tests; they run only when `STOCKFISH_PATH` names a Stockfish binary.
+
+The offline AI evals (30 scripted positions) are part of that run. To run only them:
+
+```bash
+dotnet test tests/Chess.Api.Tests --filter "FullyQualifiedName~Chess.Api.Tests.Evals"
+```
+
+Tests need no network and no Copilot login. They use the `FakeLlmGateway`, the in-memory store and fixtures.
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main`:
+
+- **build and test**: `dotnet build Chess.sln -warnaserror`, then `dotnet test Chess.sln`, with the results uploaded.
+- **secret scan**: gitleaks over the full history.
+- **kernel size guard**: `Chess.ServiceDefaults` stays at or below 400 lines of C#.
+- **Copilot SDK only in Chess.Llm**: no other project may reference `GitHub.Copilot.SDK`.
+- **solution and AppHost**: every project is in `Chess.sln`, and every web project is registered in the AppHost.
+
+`tests/Chess.E2E` currently holds a Playwright harness test only. The browser journeys against the running AppHost are not written yet, so no CI job runs them.
+
+The live Copilot check is a script for the owner, not a CI job, because every move costs a premium request: [`scripts/smoke-copilot.sh`](scripts/smoke-copilot.sh) plays one game against a model and refuses to run under CI.
+
+## Documentation
+
+- [docs/RATING.md](docs/RATING.md): the published rating formula and its test vectors.
+- [docs/BROADCAST.md](docs/BROADCAST.md): the 24 h channel runbook.
+- [docs/EVALS.md](docs/EVALS.md): the AI evals and the live smoke test.
+- [docs/architecture/](docs/architecture/): the architecture: current state, target architecture, migration plan, decisions and the atomic task list.
+- [CLAUDE.md](CLAUDE.md): the working rules and invariants for contributors and coding agents.
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release.
+
+## Contributing and license
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull request workflow and the checks to run. Please read the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Released under the [MIT License](LICENSE).
+
+---
+
+[![CI](https://github.com/konradcinkusz/llm-multi-agent-chess/actions/workflows/ci.yml/badge.svg)](https://github.com/konradcinkusz/llm-multi-agent-chess/actions/workflows/ci.yml "CI workflow") [![License: MIT](https://img.shields.io/github/license/konradcinkusz/llm-multi-agent-chess)](LICENSE "MIT license") [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/download "Built on .NET 10")
