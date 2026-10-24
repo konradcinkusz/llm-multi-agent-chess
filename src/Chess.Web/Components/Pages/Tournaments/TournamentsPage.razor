@@ -1,0 +1,19 @@
+@page "/tournaments"
+@page "/tournaments/{Id:guid}"
+
+<PageTitle>Tournaments · LLM Chess Arena</PageTitle>
+
+<h1>Tournaments</h1>
+@if (Id is { } id)
+{
+    <p>Placeholder for tournament @id. Built in T3.4.</p>
+}
+else
+{
+    <p>Placeholder. The tournament list is built in T3.4.</p>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+}
