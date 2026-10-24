@@ -1,6 +1,414 @@
 @page "/"
+@using Chess.Web.Api
+@using Chess.Web.Components.Shared
+@implements IDisposable
+@inject ArenaApiClient Api
+@inject GameEventsClient Events
 
 <PageTitle>Live game · LLM Chess Arena</PageTitle>
 
 <h1>Live game</h1>
-<p>Placeholder. The live game page is built in T3.1.</p>
+
+@if (_models is null && _modelsError is null)
+{
+    <p>Loading models…</p>
+}
+else if (_modelsError is not null)
+{
+    <p class="status-error" role="alert">Could not load the models: @_modelsError</p>
+}
+else
+{
+    <div class="play-layout">
+        <section class="play-setup" aria-labelledby="players-heading">
+            <h2 id="players-heading">Players</h2>
+
+            @if (_gatewayMessage is not null)
+            {
+                <div class="play-banner" role="alert" data-testid="gateway-banner">@_gatewayMessage</div>
+            }
+
+            <label class="play-field">
+                White
+                <select id="white-model" data-testid="white-model" @bind="_white" disabled="@IsLive">
+                    @foreach (var choice in _choices)
+                    {
+                        <option value="@choice.Model.Id" disabled="@(!choice.Selectable)">@PlayChoices.Label(choice.Model)</option>
+                    }
+                </select>
+            </label>
+
+            <label class="play-field">
+                Black
+                <select id="black-model" data-testid="black-model" @bind="_black" disabled="@IsLive">
+                    @foreach (var choice in _choices)
+                    {
+                        <option value="@choice.Model.Id" disabled="@(!choice.Selectable)">@PlayChoices.Label(choice.Model)</option>
+                    }
+                </select>
+            </label>
+
+            <label class="play-check">
+                <input type="checkbox" id="rated" data-testid="rated-toggle" @bind="_rated" disabled="@IsLive" />
+                Rated game
+            </label>
+
+            <div class="play-actions">
+                <button type="button" data-testid="start-game" disabled="@(!CanStart)" @onclick="StartAsync">Start game</button>
+                @if (IsLive)
+                {
+                    <button type="button" class="play-danger" data-testid="abort-game" @onclick="AbortAsync">Abort</button>
+                }
+            </div>
+
+            @if (_error is not null)
+            {
+                <p class="status-error" role="alert" data-testid="play-error">@_error</p>
+            }
+        </section>
+
+        <section class="play-board" aria-label="Board">
+            <div class="play-board-frame" data-testid="board">
+                <ChessBoardSvg Fen="@BoardFen" />
+            </div>
+
+            <p class="play-status" data-testid="game-status" role="status">@StatusLine</p>
+
+            @if (_live?.Thinking is { } thinking)
+            {
+                <p class="play-thinking" data-testid="thinking">
+                    @ModelName(thinking.ModelId) is thinking about @(thinking.Color)'s move (ply @thinking.Ply)…
+                </p>
+            }
+
+            @if (_live?.Outcome is { } outcome)
+            {
+                <p class="play-result" data-testid="game-result">@PlayChoices.Outcome(outcome)</p>
+
+                @if (PlayChoices.ForfeitNotice(outcome.Termination) is { } forfeit)
+                {
+                    <p class="play-notice" data-testid="forfeit-notice">@forfeit</p>
+                }
+            }
+
+            @if (_live is { Notices.Count: > 0 } notices)
+            {
+                <ul class="play-notices" data-testid="attempt-notices">
+                    @foreach (var notice in notices.Notices)
+                    {
+                        <li>
+                            @notice.Color's attempt @notice.Attempt at ply @notice.Ply was not a legal move: @notice.Reason
+                            @if (notice.RawReply is not null)
+                            {
+                                <code>@notice.RawReply</code>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (_live is { IsFinished: true })
+            {
+                <div class="play-pgn-actions">
+                    <button type="button" data-testid="pgn-toggle" @onclick="TogglePgnAsync">
+                        @(_pgn is null ? "Show PGN" : "Hide PGN")
+                    </button>
+                </div>
+
+                @if (_pgn is not null)
+                {
+                    <pre class="play-pgn" data-testid="pgn">@_pgn</pre>
+                }
+            }
+        </section>
+
+        <aside class="play-moves" aria-labelledby="moves-heading">
+            <h2 id="moves-heading">Moves</h2>
+            <ol class="move-list" data-testid="move-list">
+                @foreach (var move in Moves)
+                {
+                    <li data-ply="@move.Ply" data-color="@move.Color">
+                        @if (move.Color == "White")
+                        {
+                            <span class="move-number">@((move.Ply + 1) / 2).</span>
+                        }
+                        <span class="san">@move.San</span>
+                        @if (move.Attempts > 1)
+                        {
+                            <span class="muted">(@move.Attempts attempts)</span>
+                        }
+                    </li>
+                }
+            </ol>
+        </aside>
+    </div>
+}
+
+@code {
+    /// <summary>How long to wait before reconnecting a stream that closed before the game finished.</summary>
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(2);
+
+    private IReadOnlyList<ModelDto>? _models;
+    private IReadOnlyList<ModelChoice> _choices = [];
+    private string? _modelsError;
+    private string? _gatewayMessage;
+
+    private string _white = PlayChoices.Random;
+    private string _black = PlayChoices.Random;
+    private bool _rated = true;
+    private bool _starting;
+    private string? _error;
+
+    private LiveGame? _live;
+    private CancellationTokenSource? _follow;
+    private string? _pgn;
+
+    private bool IsLive => _live is { IsFinished: false };
+
+    private bool CanStart => _models is not null && !_starting && !IsLive && IsSelectable(_white) && IsSelectable(_black);
+
+    private string BoardFen => _live?.CurrentFen ?? LiveGame.StartFen;
+
+    private IReadOnlyList<MoveDto> Moves => _live?.Moves ?? [];
+
+    private string StatusLine => _live switch
+    {
+        null => "No game yet. Choose two players and start one.",
+        { IsFinished: true } => "Game over.",
+        { Summary.State: "queued" } => "Queued, waiting for a free game slot.",
+        _ => "In progress.",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        IReadOnlyList<ModelDto>? models = null;
+        StatusDto? status = null;
+        string? statusError = null;
+
+        try
+        {
+            models = await Api.GetModelsAsync();
+        }
+        catch (Exception ex)
+        {
+            _modelsError = ex.Message;
+        }
+
+        try
+        {
+            status = await Api.GetStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            statusError = ex.Message;
+        }
+
+        _gatewayMessage = GatewayMessage(status, statusError);
+        if (models is null)
+        {
+            return;
+        }
+
+        _models = models;
+        _choices = PlayChoices.Choices(models, PlayChoices.GatewayReady(status));
+        _white = PlayChoices.Default(_choices, 0);
+        _black = PlayChoices.Default(_choices, 1);
+    }
+
+    private async Task StartAsync()
+    {
+        _starting = true;
+        _error = null;
+        _pgn = null;
+        StopFollowing();
+
+        try
+        {
+            var summary = await Api.CreateGameAsync(
+                new CreateGameRequest(PlayChoices.Player(_white), PlayChoices.Player(_black), _rated));
+            _live = new LiveGame(summary);
+
+            _follow = new CancellationTokenSource();
+            _ = FollowAsync(summary.Id, _follow.Token);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not start the game: {ex.Message}";
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private async Task AbortAsync()
+    {
+        if (_live is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // The game ends through the stream: the server sends GameFinished with termination "aborted".
+            await Api.AbortGameAsync(_live.GameId);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not abort the game: {ex.Message}";
+        }
+    }
+
+    private async Task TogglePgnAsync()
+    {
+        if (_pgn is not null)
+        {
+            _pgn = null;
+            return;
+        }
+
+        if (_live is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _pgn = await Api.GetGamePgnAsync(_live.GameId);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not load the PGN: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Opens the stream first, then loads the game (03 §5.1). The stream replays nothing, so anything
+    /// that happened before it connected is in the load; anything the load does not cover shows up on
+    /// the stream as a gap and makes the page load again.
+    /// </summary>
+    private async Task FollowAsync(Guid gameId, CancellationToken ct)
+    {
+        try
+        {
+            var reading = ReadStreamAsync(gameId, ct);
+            await LoadAsync(gameId, ct);
+            await reading;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The page left this game or started another one.
+        }
+    }
+
+    private async Task ReadStreamAsync(Guid gameId, CancellationToken ct)
+    {
+        while (true)
+        {
+            try
+            {
+                await foreach (var message in Events.StreamAsync(gameId, ct))
+                {
+                    // ComponentBase.InvokeAsync has no Func<T> overload, so the result comes back through a local.
+                    var result = ApplyResult.Unknown;
+                    await InvokeAsync(() => result = ApplyEvent(gameId, message, ct));
+                    if (result == ApplyResult.Gap)
+                    {
+                        await LoadAsync(gameId, ct);
+                    }
+
+                    if (message.Type == "GameFinished")
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                await InvokeAsync(() => ShowError($"The live stream failed: {ex.Message}"));
+            }
+
+            // The stream closed before the game finished, or could not be opened: load the game as it is, then reconnect.
+            await LoadAsync(gameId, ct);
+            var over = false;
+            await InvokeAsync(() => over = IsOver(gameId));
+            if (over)
+            {
+                return;
+            }
+
+            await Task.Delay(ReconnectDelay, ct);
+        }
+    }
+
+    private async Task LoadAsync(Guid gameId, CancellationToken ct)
+    {
+        try
+        {
+            var detail = await Api.GetGameAsync(gameId, ct);
+            await InvokeAsync(() =>
+            {
+                if (!ct.IsCancellationRequested && _live is { } live && live.GameId == gameId)
+                {
+                    live.Load(detail);
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            await InvokeAsync(() => ShowError($"Could not load the game: {ex.Message}"));
+        }
+    }
+
+    /// <summary>Runs on the render thread. Events for a game the page has left are dropped.</summary>
+    private ApplyResult ApplyEvent(Guid gameId, GameEventMessage message, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested || _live is not { } live || live.GameId != gameId)
+        {
+            return ApplyResult.Unknown;
+        }
+
+        var result = live.Apply(message);
+        StateHasChanged();
+        return result;
+    }
+
+    private bool IsOver(Guid gameId) => _live is not { } live || live.GameId != gameId || live.IsFinished;
+
+    private void ShowError(string message)
+    {
+        _error = message;
+        StateHasChanged();
+    }
+
+    private bool IsSelectable(string modelId) => _choices.Any(choice => choice.Model.Id == modelId && choice.Selectable);
+
+    private string ModelName(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId)?.DisplayName ?? modelId;
+
+    /// <summary>Why the LLM players cannot be picked, or null when they can. Random is always available.</summary>
+    private string? GatewayMessage(StatusDto? status, string? statusError)
+    {
+        if (status is null)
+        {
+            return statusError is null ? null : $"API status unavailable ({statusError}). Only Random can be selected.";
+        }
+
+        if (PlayChoices.GatewayReady(status))
+        {
+            return null;
+        }
+
+        return $"GitHub Copilot is not ready: {status.Copilot} ({status.CopilotDetail}). " +
+            "Run `copilot` in a terminal, log in, then reload this page. Until then only Random can be selected.";
+    }
+
+    private void StopFollowing()
+    {
+        // Cancel only: disposing a source a reader may still hold a token from can throw in those readers.
+        _follow?.Cancel();
+        _follow = null;
+    }
+
+    public void Dispose() => StopFollowing();
+}
