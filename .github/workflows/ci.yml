@@ -17,7 +17,7 @@ jobs:
     name: build and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -46,7 +46,7 @@ jobs:
       GITLEAKS_VERSION: "8.21.2"
       GITLEAKS_SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -67,7 +67,7 @@ jobs:
     name: kernel size guard (ServiceDefaults <= 400 lines)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Count lines of .cs in Chess.ServiceDefaults
         run: |
@@ -82,7 +82,7 @@ jobs:
     name: Copilot SDK only in Chess.Llm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Find GitHub.Copilot.SDK references outside Chess.Llm
         run: |
@@ -98,7 +98,7 @@ jobs:
     name: every project is in Chess.sln and every web project is in the AppHost
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v6
         with:
