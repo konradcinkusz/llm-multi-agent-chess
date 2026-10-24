@@ -1,70 +1,29 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# .NET build artifacts
+**/bin/
+**/obj/
+*.user
+.vs/
+*.suo
+*.userprefs
+TestResults/
 
-# C extensions
-*.so
+# Published output
+**/publish/
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-.pytest_cache/
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
+# NuGet packages
+*.nupkg
+*.snupkg
+**/packages/
 
 # Environments
 .env
 *.env
-.venv/
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
 
 # IDEs and editors
 .idea/
 .vscode/
 *.swp
+*.sln.DotSettings.user
 
 # Logs
 *.log
@@ -75,10 +34,3 @@ logs/
 
 # MacOS
 .DS_Store
-
-# Input and output directories
-input/
-output/
-templates/
-
-repomix-output.xml
