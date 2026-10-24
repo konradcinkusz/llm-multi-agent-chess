@@ -1,0 +1,97 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Charts
+
+@* The day as bars on a UTC axis: each game is one bar, white on the left half and black on the right. Pure SVG. *@
+<div class="plan-timeline" data-testid="plan-preview">
+    <svg viewBox="0 0 @Width @Height" role="img" aria-label="@Label" focusable="false">
+        <g class="plan-axis">
+            @foreach (var tick in Ticks)
+            {
+                <PlanTick X="X(tick)" AxisY="AxisY" Label="@PlanFormat.Time(tick)" />
+            }
+        </g>
+        @for (var i = 0; i < Slots.Count; i++)
+        {
+            var slot = Slots[i];
+            var left = X(slot.PlannedStart);
+            var right = X(slot.PlannedEnd);
+            var middle = (left + right) / 2;
+            <g class="plan-game" data-slot="@(i + 1)">
+                <rect x="@left" y="@BarY" width="@(Math.Max(1, middle - left))" height="@BarHeight"
+                      style="fill: @Colour(slot.White.ModelId)">
+                    <title>Game @(i + 1): @slot.White.ModelId (White) against @slot.Black.ModelId (Black), @PlanFormat.Utc(slot.PlannedStart)</title>
+                </rect>
+                <rect x="@middle" y="@BarY" width="@(Math.Max(1, right - middle))" height="@BarHeight"
+                      style="fill: @Colour(slot.Black.ModelId)">
+                    <title>Game @(i + 1): @slot.White.ModelId (White) against @slot.Black.ModelId (Black), @PlanFormat.Utc(slot.PlannedStart)</title>
+                </rect>
+            </g>
+        }
+    </svg>
+    <ul class="plan-legend">
+        @foreach (var model in Palette.Keys)
+        {
+            <li><span class="plan-swatch" style="background: @Colour(model)"></span>@model</li>
+        }
+    </ul>
+</div>
+
+@code {
+    private const double Width = 1000;
+    private const double Height = 112;
+
+    // Room for the hour labels at either end, which would otherwise be cut off by the viewBox.
+    private const double Gutter = 24;
+    private const double PlotWidth = Width - 2 * Gutter;
+    private const double BarY = 8;
+    private const double BarHeight = 64;
+    private const double AxisY = 80;
+
+    [Parameter, EditorRequired] public IReadOnlyList<SlotEdit> Slots { get; set; } = [];
+
+    [Parameter, EditorRequired] public DateTimeOffset StartsAt { get; set; }
+
+    [Parameter, EditorRequired] public DateTimeOffset EndsAt { get; set; }
+
+    private string Label => $"{Slots.Count} games from {PlanFormat.Utc(StartsAt)} to {PlanFormat.Utc(EndsAt)}";
+
+    private IReadOnlyDictionary<string, int> Palette => ChartPalette.AssignSlots(
+        Slots.SelectMany(slot => new[] { slot.White.ModelId, slot.Black.ModelId }));
+
+    /// <summary>Models past the eighth palette slot share the neutral colour, as the charts fold them into "Other".</summary>
+    private string Colour(string model) =>
+        Palette.TryGetValue(model, out var slot) ? ChartPalette.Series(slot) : ChartPalette.Neutral;
+
+    private double X(DateTimeOffset at)
+    {
+        var span = (EndsAt - StartsAt).TotalMilliseconds;
+        if (span <= 0)
+        {
+            return Gutter;
+        }
+
+        return Gutter + Math.Clamp(PlotWidth * (at - StartsAt).TotalMilliseconds / span, 0, PlotWidth);
+    }
+
+    /// <summary>Whole hours from the first one at or after the start, every step hours so the axis has at most about a dozen labels.</summary>
+    private IReadOnlyList<DateTimeOffset> Ticks
+    {
+        get
+        {
+            var hours = Math.Max(1, (int)Math.Ceiling((EndsAt - StartsAt).TotalHours / 12));
+            var first = new DateTimeOffset(StartsAt.UtcDateTime.Date.AddHours(StartsAt.UtcDateTime.Hour), TimeSpan.Zero);
+            if (first < StartsAt)
+            {
+                first = first.AddHours(1);
+            }
+
+            var ticks = new List<DateTimeOffset>();
+            for (var at = first; at <= EndsAt; at = at.AddHours(hours))
+            {
+                ticks.Add(at);
+            }
+
+            return ticks;
+        }
+    }
+}
