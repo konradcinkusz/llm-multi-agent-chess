@@ -9,13 +9,15 @@ namespace Chess.Web.Tests.Components;
 
 public class NavigationTests
 {
-    // Every route of 03 §6 and the broadcast pages of 03 §9.4, in the order they are listed there.
-    // "/broadcast" is the chrome-less OBS page: a route, but deliberately NOT in the navigation (NavHrefs).
+    // Every route of 03 §6 and the planner page of 03 §9.4, in the order they are listed there.
     private static readonly string[] Section6Routes =
     [
         "/results", "/", "/head-to-head", "/tournaments", "/tournaments/{Id:guid}",
-        "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan", "/broadcast",
+        "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan",
     ];
+
+    // "/broadcast" is the chrome-less OBS page (03 §9.4): a route, but deliberately NOT in the navigation.
+    private static readonly string[] ObsRoutes = ["/broadcast"];
 
     // The navigation shows the top-level routes, Results first; the detail routes are reached from their lists.
     private static readonly string[] NavHrefs =
@@ -28,6 +30,7 @@ public class NavigationTests
             .Where(t => t.Namespace?.StartsWith("Chess.Web.Components.Pages", StringComparison.Ordinal) == true)
             .SelectMany(t => t.GetCustomAttributes<RouteAttribute>())
             .Select(r => r.Template)
+            .Except(ObsRoutes)
             .Order()
             .ToArray();
 
