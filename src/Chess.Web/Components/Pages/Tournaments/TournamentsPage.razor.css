@@ -1,0 +1,95 @@
+/* Tournaments list and create form (03 §6). The estimate sits right above the start button, so it is read before confirming. */
+
+.tournament-section {
+    margin: 0 0 24px;
+}
+
+.tournament-section h2 {
+    margin: 0 0 8px;
+    font-size: 1.125rem;
+}
+
+.tournament-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px 16px;
+    margin-bottom: 12px;
+}
+
+.tournament-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tournament-models {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 8px 12px;
+    border: 1px solid rgba(127, 127, 127, 0.4);
+    border-radius: 4px;
+}
+
+.tournament-model {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 6px !important;
+}
+
+.tournament-estimate {
+    margin: 12px 0;
+    padding: 8px 12px;
+    border-left: 3px solid #2a78d6;
+}
+
+.tournament-estimate h3 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+}
+
+.tournament-problem {
+    margin: 4px 0;
+    color: #c0392b;
+}
+
+.tournament-created {
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-left: 3px solid #1baf7a;
+}
+
+.tournament-created p {
+    margin: 4px 0;
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.3);
+    vertical-align: middle;
+}
+
+.muted {
+    opacity: 0.75;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}

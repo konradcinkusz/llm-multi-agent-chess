@@ -1,0 +1,34 @@
+<details class="chart-table">
+    <summary>Table view</summary>
+    <table>
+        <thead>
+            <tr>
+                @foreach (var header in Headers)
+                {
+                    <th scope="col">@header</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                <tr>
+                    @foreach (var cell in row)
+                    {
+                        <td>@cell</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+@code {
+    /// <summary>Column headers, in order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<string> Headers { get; set; } = [];
+
+    /// <summary>Rows of already formatted cell text, one inner list per row.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<IReadOnlyList<string>> Rows { get; set; } = [];
+}

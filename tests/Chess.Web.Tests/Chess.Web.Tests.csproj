@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Chess.Web\Chess.Web.csproj" />
+    <!-- Only for the DTO round-trip test: the web project itself never references Chess.Api (P3). -->
+    <ProjectReference Include="..\..\src\Chess.Api\Chess.Api.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,267 @@
+@page "/head-to-head"
+@using System.Globalization
+@using System.Net
+@using Chess.Web.Api
+@inject ArenaApiClient Api
+@implements IDisposable
+
+<PageTitle>Head-to-head · LLM Chess Arena</PageTitle>
+
+<h1>Head-to-head</h1>
+
+@if (models is null && modelsError is null)
+{
+    <p>Loading models…</p>
+}
+else if (modelsError is not null)
+{
+    <p class="status-error" role="alert">Could not load the models: @modelsError</p>
+}
+else
+{
+    <div class="h2h-pickers">
+        <label>
+            Model A
+            <select id="model-a" @bind="a" @bind:after="CompareAsync">
+                @foreach (var model in models!)
+                {
+                    <option value="@model.Id">@Describe(model)</option>
+                }
+            </select>
+        </label>
+        <label>
+            Model B
+            <select id="model-b" @bind="b" @bind:after="CompareAsync">
+                @foreach (var model in models!)
+                {
+                    <option value="@model.Id">@Describe(model)</option>
+                }
+            </select>
+        </label>
+    </div>
+
+    @if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+    {
+        <p>At least two models are needed to compare.</p>
+    }
+    else if (a == b)
+    {
+        <p>Choose two different models to compare.</p>
+    }
+    else if (pairError is not null)
+    {
+        <p class="status-error" role="alert">@pairError</p>
+    }
+    else if (pair is null)
+    {
+        <p>Loading the comparison…</p>
+    }
+    else
+    {
+        <section aria-labelledby="h2h-reading">
+            <h2 id="h2h-reading">Reading</h2>
+            <p class="h2h-reading"><strong>@VerbalReading.Sentence(pair)</strong></p>
+            <p class="muted">
+                The coefficient uses every game in the arena, not only the games between these two.
+                The direct record is shown next to it, never instead of it.
+            </p>
+
+            <dl class="h2h-figures">
+                <dt>Relative quality, RQC</dt>
+                <dd>
+                    @Format(pair.Rqc) for @pair.A
+                    <span class="muted">(95 % interval @Format(pair.RqcLow) – @Format(pair.RqcHigh))</span>
+                </dd>
+
+                <dt>Expected score</dt>
+                <dd>@Format(pair.ExpectedScore) for @pair.A</dd>
+
+                <dt>Quality share</dt>
+                <dd>@Format(pair.QualityShare) for @pair.A</dd>
+
+                <dt>Elo-equivalent</dt>
+                <dd>@EloText(pair)</dd>
+
+                <dt>Direct record</dt>
+                <dd>@DirectRecordText(pair)</dd>
+            </dl>
+        </section>
+
+        @if (directGames is not null)
+        {
+            <section aria-labelledby="h2h-games">
+                <h2 id="h2h-games">Direct games</h2>
+                @if (directGames.Count == 0)
+                {
+                    <p>No games between these two models yet.</p>
+                }
+                else
+                {
+                    <table class="h2h-games">
+                        <thead>
+                            <tr>
+                                <th scope="col">Created</th>
+                                <th scope="col">White</th>
+                                <th scope="col">Black</th>
+                                <th scope="col">Result</th>
+                                <th scope="col">Rated</th>
+                                <th scope="col">@pair.A score</th>
+                                <th scope="col"><span class="visually-hidden">Game</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var game in directGames)
+                            {
+                                <tr>
+                                    <td>@game.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC</td>
+                                    <td>@game.White.ModelId</td>
+                                    <td>@game.Black.ModelId</td>
+                                    <td>@(game.State == "finished" ? game.Result : game.State)</td>
+                                    <td>@(game.Rated ? "yes" : "no")</td>
+                                    <td>@ScoreText(DirectGames.ScoreFor(game, pair.A))</td>
+                                    <td><a href="/games/@game.Id">Open</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </section>
+        }
+    }
+}
+
+@code {
+    // Enough to cover the direct games of a pair in one request for a normal arena; more pages are fetched when there are more.
+    private const int GamesPageSize = 100;
+
+    private IReadOnlyList<ModelDto>? models;
+    private string? modelsError;
+    private string? a;
+    private string? b;
+    private PairwiseCoefficient? pair;
+    private string? pairError;
+    private IReadOnlyList<GameSummaryDto>? directGames;
+    private CancellationTokenSource? cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            models = await Api.GetModelsAsync();
+        }
+        catch (Exception ex)
+        {
+            // The page reports the failure; it must not take the app down with it.
+            modelsError = ex.Message;
+            return;
+        }
+
+        a = models.FirstOrDefault()?.Id;
+        b = models.Skip(1).FirstOrDefault()?.Id;
+        await CompareAsync();
+    }
+
+    /// <summary>Loads the coefficient for the two picked models. A newer pick cancels the one still running.</summary>
+    private async Task CompareAsync()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
+        cts = new CancellationTokenSource();
+        var ct = cts.Token;
+
+        pair = null;
+        pairError = null;
+        directGames = null;
+
+        var first = a;
+        var second = b;
+        if (string.IsNullOrEmpty(first) || string.IsNullOrEmpty(second) || first == second)
+        {
+            return;
+        }
+
+        try
+        {
+            var coefficient = await Api.GetPairwiseAsync(first, second, ct);
+            if (ct.IsCancellationRequested)
+            {
+                return;
+            }
+
+            pair = coefficient;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            pairError = "One of these models has no rating data yet.";
+            return;
+        }
+        catch (Exception ex)
+        {
+            pairError = $"Could not load the comparison: {ex.Message}";
+            return;
+        }
+
+        // The direct-games list needs GET /api/games. When that endpoint does not answer, the list is left out and the coefficient still shows.
+        try
+        {
+            var games = await LoadDirectGamesAsync(first, second, ct);
+            if (!ct.IsCancellationRequested)
+            {
+                directGames = games;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception)
+        {
+            directGames = null;
+        }
+    }
+
+    private async Task<IReadOnlyList<GameSummaryDto>> LoadDirectGamesAsync(string first, string second, CancellationToken ct)
+    {
+        // The archive filters by one model, so the pair is cut out of the games of the first model.
+        var games = new List<GameSummaryDto>();
+        for (var page = 1; ; page++)
+        {
+            var result = await Api.GetGamesAsync(page, GamesPageSize, first, null, ct);
+            games.AddRange(result.Items);
+            if (result.Items.Count == 0 || games.Count >= result.Total)
+            {
+                break;
+            }
+        }
+
+        return DirectGames.Between(games, first, second);
+    }
+
+    private static string Describe(ModelDto model) => model.Enabled ? model.DisplayName : $"{model.DisplayName} (disabled)";
+
+    private static string Format(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string ScoreText(double? score) => score is { } s ? s.ToString("0.#", CultureInfo.InvariantCulture) : "–";
+
+    private string EloText(PairwiseCoefficient p) =>
+        $"{p.EloEquivalent.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)} Elo for {p.A} against {p.B}";
+
+    private static string DirectRecordText(PairwiseCoefficient p)
+    {
+        if (p.HeadToHeadGames == 0 || p.HeadToHeadScore is not { } score)
+        {
+            return "No direct games yet.";
+        }
+
+        return $"{p.HeadToHeadGames} direct {(p.HeadToHeadGames == 1 ? "game" : "games")}; {p.A} scored {Format(score)} per game.";
+    }
+
+    public void Dispose()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
+    }
+}

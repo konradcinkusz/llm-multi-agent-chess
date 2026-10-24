@@ -1,0 +1,302 @@
+@page "/tournaments"
+@using Chess.Web.Api
+@implements IDisposable
+@inject ArenaApiClient Api
+
+<PageTitle>Tournaments · LLM Chess Arena</PageTitle>
+
+<h1>Tournaments</h1>
+
+<section class="tournament-section" aria-labelledby="new-tournament-heading">
+    <h2 id="new-tournament-heading">New round robin</h2>
+
+    @if (_models is null && _modelsError is null)
+    {
+        <p>Loading models…</p>
+    }
+    else if (_modelsError is not null)
+    {
+        <p class="status-error" role="alert">Could not load the models: @_modelsError</p>
+    }
+    else
+    {
+        <div class="tournament-form">
+            <label>
+                Name
+                <input id="tournament-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" />
+            </label>
+
+            <fieldset class="tournament-models">
+                <legend>Models</legend>
+                @foreach (var model in _choices)
+                {
+                    <label class="tournament-model">
+                        <input id="model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
+                               @onchange="e => Toggle(model.Id, e.Value)" />
+                        @model.DisplayName
+                        <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
+                    </label>
+                }
+            </fieldset>
+
+            <label>
+                Games per pair
+                <select id="games-per-pair" @bind="_gamesPerPair">
+                    @foreach (var games in GamesPerPairChoices)
+                    {
+                        <option value="@games">@games</option>
+                    }
+                </select>
+            </label>
+
+            <label>
+                Max concurrency
+                <select id="max-concurrency" @bind="_maxConcurrency">
+                    @for (var limit = 1; limit <= TournamentFormRules.MaxConcurrencyLimit; limit++)
+                    {
+                        <option value="@limit">@limit</option>
+                    }
+                </select>
+            </label>
+        </div>
+
+        @if (SelectedModels.Count >= 2)
+        {
+            var pairs = SelectedModels.Count * (SelectedModels.Count - 1) / 2;
+            var gameCount = pairs * _gamesPerPair;
+            var estimates = PremiumEstimate.For(_models!, SelectedModels, _gamesPerPair);
+            var unknown = estimates.Count(estimate => estimate.Requests is null);
+
+            <div class="tournament-estimate" aria-live="polite">
+                <h3>Estimated premium requests</h3>
+                <p>
+                    @gameCount @(gameCount == 1 ? "game" : "games") in @pairs @(pairs == 1 ? "pair" : "pairs").
+                    Each game is estimated at @PremiumEstimate.RequestsPerGame requests for each of its models (ADR-004),
+                    so this is an upper bound, not a bill.
+                </p>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr><th>Model</th><th>Multiplier</th><th>Premium requests</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var estimate in estimates)
+                            {
+                                <tr>
+                                    <td>@estimate.ModelId</td>
+                                    <td>@TournamentFormat.Multiplier(Find(estimate.ModelId)?.PremiumMultiplier)</td>
+                                    <td>@TournamentFormat.Requests(estimate.Requests)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p>
+                    Known total: @TournamentFormat.Requests(PremiumEstimate.Known(estimates))
+                    @if (unknown > 0)
+                    {
+                        <span>, plus @unknown model@(unknown == 1 ? "" : "s") with an unknown multiplier</span>
+                    }
+                </p>
+            </div>
+        }
+
+        @foreach (var problem in Problems)
+        {
+            <p class="tournament-problem">@problem</p>
+        }
+
+        <button id="start-tournament" type="button" @onclick="StartAsync" disabled="@(Problems.Count > 0 || _submitting)">
+            Start tournament
+        </button>
+
+        @if (_createError is not null)
+        {
+            <p class="status-error" role="alert">@_createError</p>
+        }
+
+        @if (_created is { } created)
+        {
+            <div class="tournament-created" role="status">
+                <p>
+                    Started <strong>@created.Tournament.Name</strong> with @created.Tournament.GamesTotal games.
+                    <a href="/tournaments/@created.Tournament.Id">Open the tournament</a>
+                </p>
+                <p>Premium requests estimated by the API:</p>
+                <ul>
+                    @foreach (var estimate in created.EstimatedPremiumRequests)
+                    {
+                        <li>@estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)</li>
+                    }
+                </ul>
+            </div>
+        }
+    }
+</section>
+
+<section class="tournament-section" aria-labelledby="tournament-list-heading">
+    <h2 id="tournament-list-heading">All tournaments</h2>
+
+    @if (_listError is not null)
+    {
+        <p class="status-error" role="alert">Could not load the tournaments: @_listError</p>
+    }
+
+    @if (_tournaments is null)
+    {
+        <p>Loading tournaments…</p>
+    }
+    else if (_tournaments.Count == 0)
+    {
+        <p>No tournaments yet. Create one above.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="tournament-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Models</th>
+                        <th>Games per pair</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var tournament in _tournaments)
+                    {
+                        <tr>
+                            <td><a href="/tournaments/@tournament.Id">@tournament.Name</a></td>
+                            <td>@string.Join(", ", tournament.Models)</td>
+                            <td>@tournament.GamesPerPair</td>
+                            <td>@TournamentFormat.Status(tournament.Status)</td>
+                            <td><TournamentProgress Finished="tournament.GamesFinished" Total="tournament.GamesTotal" /></td>
+                            <td>
+                                @if (TournamentFormat.IsRunning(tournament.Status))
+                                {
+                                    <CancelTournament TournamentId="tournament.Id" Cancelled="ReloadListAsync" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly int[] GamesPerPairChoices = [2, 4, 6, 8, 10];
+
+    private readonly CancellationTokenSource _cts = new();
+
+    private IReadOnlyList<ModelDto>? _models;
+    private string? _modelsError;
+    private IReadOnlyList<ModelDto> _choices = [];
+
+    private IReadOnlyList<TournamentDto>? _tournaments;
+    private string? _listError;
+
+    private string _name = "";
+    private readonly HashSet<string> _selected = [];
+    private int _gamesPerPair = 2;
+    private int _maxConcurrency = TournamentFormRules.MaxConcurrencyLimit;
+    private bool _submitting;
+    private string? _createError;
+    private TournamentCreatedDto? _created;
+
+    /// <summary>The selected models, in the order the form lists them.</summary>
+    private IReadOnlyList<string> SelectedModels =>
+        _choices.Where(model => _selected.Contains(model.Id)).Select(model => model.Id).ToArray();
+
+    private IReadOnlyList<string> Problems =>
+        TournamentFormRules.Problems(_name, SelectedModels, _gamesPerPair, _maxConcurrency);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _models = await Api.GetModelsAsync(_cts.Token);
+            _choices = _models.Where(model => model.Enabled).ToArray();
+        }
+        catch (HttpRequestException ex)
+        {
+            _modelsError = ex.Message;
+        }
+
+        await LoadTournamentsAsync(_cts.Token);
+        _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        var ct = _cts.Token;
+        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(() => LoadTournamentsAsync(ct));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task LoadTournamentsAsync(CancellationToken ct)
+    {
+        try
+        {
+            _tournaments = await Api.GetTournamentsAsync(ct);
+            _listError = null;
+        }
+        catch (HttpRequestException ex)
+        {
+            _listError = ex.Message;
+        }
+    }
+
+    private Task ReloadListAsync() => LoadTournamentsAsync(_cts.Token);
+
+    private void Toggle(string modelId, object? selected)
+    {
+        if (selected is true)
+        {
+            _selected.Add(modelId);
+        }
+        else
+        {
+            _selected.Remove(modelId);
+        }
+    }
+
+    private ModelDto? Find(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId);
+
+    private async Task StartAsync()
+    {
+        _submitting = true;
+        _createError = null;
+        _created = null;
+        try
+        {
+            var request = new CreateTournamentRequest(_name.Trim(), SelectedModels, _gamesPerPair, _maxConcurrency);
+            _created = await Api.CreateTournamentAsync(request, _cts.Token);
+            _name = "";
+            _selected.Clear();
+            await LoadTournamentsAsync(_cts.Token);
+        }
+        catch (HttpRequestException ex)
+        {
+            _createError = $"The tournament was not created: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    public void Dispose() => _cts.Cancel();
+}

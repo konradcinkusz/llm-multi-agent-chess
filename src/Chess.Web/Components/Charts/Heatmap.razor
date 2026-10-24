@@ -1,0 +1,126 @@
+@using static Chess.Web.Components.Charts.ChartGeometry
+
+<ChartFrame Title="@Title" Description="@Description">
+    @if (Labels.Count == 0)
+    {
+        <p class="chart-empty">No data.</p>
+    }
+    else
+    {
+        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+            @for (var i = 0; i < Labels.Count; i++)
+            {
+                var label = Labels[i];
+                <ChartText class="chart-label" x="@Num(LabelWidth - 8)" y="@Num(RowY(i) + CellSize / 2 + 4)" text-anchor="end">@label</ChartText>
+                <ChartText class="chart-label" transform="@($"translate({Num(ColumnX(i) + CellSize / 2)} {Num(TopBand - 8)}) rotate(-45)")">@label</ChartText>
+            }
+
+            @for (var row = 0; row < Labels.Count; row++)
+            {
+                for (var column = 0; column < Labels.Count; column++)
+                {
+                    var rowLabel = Labels[row];
+                    var columnLabel = Labels[column];
+                    var cell = _cells.GetValueOrDefault((rowLabel, columnLabel));
+                    var x = ColumnX(column);
+                    var y = RowY(row);
+                    if (cell?.Value is double value)
+                    {
+                        <g class="chart-cell" data-row="@rowLabel" data-column="@columnLabel">
+                            <rect class="@(cell.Muted ? "chart-muted-cell" : null)" x="@Num(x + 1)" y="@Num(y + 1)" width="@Num(CellSize - 2)" height="@Num(CellSize - 2)" style="fill: @CellFill(value)">
+                                <title>@rowLabel vs @columnLabel: @Fixed(value, ValueFormat)@(cell.Muted ? " (not significant)" : "")</title>
+                            </rect>
+                            <ChartText class="chart-value" x="@Num(x + CellSize / 2)" y="@Num(y + CellSize / 2 + 4)" text-anchor="middle">@Fixed(value, ValueFormat)</ChartText>
+                        </g>
+                    }
+                    else
+                    {
+                        <rect class="chart-hole" x="@Num(x + 1)" y="@Num(y + 1)" width="@Num(CellSize - 2)" height="@Num(CellSize - 2)" />
+                    }
+                }
+            }
+        </svg>
+        <ChartTable Headers="_tableHeaders" Rows="_tableRows" />
+    }
+</ChartFrame>
+
+@code {
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    /// <summary>Say what the scale means here, e.g. the RQC reading of the colours.</summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>The same labels, in the same order, on both axes.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<string> Labels { get; set; } = [];
+
+    /// <summary>Cells keyed by row and column label. Pairs without a cell stay empty.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<HeatCell> Cells { get; set; } = [];
+
+    /// <summary>The value drawn in the neutral colour (03 §6.1: diverging scales meet at a grey midpoint).</summary>
+    [Parameter]
+    public double Midpoint { get; set; } = 0.5;
+
+    /// <summary>Lowest value of the scale, drawn in the low pole colour.</summary>
+    [Parameter]
+    public double Min { get; set; }
+
+    /// <summary>Highest value of the scale, drawn in the high pole colour.</summary>
+    [Parameter]
+    public double Max { get; set; } = 1;
+
+    [Parameter]
+    public string ValueFormat { get; set; } = "0.00";
+
+    private const double LabelWidth = 170;
+    private const double TopBand = 130;
+    private const double CellSize = 56;
+
+    private Dictionary<(string Row, string Column), HeatCell> _cells = [];
+    private string _viewBox = "";
+    private IReadOnlyList<string> _tableHeaders = [];
+    private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
+
+    protected override void OnParametersSet()
+    {
+        _cells = Cells.ToDictionary(c => (c.Row, c.Column));
+        var size = LabelWidth + Labels.Count * CellSize + 8;
+        _viewBox = $"0 0 {Num(size)} {Num(TopBand + Labels.Count * CellSize + 8)}";
+
+        _tableHeaders = new[] { "" }.Concat(Labels).ToList();
+        _tableRows = Labels.Select(row => (IReadOnlyList<string>)new[] { row }
+            .Concat(Labels.Select(column => TableCell(row, column)))
+            .ToList()).ToList();
+    }
+
+    private double RowY(int row) => TopBand + row * CellSize;
+
+    private double ColumnX(int column) => LabelWidth + column * CellSize;
+
+    private string TableCell(string row, string column)
+    {
+        if (!_cells.TryGetValue((row, column), out var cell) || cell.Value is not double value)
+            return "—";
+        return Fixed(value, ValueFormat) + (cell.Muted ? " (n.s.)" : "");
+    }
+
+    /// <summary>Diverging fill: the midpoint is neutral, each pole mixes its colour in by distance from it.</summary>
+    private string CellFill(double value)
+    {
+        if (value == Midpoint)
+            return ChartPalette.DivergeMid;
+        return value > Midpoint
+            ? Mix(ChartPalette.DivergeHigh, value - Midpoint, Max - Midpoint)
+            : Mix(ChartPalette.DivergeLow, Midpoint - value, Midpoint - Min);
+    }
+
+    private static string Mix(string pole, double distance, double span)
+    {
+        var share = span <= 0 ? 1 : Math.Clamp(distance / span, 0, 1);
+        return $"color-mix(in srgb, {pole} {Num(share * 100)}%, {ChartPalette.DivergeMid})";
+    }
+}
