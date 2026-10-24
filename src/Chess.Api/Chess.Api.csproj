@@ -10,13 +10,16 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-    <PackageReference Include="OpenAI" />
-    <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Chess.ServiceDefaults\Chess.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Chess.Engine\Chess.Engine.csproj" />
+    <ProjectReference Include="..\Chess.Llm\Chess.Llm.csproj" />
+    <ProjectReference Include="..\Chess.Analysis\Chess.Analysis.csproj" />
+    <ProjectReference Include="..\Chess.Rating\Chess.Rating.csproj" />
   </ItemGroup>
 
 </Project>
