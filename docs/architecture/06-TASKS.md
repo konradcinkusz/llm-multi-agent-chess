@@ -297,7 +297,9 @@ custom `FactAttribute` that sets `Skip` — no new package).
 **Do:** `.github/workflows/ci.yml` on `pull_request` and `push` to `main`: setup .NET 10, cache
 NuGet, V-NET, upload test results; job `secrets`: gitleaks on the full history; job
 `kernel-size`: fail if `src/Chess.ServiceDefaults` exceeds 400 lines of `.cs`; job `contracts`:
-fail if any project references `GitHub.Copilot.SDK` other than `Chess.Llm` (grep the csproj files).
+fail if any project references `GitHub.Copilot.SDK` other than `Chess.Llm` (grep the csproj files);
+job `solution`: fail if any `*.csproj` under `src/` or `tests/` is missing from `dotnet sln Chess.sln list`,
+or if a `Microsoft.NET.Sdk.Web` project under `src/` is not referenced from `src/Chess.AppHost/AppHost.cs`.
 Dependabot (nuget, github-actions, weekly). `CODEOWNERS` (`* @konradcinkusz`).
 PR template mirroring 04 §3 rule 7 (acceptance checklist, verification output, `## Blocked`).
 Real `.gitattributes` (`* text=auto`, `*.sh eol=lf`). `scripts/dev-setup.sh` (checks .NET 10,
