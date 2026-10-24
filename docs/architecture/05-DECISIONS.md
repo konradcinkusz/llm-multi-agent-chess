@@ -1,12 +1,13 @@
 # 05 — Decisions
 
 Each record: context, decision, consequences, and the principle it applies or deviates from.
-Status is **Proposed** until the owner accepts the plan; the supervisor flips them to
-**Accepted** when the plan PR merges.
+Every record is **Accepted** as of 2026-10-24 (T4.4 final review, see [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md)).
 
 ---
 
 ## ADR-001 — Remove the Python implementation
+
+**Status:** Accepted (2026-10-24).
 
 **Context.** The repo carries two implementations of one product (Streamlit/Python and
 .NET). The README documents only the Python one; recent work happened only in .NET.
@@ -16,6 +17,8 @@ in wave 0. The .NET engine is characterised by its own tests (T1.5) instead.
 Python code if it is ever wanted. — P14 (a stale README is a finding).
 
 ## ADR-002 — Local only: Aspire is the runtime, nothing is deployed
+
+**Status:** Accepted (2026-10-24).
 
 **Context.** R1: the owner wants the app on their own machine, no deployment, no provisioned
 agents (no Azure AI Foundry, no Fly.io).
@@ -33,6 +36,8 @@ for tests and for a no-Docker demo.
 
 ## ADR-003 — One service
 
+**Status:** Accepted (2026-10-24).
+
 **Context.** P3 asks for a service per bounded context.
 **Decision.** Games, players, tournaments and ratings are one bounded context (`Chess.Api`):
 ratings are a pure function of finished games, tournaments are schedules of games, and the
@@ -42,6 +47,8 @@ libraries (`Chess.Engine`, `Chess.Rating`, `Chess.Analysis`) and the vendor edge
 **Consequences.** One database, one owner — P3 holds.
 
 ## ADR-004 — GitHub Copilot SDK is the only LLM gateway
+
+**Status:** Accepted (2026-10-24).
 
 **Context.** R2: every model, session and request goes through the Copilot SDK on the owner's
 subscription.
@@ -69,6 +76,8 @@ subscription.
 
 ## ADR-005 — Keep Blazor, as a Blazor Web App with interactive server rendering
 
+**Status:** Accepted (2026-10-24).
+
 **Context.** The standard frontend is a Next.js product surface whose server side is the only
 thing the browser talks to (FRONTEND-BFF §1). The current Blazor WASM app calls the API and a
 SignalR hub through nginx. On 2026-10-24 the owner decided to **stay with Blazor**; the
@@ -90,6 +99,8 @@ last fully working legacy state is commit `f0f5845`.
 
 ## ADR-006 — No authentication; bind to loopback
 
+**Status:** Accepted (2026-10-24).
+
 **Context.** P5's JWT/JWKS rule assumes a multi-user, networked estate. This is a single-user
 tool on the owner's machine, and adopting `authservice` would add a second service and a login
 for one person.
@@ -99,6 +110,8 @@ attempt log is therefore reachable only from the machine itself.
 **Deviation, recorded:** P5 signing-key item N/A while R1 holds. Revisit together with ADR-002.
 
 ## ADR-007 — Ranking: server-side games, forfeits, Bradley–Terry recomputed on read
+
+**Status:** Accepted (2026-10-24).
 
 **Context.** The ranking is the product (R3). Today an LLM that answers garbage still finishes
 games (first-legal-move fallback), games live in a browser connection, and nothing is rated.
@@ -119,6 +132,8 @@ thousands of games the fit is still milliseconds; if it ever is not, cache by
 
 ## ADR-008 — Stockfish is an optional external binary
 
+**Status:** Accepted (2026-10-24).
+
 **Context.** Move quality (ACPL) needs an engine; a package dependency would break the
 dependency budget.
 **Decision.** `Analysis:StockfishPath` (or `stockfish` on `PATH`) enables `StockfishAnalyzer`
@@ -127,12 +142,16 @@ over UCI; otherwise `NoOpMoveQualityAnalyzer` and `Q = L` (RATING.md §4). Repor
 
 ## ADR-009 — Retarget to net10.0 with central package management
 
+**Status:** Accepted (2026-10-24).
+
 **Context.** net8.0 leaves support on 2026-11-10; Aspire's current releases target net10.
 **Decision.** Every project `net10.0`, versions in `Directory.Packages.props`, SDK pinned in
 `global.json`. No Dockerfiles exist after T0.2, so the TFM/base-image coupling (P6) has nothing
 to drift against.
 
 ## ADR-010 — Contracts are frozen in wave 0 so later waves can run in parallel
+
+**Status:** Accepted (2026-10-24).
 
 **Context.** The work is executed by several parallel agent sessions that each open one PR.
 Parallel sessions that each invent a shared interface produce merge conflicts and three
@@ -143,6 +162,8 @@ its own file. Every later task owns a disjoint set of files (06-TASKS, "Owns"). 
 needs to change a frozen contract stops and reports to the supervisor instead.
 
 ## ADR-011 — Broadcast mode: a scheduled, sequential, paced 24-hour channel
+
+**Status:** Accepted (2026-10-24).
 
 **Context.** The owner will run the arena as a 24/7 YouTube channel. Today the app can start single
 games and round-robin tournaments, but cannot (a) be planned ahead for a wall-clock window, (b) pace

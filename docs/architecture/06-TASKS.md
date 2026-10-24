@@ -12,45 +12,45 @@ Legacy reference: the last state of the old code is commit `f0f5845`; port from 
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| T0.1 | Remove Python, move .NET into `src/`, retarget net10 | — | todo |
-| T0.2 | Solution skeleton, frozen contracts, manifest `Program.cs` | T0.1 | todo |
-| T1.1 | ServiceDefaults kernel | T0.2 | todo |
-| T1.2 | Aspire AppHost | T0.2 | todo |
-| T1.3 | Persistence: new schema, provider switch, migration hosted service | T0.2 | todo |
-| T1.4 | Copilot SDK gateway | T0.2 | todo |
-| T1.5 | Engine characterisation tests (perft) | T0.2 | todo |
-| T1.6 | Rating library (RATING.md) | T0.2 | todo |
-| T1.7 | Stockfish analyzer | T0.2 | todo |
-| T1.8 | Repo baseline + CI + secret scanning | T0.2 | todo |
-| T1.9 | Chess.Web shell: Blazor Web App, API client, SSE client, board | T0.2 | todo |
-| T1.10 | Engine: PGN writer + tolerant move notation | T0.2 | todo |
-| T2.1 | Players: LLM player, random player, prompt, parser | T1.10 | todo |
-| T2.2 | Game runner + event stream | T1.3 | todo |
-| T2.3 | Games endpoints + SSE | T2.2 | todo |
-| T2.4 | Tournaments | T2.2 | todo |
-| T2.5 | Ratings endpoints | T1.3, T1.6 | todo |
-| T2.6 | Models + status endpoints, health checks | T1.1, T1.4 | todo |
-| T2.7 | Attempts (prompt log) endpoint | T1.3 | todo |
-| T2.8 | Post-game move-quality pipeline | T1.7, T2.2 | todo |
-| T2.9 | Rating snapshots + results breakdown endpoints | T1.3, T1.6 | todo |
-| T3.1 | UI: live game page | T1.9, T2.3, T2.6 | todo |
-| T3.0 | UI: SVG chart components | T1.9 | todo |
-| T3.2 | UI: Results page — Big Picture + charts | T3.0, T2.5, T2.9 | todo |
-| T3.3 | UI: head-to-head comparison | T1.9, T2.5 | todo |
-| T3.4 | UI: tournaments | T1.9, T2.4 | todo |
-| T3.5 | UI: game archive + replay | T1.9, T2.3 | todo |
-| T3.6 | UI: attempts log | T1.9, T2.7 | todo |
-| T4.1 | E2E (Playwright) on the AppHost with the fake gateway | T1.2, T3.1, T3.5 | todo |
-| T4.2 | AI evals: offline scenario suite + live smoke script | T2.1, T2.2 | todo |
-| T5.1 | Broadcast domain: contracts, planner, persistence | — | todo |
-| T5.2 | Broadcast runner: paced sequential play, resume, failure policy | T5.1 | todo |
-| T5.3 | Broadcast API endpoints | T5.1 | todo |
-| T5.4 | UI: broadcast planner page | T5.3 | todo |
-| T5.5 | UI: /broadcast OBS view | T5.3 | todo |
-| T5.6 | 24h soak test + runbook (OBS → YouTube) | T5.2, T5.3, T5.5 | todo |
-| T4.3 | README, CLAUDE.md, CHANGELOG final | T5.4, T5.5, T5.6 | todo |
-| T4.5 | GitHub Pages one-pager + deploy workflow | T4.3 | todo |
-| T4.4 | Final architecture review | T4.1, T4.2, T4.3, T4.5 | todo |
+| T0.1 | Remove Python, move .NET into `src/`, retarget net10 | — | done |
+| T0.2 | Solution skeleton, frozen contracts, manifest `Program.cs` | T0.1 | done |
+| T1.1 | ServiceDefaults kernel | T0.2 | done |
+| T1.2 | Aspire AppHost | T0.2 | done |
+| T1.3 | Persistence: new schema, provider switch, migration hosted service | T0.2 | done |
+| T1.4 | Copilot SDK gateway | T0.2 | done |
+| T1.5 | Engine characterisation tests (perft) | T0.2 | done |
+| T1.6 | Rating library (RATING.md) | T0.2 | done |
+| T1.7 | Stockfish analyzer | T0.2 | done |
+| T1.8 | Repo baseline + CI + secret scanning | T0.2 | done |
+| T1.9 | Chess.Web shell: Blazor Web App, API client, SSE client, board | T0.2 | done |
+| T1.10 | Engine: PGN writer + tolerant move notation | T0.2 | done |
+| T2.1 | Players: LLM player, random player, prompt, parser | T1.10 | done |
+| T2.2 | Game runner + event stream | T1.3 | done |
+| T2.3 | Games endpoints + SSE | T2.2 | done |
+| T2.4 | Tournaments | T2.2 | done |
+| T2.5 | Ratings endpoints | T1.3, T1.6 | done |
+| T2.6 | Models + status endpoints, health checks | T1.1, T1.4 | done |
+| T2.7 | Attempts (prompt log) endpoint | T1.3 | done |
+| T2.8 | Post-game move-quality pipeline | T1.7, T2.2 | done |
+| T2.9 | Rating snapshots + results breakdown endpoints | T1.3, T1.6 | done |
+| T3.1 | UI: live game page | T1.9, T2.3, T2.6 | done |
+| T3.0 | UI: SVG chart components | T1.9 | done |
+| T3.2 | UI: Results page — Big Picture + charts | T3.0, T2.5, T2.9 | done |
+| T3.3 | UI: head-to-head comparison | T1.9, T2.5 | done |
+| T3.4 | UI: tournaments | T1.9, T2.4 | done |
+| T3.5 | UI: game archive + replay | T1.9, T2.3 | done |
+| T3.6 | UI: attempts log | T1.9, T2.7 | done |
+| T4.1 | E2E (Playwright) on the AppHost with the fake gateway | T1.2, T3.1, T3.5 | done |
+| T4.2 | AI evals: offline scenario suite + live smoke script | T2.1, T2.2 | done |
+| T5.1 | Broadcast domain: contracts, planner, persistence | — | done |
+| T5.2 | Broadcast runner: paced sequential play, resume, failure policy | T5.1 | done |
+| T5.3 | Broadcast API endpoints | T5.1 | done |
+| T5.4 | UI: broadcast planner page | T5.3 | done |
+| T5.5 | UI: /broadcast OBS view | T5.3 | done |
+| T5.6 | 24h soak test + runbook (OBS → YouTube) | T5.2, T5.3, T5.5 | done |
+| T4.3 | README, CLAUDE.md, CHANGELOG final | T5.4, T5.5, T5.6 | done |
+| T4.5 | GitHub Pages one-pager + deploy workflow | T4.3 | done |
+| T4.4 | Final architecture review | T4.1, T4.2, T4.3, T4.5 | done |
 
 Common *Verify* for every .NET task (abbreviated **V-NET** below):
 
@@ -669,3 +669,31 @@ ADR statuses in 05.
 REVIEW mode of the playbook: walk the compliance checklist item by item against the merged
 code, findings ranked by severity with failure scenarios, deviations register (dated), and an
 alignment-actions table. Any blocking finding becomes a new task here.
+
+---
+
+## Follow-ups from the final review
+
+Source: [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) §4. Only blocking and high findings become tasks here; the medium and
+low items are in its §6 alignment table. None is blocking. These rows are not on the board above, so they are not counted in it.
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| F1 | Reject cross-origin requests to the loopback app (review H-1) | — | todo |
+
+### F1 — Reject cross-origin requests to the loopback app
+
+**Owns:** `src/Chess.Api/` (a request-validation middleware and its registration in `Program.cs`), `src/Chess.Web/Program.cs`,
+`tests/Chess.Api.Tests/Security/**`, `tests/Chess.Web.Tests/Security/**`.
+**Why:** the review showed that a page on another origin can start a broadcast day (`POST …/schedules/{id}/start` → 200) and
+that the Blazor websocket accepts a foreign `Origin` (`/_blazor/negotiate` → 200, upgrade → 101). ADR-006 assumes the loopback
+binding and the absence of CORS keep the browser out. They keep out reads, not writes or the websocket.
+**Do:**
+1. Middleware on `/api` and `/_blazor` that answers 403 when the `Origin` header is present and is not `http://localhost:5070`,
+   or when `Sec-Fetch-Site` is `cross-site`.
+2. Require a non-simple request on every `POST` and `DELETE` (`Content-Type: application/json` or a custom header), so a
+   cross-origin write needs a preflight, which the app never answers.
+3. Keep the `fake` profile and the E2E journeys working; they use the owner's origin.
+**Done when:** a test sends `POST /api/broadcast/schedules/{id}/start` and `POST /_blazor/negotiate` with
+`Origin: http://evil.example` and gets 403; the same requests with `Origin: http://localhost:5070` succeed; the E2E journeys pass.
+**Verify:** V-NET; `E2E_CHROMIUM_PATH=<chromium> dotnet test tests/Chess.E2E`.
