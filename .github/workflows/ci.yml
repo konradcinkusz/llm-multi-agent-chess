@@ -126,3 +126,32 @@ jobs:
           done
 
           exit "${status}"
+
+  e2e:
+    name: end-to-end journeys (Playwright, AppHost with the fake gateway)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+
+      - name: Build the E2E project (warnings as errors)
+        run: dotnet build tests/Chess.E2E -warnaserror
+
+      - name: Install Playwright Chromium with its system dependencies
+        run: pwsh tests/Chess.E2E/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Run the journeys
+        run: dotnet test tests/Chess.E2E --no-build --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-results
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
