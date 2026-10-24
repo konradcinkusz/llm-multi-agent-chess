@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llm-multi-agent-chess — a local LLM chess arena with a published rating</title>
+<meta name="description" content="A local arena that ranks the LLMs available through GitHub Copilot by playing them against each other, with a published relative-quality coefficient, plus a 24 h broadcast mode.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="llm-multi-agent-chess">
+<meta property="og:description" content="A local arena that ranks the LLMs available through GitHub Copilot by playing them against each other, with a published relative-quality coefficient, plus a 24 h broadcast mode.">
+<meta property="og:url" content="https://konradcinkusz.github.io/llm-multi-agent-chess/">
+<style>
+  /* Light is the base palette; every token is redefined for dark below, so no colour
+     has its only definition inside a media query. */
+  :root {
+    --bg: #ffffff;
+    --surface: #f8fafc;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #55637a;
+    --accent: #4f46e5;
+    --accent-soft: #eef2ff;
+    --key: #b45309;
+    --code-bg: #0f172a;
+    --code-text: #e2e8f0;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 8px 24px -12px rgba(15, 23, 42, .18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1020;
+      --surface: #121a2e;
+      --surface-2: #172038;
+      --border: #253150;
+      --text: #e6edf3;
+      --muted: #9fb0c9;
+      --accent: #a5b4fc;
+      --accent-soft: #1b2444;
+      --key: #fbbf24;
+      --code-bg: #060a16;
+      --code-text: #dbe4f0;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px -14px rgba(0, 0, 0, .7);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { text-decoration-thickness: 2px; }
+  h1, h2, h3 { line-height: 1.25; letter-spacing: -.018em; margin: 0; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+
+  /* ---------------------------------------------------------------- hero */
+  header { padding: 64px 0 8px; text-align: center; }
+  header img { width: 96px; height: 96px; }
+  /* The name is one long unbreakable-looking token, so the floor has to be small
+     enough that a 390px phone does not scroll sideways to read the title. */
+  h1 { font-size: clamp(1.55rem, 7vw, 2.9rem); margin: 18px 0 0; overflow-wrap: break-word; }
+  .tagline {
+    font-size: clamp(1.02rem, 2.4vw, 1.18rem);
+    color: var(--muted);
+    max-width: 34em;
+    margin: 14px auto 0;
+    text-wrap: balance;
+  }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 0; }
+  .btn {
+    display: inline-block;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-weight: 600;
+    font-size: .94rem;
+    text-decoration: none;
+    color: var(--text);
+    background: var(--surface);
+    transition: transform .12s ease, border-color .12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #0b1020; } }
+
+  /* --------------------------------------------------------------- stats */
+  /* Flex rather than grid: tiles in a fixed-column grid can leave an empty cell, and
+     with gap-as-divider that orphan renders as a stray grey block. Wrapping flex items
+     simply grow to fill the row instead. */
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 48px 0 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .stat { flex: 1 1 104px; padding: 18px 10px; text-align: center; border-left: 1px solid var(--border); }
+  .stat:first-child { border-left: 0; }
+  .stat b { display: block; font-size: 1.6rem; letter-spacing: -.03em; }
+  .stat span { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+
+  /* ------------------------------------------------------------ sections */
+  section { padding: 56px 0 0; }
+  section > h2 {
+    font-size: 1.5rem;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 22px;
+  }
+  section p { color: var(--muted); max-width: 68ch; }
+  section p strong { color: var(--text); }
+
+  /* --------------------------------------------------------------- code */
+  .client { margin: 0 0 22px; }
+  .client h3 { font-size: .93rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 8px; }
+  .code {
+    position: relative;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .code pre {
+    margin: 0;
+    padding: 16px 60px 16px 18px;
+    overflow-x: auto;
+    color: var(--code-text);
+    font-size: .875rem;
+    line-height: 1.7;
+  }
+  .code .prompt { color: #64748b; user-select: none; }
+  .copy {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(148, 163, 184, .16);
+    color: var(--code-text);
+    border: 0; border-radius: 6px;
+    padding: 5px 10px;
+    font: 600 .74rem/1 ui-sans-serif, system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .copy:hover { background: rgba(148, 163, 184, .3); }
+
+  /* --------------------------------------------------------------- cards */
+  /* min(px, 100%) rather than a bare px floor: below ~320px the floor would exceed the
+     available width and push the page into a horizontal scroll. */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(268px, 100%), 1fr)); gap: 14px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+  .card h3 { font-size: .95rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .card h3 .n { color: var(--accent); }
+  .card .meta { font-size: .76rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 6px 0 8px; }
+  .card p { font-size: .9rem; margin: 0; color: var(--muted); }
+  .card.first { border-color: var(--accent); }
+  .card.first .meta { color: var(--key); font-weight: 700; }
+
+  /* -------------------------------------------------------- doc link groups */
+  .group { margin-bottom: 26px; }
+  .group h3 { font-size: .93rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 10px; }
+  .group ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 2px 20px; }
+  .group li { padding: 5px 0; border-bottom: 1px solid var(--border); font-size: .93rem; }
+  .group li a { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86rem; text-decoration: none; }
+  .group li a:hover { text-decoration: underline; }
+  .group li em { display: block; font-style: normal; color: var(--muted); font-size: .84rem; }
+
+  /* A wide table scrolls inside its own container so a narrow screen never pushes the
+     whole page sideways. */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+  table.skills { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  table.skills td { padding: 9px 14px; border-top: 1px solid var(--border); vertical-align: top; color: var(--muted); }
+  table.skills td.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .84rem; color: var(--accent); white-space: nowrap; }
+  table.skills th.grp { text-align: left; padding: 15px 14px 7px; font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); background: var(--surface-2); border-top: 1px solid var(--border); }
+  table.skills tr:first-child th.grp { border-top: 0; }
+
+  .note {
+    background: var(--accent-soft);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 8px;
+  }
+  .note p { margin: 0; }
+  .note p + p { margin-top: 10px; }
+
+  footer {
+    margin-top: 64px;
+    padding: 26px 0 48px;
+    border-top: 1px solid var(--border);
+    font-size: .88rem;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+    justify-content: space-between;
+  }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>llm-multi-agent-chess</h1>
+    <p class="tagline">A local arena that ranks the LLMs available through GitHub Copilot by playing them against each other, with a published relative-quality coefficient, plus a 24 h broadcast mode.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/konradcinkusz/llm-multi-agent-chess#quickstart">Quickstart</a>
+      <a class="btn" href="https://github.com/konradcinkusz/llm-multi-agent-chess/blob/main/docs/RATING.md">How ratings work</a>
+      <a class="btn" href="https://github.com/konradcinkusz/llm-multi-agent-chess">GitHub</a>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>660</b><span>Test methods</span></div>
+      <div class="stat"><b>11</b><span>Architecture decisions</span></div>
+      <div class="stat"><b>14</b><span>Projects</span></div>
+    </div>
+  </header>
+
+  <section id="what">
+    <h2>What this is</h2>
+    <p>LLM Chess Arena runs on your own machine. It makes the LLMs available through your GitHub Copilot subscription play chess against each other, stores every game, move and LLM attempt in PostgreSQL, and ranks the models with a published, deterministic formula. Results come first: who won a game carries 75&nbsp;% of the relative coefficient, and every number is shown with its 95&nbsp;% interval.</p>
+    <p>It runs on <strong>localhost only</strong>, and nothing is deployed. Each LLM move is one Copilot request, so the planner and the tournament forms show the premium-request estimate before anything runs. Broadcast mode plans a day of games in advance and plays them one at a time, for OBS to capture.</p>
+  </section>
+
+  <section id="usage">
+    <h2>Quickstart</h2>
+    <p>You need the .NET 10 SDK. The default profile also needs Docker, which starts PostgreSQL. Once the AppHost is running, open the arena at <code>http://localhost:5070</code>. To try it with no Docker and no Copilot login, add <code>--launch-profile fake</code> to the last command.</p>
+
+    <div class="code"><button class="copy" type="button">Copy</button><pre><code>git clone https://github.com/konradcinkusz/llm-multi-agent-chess.git
+cd llm-multi-agent-chess
+dotnet run --project src/Chess.AppHost</code></pre></div>
+  </section>
+
+  <section id="documents">
+    <h2>The documents</h2>
+    <div class="group">
+      <h3>Reference</h3>
+      <ul>
+        <li><a href="https://github.com/konradcinkusz/llm-multi-agent-chess/blob/main/docs/RATING.md">docs/RATING.md</a><em>The published rating formula, with its test vectors.</em></li>
+        <li><a href="https://github.com/konradcinkusz/llm-multi-agent-chess/blob/main/docs/BROADCAST.md">docs/BROADCAST.md</a><em>The 24 h channel runbook: planning, OBS, restarts.</em></li>
+        <li><a href="https://github.com/konradcinkusz/llm-multi-agent-chess/blob/main/docs/EVALS.md">docs/EVALS.md</a><em>The offline AI evals and the live smoke test.</em></li>
+        <li><a href="https://github.com/konradcinkusz/llm-multi-agent-chess/tree/main/docs/architecture">docs/architecture/</a><em>Current state, target architecture, decisions and the task list.</em></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <span>MIT licensed · Copyright (c) 2024 Konrad Cinkusz</span>
+    <span>
+      <a href="https://github.com/konradcinkusz/llm-multi-agent-chess">Repository</a> ·
+      <a href="https://github.com/konradcinkusz">@konradcinkusz</a>
+    </span>
+  </footer>
+
+</div>
+
+<script>
+  // Copy buttons. Progressive enhancement: without JS the snippets are still selectable,
+  // and without a secure context navigator.clipboard is simply absent, so the button
+  // reports the failure instead of silently doing nothing. Delete this block along with
+  // every .copy button if the page ends up with no code snippets to copy.
+  for (const button of document.querySelectorAll('.copy')) {
+    button.addEventListener('click', async () => {
+      const code = button.parentElement.querySelector('code').textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        button.textContent = 'Copied';
+      } catch {
+        button.textContent = 'Press ⌘C';
+      }
+      setTimeout(() => { button.textContent = 'Copy'; }, 1600);
+    });
+  }
+</script>
+</body>
+</html>

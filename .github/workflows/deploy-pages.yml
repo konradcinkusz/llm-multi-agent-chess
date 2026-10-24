@@ -1,0 +1,61 @@
+name: deploy-pages
+
+# Publishes the one-page site to GitHub Pages.
+#
+# Requires a one-time repository setting: Settings → Pages → Build and deployment →
+# Source: "GitHub Actions". Without it, configure-pages fails with a 404 and there is
+# nothing in the workflow to fix.
+#
+# docs/ holds the standards as markdown as well as the page, and serving those raw
+# would put unrendered .md files on a public URL. So the job assembles a _site/ that
+# contains only the page and its assets rather than uploading docs/ wholesale.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/index.html'
+      - 'docs/assets/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel a running deployment: a half-published site is worse than a late one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Assemble the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect the page and its assets
+        run: |
+          mkdir -p _site/assets
+          cp docs/index.html _site/
+          cp docs/assets/*.svg _site/assets/
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
