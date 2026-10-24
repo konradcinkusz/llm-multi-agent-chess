@@ -9,16 +9,16 @@ namespace Chess.Web.Tests.Components;
 
 public class NavigationTests
 {
-    // Every route of 03 §6, in the order it is listed there.
+    // Every route of 03 §6 and the planner page of 03 §9.4, in the order they are listed there.
     private static readonly string[] Section6Routes =
     [
         "/results", "/", "/head-to-head", "/tournaments", "/tournaments/{Id:guid}",
-        "/games", "/games/{Id:guid}", "/admin/attempts",
+        "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan",
     ];
 
     // The navigation shows the top-level routes, Results first; the detail routes are reached from their lists.
     private static readonly string[] NavHrefs =
-        ["/results", "/", "/head-to-head", "/tournaments", "/games", "/admin/attempts"];
+        ["/results", "/", "/head-to-head", "/tournaments", "/broadcast/plan", "/games", "/admin/attempts"];
 
     [Fact]
     public void EveryRouteOfSection6IsServedByAPlaceholderPage()
