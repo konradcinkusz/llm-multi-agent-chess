@@ -15,6 +15,8 @@ public sealed record PageDto<T>(IReadOnlyList<T> Items, int Page, int PageSize, 
 public sealed record CreateTournamentRequest(string Name, IReadOnlyList<string> Models, int GamesPerPair, int MaxConcurrency);
 public sealed record TournamentDto(Guid Id, string Name, IReadOnlyList<string> Models, int GamesPerPair, string Status,
     int GamesTotal, int GamesFinished, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt);  // Status: running | finished | cancelled
+public sealed record TournamentCreatedDto(TournamentDto Tournament, IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
+public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests);  // null: multiplier unknown
 public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled);
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);
 

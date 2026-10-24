@@ -36,8 +36,8 @@ public sealed class ArenaApiClient(HttpClient http)
     public Task AbortGameAsync(Guid id, CancellationToken ct = default) =>
         EnsureSuccessAsync(http.DeleteAsync($"/api/games/{id}", ct), ct);
 
-    public async Task<TournamentDto> CreateTournamentAsync(CreateTournamentRequest request, CancellationToken ct = default) =>
-        await ReadJsonAsync<TournamentDto>(await http.PostAsJsonAsync("/api/tournaments", request, JsonOptions, ct), ct);
+    public async Task<TournamentCreatedDto> CreateTournamentAsync(CreateTournamentRequest request, CancellationToken ct = default) =>
+        await ReadJsonAsync<TournamentCreatedDto>(await http.PostAsJsonAsync("/api/tournaments", request, JsonOptions, ct), ct);
 
     public Task<IReadOnlyList<TournamentDto>> GetTournamentsAsync(CancellationToken ct = default) =>
         GetJsonAsync<IReadOnlyList<TournamentDto>>("/api/tournaments", ct);

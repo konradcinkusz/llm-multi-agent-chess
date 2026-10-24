@@ -1,0 +1,58 @@
+/* Tournament detail: facts, progress, leaderboard and games (03 §6). */
+
+.back {
+    margin: 0 0 8px;
+}
+
+.tournament-facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 16px;
+    margin: 0 0 12px;
+}
+
+.tournament-facts dt {
+    opacity: 0.75;
+}
+
+.tournament-facts dd {
+    margin: 0;
+}
+
+.tournament-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.tournament-section {
+    margin: 0 0 24px;
+}
+
+.tournament-section h2 {
+    margin: 0 0 8px;
+    font-size: 1.125rem;
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.3);
+    vertical-align: middle;
+}
+
+.muted {
+    opacity: 0.75;
+}
