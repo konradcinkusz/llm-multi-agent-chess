@@ -1,0 +1,553 @@
+@page "/broadcast/plan"
+@using Chess.Web.Api
+@using Chess.Web.Components.Charts
+@using Chess.Web.Components.Pages.Tournaments
+@implements IDisposable
+@inject ArenaApiClient Api
+@inject IHttpClientFactory HttpClients
+
+<PageTitle>Broadcast plan · LLM Chess Arena</PageTitle>
+
+<h1>Broadcast plan</h1>
+<p class="muted">Plan a day of games, check the premium-request estimate, save the plan as a draft, then start it. Times are UTC.</p>
+
+@* Every action reports here, whichever section it came from. *@
+@if (_actionError is not null)
+{
+    <p class="status-error" role="alert">@_actionError</p>
+}
+
+<section class="plan-section" aria-labelledby="plan-form-heading">
+    <h2 id="plan-form-heading">1. Plan the day</h2>
+
+    @if (_models is null && _modelsError is null)
+    {
+        <p>Loading models…</p>
+    }
+    else if (_modelsError is not null)
+    {
+        <p class="status-error" role="alert">Could not load the models: @_modelsError</p>
+    }
+    else
+    {
+        <div class="plan-form">
+            <label>
+                Name
+                <input data-testid="plan-name" type="text" maxlength="120" @bind="_name" />
+            </label>
+            <label>
+                Start (UTC)
+                <input data-testid="plan-start" type="datetime-local" value="@_startText" @onchange="OnStartChanged" />
+            </label>
+            <label>
+                Hours
+                <input data-testid="plan-hours" type="number" min="1" max="@PlanPlanner.MaxDurationHours" @bind="_hours" />
+            </label>
+            <label>
+                Move delay (ms)
+                <input data-testid="plan-move-delay" type="number" min="0" step="500" @bind="_moveDelayMs" />
+            </label>
+            <label>
+                Game gap (s)
+                <input data-testid="plan-game-gap" type="number" min="0" @bind="_gameGapSeconds" />
+            </label>
+            <label>
+                Seed
+                <input data-testid="plan-seed" type="number" @bind="_seed" />
+            </label>
+        </div>
+
+        <fieldset class="plan-models" data-testid="plan-models">
+            <legend>Models</legend>
+            @foreach (var model in _choices)
+            {
+                <label class="plan-model">
+                    <input data-testid="plan-model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
+                           @onchange="e => Toggle(model.Id, e.Value)" />
+                    @model.DisplayName
+                    <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
+                </label>
+            }
+        </fieldset>
+
+        @foreach (var problem in FormProblems)
+        {
+            <p class="plan-problem">@problem</p>
+        }
+
+        <div class="plan-actions">
+            <button data-testid="plan-generate" type="button" @onclick="Generate" disabled="@(FormProblems.Count > 0 || _busy)">
+                Generate preview
+            </button>
+        </div>
+    }
+</section>
+
+@if (_request is { } request)
+{
+    var ends = request.StartsAt.AddHours(request.DurationHours);
+
+    <section class="plan-section" aria-labelledby="plan-preview-heading">
+        <h2 id="plan-preview-heading">2. Preview and estimate</h2>
+        <p class="muted">
+            @_slots.Count @(_slots.Count == 1 ? "game" : "games") from @PlanFormat.Utc(request.StartsAt) to @PlanFormat.Utc(ends).
+            Nothing is saved until you press Save draft.
+        </p>
+
+        <ChartFrame Title="Preview timeline"
+                    Description="Each bar is one game on a UTC clock: white on the left half, black on the right.">
+            <PlanTimeline Slots="_slots" StartsAt="request.StartsAt" EndsAt="ends" />
+        </ChartFrame>
+
+        <div class="plan-estimate" data-testid="plan-estimate" aria-live="polite">
+            <h3>Premium requests for the day (estimate, before saving)</h3>
+            <p class="muted">
+                Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
+            </p>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr><th>Model</th><th>Multiplier</th><th>Games</th><th>Premium requests</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var model in request.Models)
+                        {
+                            <tr>
+                                <td>@NameOf(model)</td>
+                                <td>@TournamentFormat.Multiplier(Find(model)?.PremiumMultiplier)</td>
+                                <td>@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
+                                <td>@TournamentFormat.Requests(RequestsFor(model))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p>
+                Known total: @TournamentFormat.Requests(request.Models.Sum(model => RequestsFor(model) ?? 0))
+                @if (UnknownCount > 0)
+                {
+                    <span>, plus @UnknownCount model@(UnknownCount == 1 ? "" : "s") with an unknown multiplier</span>
+                }
+            </p>
+        </div>
+
+        <h3>Games</h3>
+        <div class="table-scroll">
+            <table class="plan-slots">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Starts</th>
+                        <th>White</th>
+                        <th>Black</th>
+                        <th><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _slots.Count; i++)
+                    {
+                        var index = i;
+                        var slot = _slots[i];
+                        <tr data-testid="plan-slot">
+                            <td>@(index + 1)</td>
+                            <td>@PlanFormat.Utc(slot.PlannedStart)</td>
+                            <td>
+                                <select data-testid="slot-white" aria-label="White, game @(index + 1)" value="@slot.White.ModelId"
+                                        disabled="@(Locked || _busy)" @onchange="e => SetPlayer(index, true, e.Value)">
+                                    @foreach (var model in request.Models)
+                                    {
+                                        <option value="@model">@NameOf(model)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <select data-testid="slot-black" aria-label="Black, game @(index + 1)" value="@slot.Black.ModelId"
+                                        disabled="@(Locked || _busy)" @onchange="e => SetPlayer(index, false, e.Value)">
+                                    @foreach (var model in request.Models)
+                                    {
+                                        <option value="@model">@NameOf(model)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td class="plan-row-actions">
+                                <button data-testid="slot-up" type="button" disabled="@(Locked || _busy || index == 0)"
+                                        @onclick="() => Reorder(index, -1)">Up</button>
+                                <button data-testid="slot-down" type="button" disabled="@(Locked || _busy || index == _slots.Count - 1)"
+                                        @onclick="() => Reorder(index, 1)">Down</button>
+                                <button data-testid="slot-delete" type="button" disabled="@(Locked || _busy)"
+                                        @onclick="() => Delete(index)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="muted">Up and Down move the players of a game to the neighbouring game; the windows stay where they are.</p>
+
+        @foreach (var problem in SlotProblems)
+        {
+            <p class="plan-problem">@problem</p>
+        }
+
+        <div class="plan-actions">
+            <button data-testid="plan-save" type="button" @onclick="SaveAsync" disabled="@(!CanSave)">Save draft</button>
+            <button data-testid="plan-start-now" type="button" @onclick="StartAsync" disabled="@(!CanStart)">Start</button>
+        </div>
+
+        @if (_saved is { } saved)
+        {
+            <p class="plan-saved" role="status">
+                Saved as <strong>@saved.Schedule.Name</strong> (@PlanFormat.Status(saved.Schedule.Status)).
+                @if (Dirty)
+                {
+                    <span>Unsaved changes: save the draft before you start it.</span>
+                }
+            </p>
+        }
+
+    </section>
+}
+
+<section class="plan-section" aria-labelledby="plan-schedules-heading">
+    <h2 id="plan-schedules-heading">3. Schedules</h2>
+
+    @if (_scheduleError is not null)
+    {
+        <p class="status-error" role="alert">Could not load the schedules: @_scheduleError</p>
+    }
+
+    @if (_schedules is null)
+    {
+        <p>Loading schedules…</p>
+    }
+    else if (_schedules.Count == 0)
+    {
+        <p>No schedules yet. Save a plan above.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="plan-schedules">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Window (UTC)</th>
+                        <th>Games</th>
+                        <th>Premium requests (estimate)</th>
+                        <th><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var schedule in _schedules)
+                    {
+                        <tr data-testid="schedule-row">
+                            <td>@schedule.Name</td>
+                            <td>@PlanFormat.Status(schedule.Status)</td>
+                            <td>@PlanFormat.Utc(schedule.StartsAt) to @PlanFormat.Utc(schedule.EndsAt)</td>
+                            <td>@schedule.SlotsFinished of @schedule.SlotsTotal</td>
+                            <td>
+                                @string.Join(", ", schedule.EstimatedPremiumRequests.Select(estimate =>
+                                    $"{NameOf(estimate.ModelId)} {TournamentFormat.Requests(estimate.EstimatedPremiumRequests)}"))
+                            </td>
+                            <td class="plan-row-actions">
+                                @if (schedule.Status is ScheduleStatuses.Draft or ScheduleStatuses.Scheduled)
+                                {
+                                    <button data-testid="schedule-start" type="button"
+                                            disabled="@(_busy || ChannelBusy(schedule.Id))"
+                                            @onclick="() => CommandAsync(schedule.Id, StartFailure, _broadcast.StartAsync)">Start</button>
+                                }
+                                @if (schedule.Status == ScheduleStatuses.Running)
+                                {
+                                    <button data-testid="schedule-pause" type="button" disabled="@_busy"
+                                            @onclick="() => CommandAsync(schedule.Id, PauseFailure, _broadcast.PauseAsync)">Pause</button>
+                                }
+                                @if (schedule.Status == ScheduleStatuses.Paused)
+                                {
+                                    <button data-testid="schedule-resume" type="button" disabled="@(_busy || ChannelBusy(schedule.Id))"
+                                            @onclick="() => CommandAsync(schedule.Id, ResumeFailure, _broadcast.ResumeAsync)">Resume</button>
+                                }
+                                @if (schedule.Status is ScheduleStatuses.Scheduled or ScheduleStatuses.Running or ScheduleStatuses.Paused)
+                                {
+                                    <button data-testid="schedule-stop" type="button" disabled="@_busy"
+                                            @onclick="() => CommandAsync(schedule.Id, StopFailure, _broadcast.StopAsync)">Stop</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>
+    /// The day the estimate describes (ADR-011): about 24 games of 80 plies at 40 s a move. The planner does not ask
+    /// for these, so the page states them beside the estimate.
+    /// </summary>
+    private const double AssumedPlies = 80;
+    private const double AssumedMoveLatencyMs = 40_000;
+    private const int DefaultHours = 24;
+    private const int DefaultMoveDelayMs = 4000;
+    private const int DefaultGameGapSeconds = 20;
+    private const int DefaultSeed = 1;
+
+    private const string SaveFailure = "Not saved:";
+    private const string StartFailure = "Could not start:";
+    private const string PauseFailure = "Could not pause:";
+    private const string ResumeFailure = "Could not resume:";
+    private const string StopFailure = "Could not stop:";
+
+    private readonly CancellationTokenSource _cts = new();
+    private BroadcastApiClient _broadcast = null!;
+
+    private IReadOnlyList<ModelDto>? _models;
+    private string? _modelsError;
+    private IReadOnlyList<ModelDto> _choices = [];
+    private readonly HashSet<string> _selected = [];
+
+    private string _name = "LLM Chess 24h";
+    private string _startText = "";
+    private int _hours = DefaultHours;
+    private int _moveDelayMs = DefaultMoveDelayMs;
+    private int _gameGapSeconds = DefaultGameGapSeconds;
+    private int _seed = DefaultSeed;
+
+    // The plan on screen: the request it was generated from, and its games, which the user may edit before saving.
+    private PlanRequest? _request;
+    private List<SlotEdit> _slots = [];
+
+    // The draft the API holds for this plan, once it is saved.
+    private ScheduleDetailDto? _saved;
+
+    private IReadOnlyList<ScheduleDto>? _schedules;
+    private string? _scheduleError;
+    private string? _actionError;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _broadcast = new BroadcastApiClient(HttpClients.CreateClient(BroadcastApiClient.ClientName));
+        _startText = PlanFormat.ToStartInput(PlanFormat.NextFullHour(DateTimeOffset.UtcNow));
+        try
+        {
+            _models = await Api.GetModelsAsync(_cts.Token);
+            _choices = _models.Where(model => model.Enabled).ToArray();
+        }
+        catch (HttpRequestException ex)
+        {
+            _modelsError = ex.Message;
+        }
+
+        await ReloadSchedulesAsync();
+    }
+
+    private IReadOnlyList<string> SelectedModels =>
+        _choices.Where(model => _selected.Contains(model.Id)).Select(model => model.Id).ToArray();
+
+    private IReadOnlyList<string> FormProblems =>
+        PlanFormat.ParseStartInput(_startText) is not { } start
+            ? ["Choose a start time (UTC)."]
+            : PlanPlanner.Problems(FormRequest(start));
+
+    private IReadOnlyList<string> SlotProblems
+    {
+        get
+        {
+            var problems = new List<string>();
+            for (var i = 0; i < _slots.Count; i++)
+            {
+                if (_slots[i].White.ModelId == _slots[i].Black.ModelId)
+                {
+                    problems.Add($"Game {i + 1}: a model cannot play itself.");
+                }
+            }
+
+            if (_slots.Count == 0)
+            {
+                problems.Add("Keep at least one game to save.");
+            }
+
+            return problems;
+        }
+    }
+
+    /// <summary>The draft on screen differs from the one the API holds (or none is saved yet).</summary>
+    private bool Dirty => _saved is null || !SameSlots(_slots, _saved.Slots);
+
+    /// <summary>A saved schedule that has started, finished or been stopped cannot be edited.</summary>
+    private bool Locked => _saved is { } saved && saved.Schedule.Status is not (ScheduleStatuses.Draft or ScheduleStatuses.Scheduled);
+
+    private bool CanSave => !_busy && !Locked && Dirty && _request is not null && SlotProblems.Count == 0;
+
+    /// <summary>Start is offered only for the saved draft, with no unsaved edits and no other schedule playing.</summary>
+    private bool CanStart => _saved is { } saved && saved.Schedule.Status is ScheduleStatuses.Draft or ScheduleStatuses.Scheduled
+        && !Dirty && !_busy && !ChannelBusy(saved.Schedule.Id);
+
+    /// <summary>True while another schedule is running or paused: the API runs one channel at a time.</summary>
+    private bool ChannelBusy(Guid scheduleId) =>
+        _schedules?.Any(schedule => schedule.Id != scheduleId
+            && schedule.Status is ScheduleStatuses.Running or ScheduleStatuses.Paused) == true;
+
+    private int UnknownCount => _request is null ? 0 : _request.Models.Count(model => RequestsFor(model) is null);
+
+    private IReadOnlyDictionary<string, double?> Multipliers => (_models ?? Array.Empty<ModelDto>())
+        .ToDictionary(model => model.Id, model => model.PremiumMultiplier, StringComparer.Ordinal);
+
+    private double? RequestsFor(string model) => PlanPlanner.Requests(model, _slots, AssumedPlies, Multipliers);
+
+    private ModelDto? Find(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId);
+
+    private string NameOf(string modelId) => Find(modelId)?.DisplayName ?? modelId;
+
+    private PlanRequest FormRequest(DateTimeOffset start) => new(_name.Trim(), SelectedModels, start, _hours,
+        new PacingProfile(_moveDelayMs, _gameGapSeconds), _seed, AssumedPlies, AssumedMoveLatencyMs);
+
+    private void OnStartChanged(ChangeEventArgs e) => _startText = e.Value?.ToString() ?? "";
+
+    private void Toggle(string modelId, object? selected)
+    {
+        if (selected is true)
+        {
+            _selected.Add(modelId);
+        }
+        else
+        {
+            _selected.Remove(modelId);
+        }
+    }
+
+    /// <summary>Builds the preview locally. Nothing is sent to the API, so nothing is saved.</summary>
+    private void Generate()
+    {
+        if (PlanFormat.ParseStartInput(_startText) is not { } start || FormProblems.Count > 0)
+        {
+            return;
+        }
+
+        _request = FormRequest(start);
+        _slots = [.. PlanPlanner.Plan(_request)];
+        _saved = null;
+        _actionError = null;
+    }
+
+    private void SetPlayer(int index, bool white, object? value)
+    {
+        var model = value?.ToString();
+        if (string.IsNullOrEmpty(model))
+        {
+            return;
+        }
+
+        var spec = new PlayerSpec(model == PlanPlanner.RandomModelId ? "random" : "llm", model);
+        _slots[index] = white ? _slots[index] with { White = spec } : _slots[index] with { Black = spec };
+    }
+
+    /// <summary>Moves the players of game <paramref name="index"/> to the neighbouring game. The windows stay put, so the timeline does not shift.</summary>
+    private void Reorder(int index, int delta)
+    {
+        var other = index + delta;
+        var mine = _slots[index];
+        var theirs = _slots[other];
+        _slots[index] = mine with { White = theirs.White, Black = theirs.Black };
+        _slots[other] = theirs with { White = mine.White, Black = mine.Black };
+    }
+
+    private void Delete(int index) => _slots.RemoveAt(index);
+
+    private Task SaveAsync()
+    {
+        if (!CanSave || _request is not { } request)
+        {
+            return Task.CompletedTask;
+        }
+
+        return RunAsync(SaveFailure, async ct =>
+        {
+            _saved ??= await _broadcast.PlanAsync(request, ct);
+            if (!SameSlots(_slots, _saved.Slots))
+            {
+                _saved = await _broadcast.ReplaceSlotsAsync(_saved.Schedule.Id, _slots, ct);
+            }
+        });
+    }
+
+    private Task StartAsync()
+    {
+        if (!CanStart || _saved is not { } saved)
+        {
+            return Task.CompletedTask;
+        }
+
+        return CommandAsync(saved.Schedule.Id, StartFailure, _broadcast.StartAsync);
+    }
+
+    /// <summary>Runs a schedule command. The saved draft is replaced by the answer when it is the one commanded.</summary>
+    private Task CommandAsync(Guid scheduleId, string failure, Func<Guid, CancellationToken, Task<ScheduleDetailDto>> command)
+    {
+        if (_busy)
+        {
+            return Task.CompletedTask;
+        }
+
+        return RunAsync(failure, async ct =>
+        {
+            var detail = await command(scheduleId, ct);
+            if (_saved?.Schedule.Id == scheduleId)
+            {
+                _saved = detail;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Runs one API action with the page marked busy, shows the API's reason when it is refused, and reloads the
+    /// schedules either way so the list shows what the API now holds.
+    /// </summary>
+    private async Task RunAsync(string failure, Func<CancellationToken, Task> work)
+    {
+        _busy = true;
+        _actionError = null;
+        StateHasChanged();
+        try
+        {
+            await work(_cts.Token);
+        }
+        catch (BroadcastApiException ex)
+        {
+            _actionError = $"{failure} {ex.Message}";
+        }
+        catch (HttpRequestException ex)
+        {
+            _actionError = $"{failure} {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await ReloadSchedulesAsync();
+    }
+
+    private async Task ReloadSchedulesAsync()
+    {
+        try
+        {
+            _schedules = await _broadcast.GetSchedulesAsync(_cts.Token);
+            _scheduleError = null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or BroadcastApiException)
+        {
+            _scheduleError = ex.Message;
+        }
+    }
+
+    /// <summary>Whether the saved games and the games on screen are the same, comparing instants rather than offsets.</summary>
+    private static bool SameSlots(IReadOnlyList<SlotEdit> edits, IReadOnlyList<SlotDto> slots) =>
+        edits.Count == slots.Count && edits.Zip(slots).All(pair =>
+            pair.First.White == pair.Second.White && pair.First.Black == pair.Second.Black
+            && pair.First.PlannedStart == pair.Second.PlannedStart && pair.First.PlannedEnd == pair.Second.PlannedEnd);
+
+    public void Dispose() => _cts.Cancel();
+}
