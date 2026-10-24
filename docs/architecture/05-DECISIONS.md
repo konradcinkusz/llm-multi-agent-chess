@@ -109,6 +109,17 @@ for one person.
 attempt log is therefore reachable only from the machine itself.
 **Deviation, recorded:** P5 signing-key item N/A while R1 holds. Revisit together with ADR-002.
 
+**Amended 2026-10-24: origin guard.** Loopback binding does not stop a web page on another site from reaching the
+app through the owner's browser. A browser sends a cross-site `POST` without a preflight, and a websocket handshake is
+not subject to CORS, so such a page could start a broadcast day (which spends Copilot premium requests) or open a Blazor
+circuit (ARCHITECTURE_REVIEW H-1). The guard (`Chess.ServiceDefaults/OriginGuard.cs`, applied by both apps) answers 403
+to any request whose `Origin` is not `localhost`, `127.0.0.1` or `[::1]` on the web or API port (plus
+`Arena:AllowedOrigins`), and to any request with `Sec-Fetch-Site: cross-site`. Requests without an `Origin`, such as curl,
+the web app's server-side calls, health probes and Playwright's request context, are allowed. The guard does not
+authenticate the owner. It does not stop code already running on the owner's machine, another local user or process
+that can reach the loopback ports, or a non-browser client that sends neither header. CORS is still not configured: the
+guard refuses foreign origins, it does not grant any.
+
 ## ADR-007 — Ranking: server-side games, forfeits, Bradley–Terry recomputed on read
 
 **Status:** Accepted (2026-10-24).

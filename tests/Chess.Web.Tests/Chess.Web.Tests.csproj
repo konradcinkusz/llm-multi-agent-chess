@@ -11,13 +11,15 @@
 
   <ItemGroup>
     <PackageReference Include="bunit" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Chess.Web\Chess.Web.csproj" />
+    <!-- Aliased: Chess.Api has a top-level Program too, so the web entry point is named ChessWeb::Program in tests. -->
+    <ProjectReference Include="..\..\src\Chess.Web\Chess.Web.csproj" Aliases="global,ChessWeb" />
     <!-- Only for the DTO round-trip test: the web project itself never references Chess.Api (P3). -->
     <ProjectReference Include="..\..\src\Chess.Api\Chess.Api.csproj" />
   </ItemGroup>
