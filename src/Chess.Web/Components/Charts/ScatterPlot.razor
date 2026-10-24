@@ -1,0 +1,101 @@
+@using static Chess.Web.Components.Charts.ChartGeometry
+
+<ChartFrame Title="@Title" Description="@Description">
+    @if (_points.Count == 0)
+    {
+        <p class="chart-empty">No data.</p>
+    }
+    else
+    {
+        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+            @foreach (var tick in _yTicks)
+            {
+                <line class="chart-grid" x1="@Num(PlotLeft)" y1="@Num(_y.Map(tick))" x2="@Num(PlotRight)" y2="@Num(_y.Map(tick))" />
+                <ChartText class="chart-tick" x="@Num(PlotLeft - 8)" y="@Num(_y.Map(tick) + 4)" text-anchor="end">@Num(tick)</ChartText>
+            }
+            @foreach (var tick in _xTicks)
+            {
+                <ChartText class="chart-tick" x="@Num(_x.Map(tick))" y="@Num(PlotBottom + 16)" text-anchor="middle">@Num(tick)</ChartText>
+            }
+
+            <line class="chart-baseline" x1="@Num(PlotLeft)" y1="@Num(PlotBottom)" x2="@Num(PlotRight)" y2="@Num(PlotBottom)" />
+            <ChartText class="chart-axis-title" x="@Num((PlotLeft + PlotRight) / 2)" y="@Num(PlotBottom + 36)" text-anchor="middle">@XTitle</ChartText>
+            <ChartText class="chart-axis-title" x="@Num(PlotLeft - 8)" y="@Num(PlotTop - 4)" text-anchor="end">@YTitle</ChartText>
+
+            @for (var i = 0; i < _points.Count; i++)
+            {
+                var point = _points[i];
+                var cx = _x.Map(point.X);
+                var cy = _y.Map(point.Y);
+                <g class="chart-point" data-point="@point.Label">
+                    <circle class="chart-ring" cx="@Num(cx)" cy="@Num(cy)" r="5" style="fill: @Colour" />
+                    <circle class="chart-hit" cx="@Num(cx)" cy="@Num(cy)" r="10">
+                        <title>@point.Label: @Num(point.X), @Num(point.Y)</title>
+                    </circle>
+                    <ChartText class="chart-label" x="@Num(cx + 8)" y="@Num(_labelY[i] + 4)">@point.Label</ChartText>
+                </g>
+            }
+        </svg>
+        <ChartTable Headers="_tableHeaders" Rows="_tableRows" />
+    }
+</ChartFrame>
+
+@code {
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string XTitle { get; set; } = "";
+
+    [Parameter]
+    public string YTitle { get; set; } = "";
+
+    /// <summary>Every point is labelled. A scatter has one colour, so no legend is drawn.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ScatterPoint> Points { get; set; } = [];
+
+    /// <summary>Fill of every point.</summary>
+    [Parameter]
+    public string Colour { get; set; } = ChartPalette.Neutral;
+
+    private const double Width = 720;
+    private const double Height = 340;
+    private const double PlotLeft = 56;
+    private const double PlotRight = 640;
+    private const double PlotTop = 16;
+    private const double PlotBottom = 300;
+    private const double LabelGap = 14;
+
+    private List<ScatterPoint> _points = [];
+    private LinearScale _x;
+    private LinearScale _y;
+    private IReadOnlyList<double> _xTicks = [];
+    private IReadOnlyList<double> _yTicks = [];
+    private double[] _labelY = [];
+    private string _viewBox = "";
+    private IReadOnlyList<string> _tableHeaders = [];
+    private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
+
+    protected override void OnParametersSet()
+    {
+        _points = Points.ToList();
+        _viewBox = $"0 0 {Num(Width)} {Num(Height)}";
+        _tableHeaders = ["Point", XTitle, YTitle];
+        _tableRows = _points.Select(p => (IReadOnlyList<string>)new[] { p.Label, Num(p.X), Num(p.Y) }).ToList();
+
+        if (_points.Count == 0)
+            return;
+
+        var (xLow, xHigh, xTicks) = NiceAxis(_points.Min(p => p.X), _points.Max(p => p.X));
+        var (yLow, yHigh, yTicks) = NiceAxis(_points.Min(p => p.Y), _points.Max(p => p.Y));
+        _x = new LinearScale(xLow, xHigh, PlotLeft, PlotRight);
+        _y = new LinearScale(yLow, yHigh, PlotBottom, PlotTop);
+        _xTicks = xTicks;
+        _yTicks = yTicks;
+        _labelY = SeparateLabels(_points.Select(p => _y.Map(p.Y)).ToArray(), LabelGap);
+    }
+}

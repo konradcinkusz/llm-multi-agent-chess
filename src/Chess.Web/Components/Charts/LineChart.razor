@@ -1,0 +1,122 @@
+@using static Chess.Web.Components.Charts.ChartGeometry
+
+<ChartFrame Title="@Title" Description="@Description">
+    @if (_series.Count == 0)
+    {
+        <p class="chart-empty">No data.</p>
+    }
+    else
+    {
+        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+            @foreach (var tick in _yTicks)
+            {
+                <line class="chart-grid" x1="@Num(PlotLeft)" y1="@Num(_y.Map(tick))" x2="@Num(PlotRight)" y2="@Num(_y.Map(tick))" />
+                <ChartText class="chart-tick" x="@Num(PlotLeft - 8)" y="@Num(_y.Map(tick) + 4)" text-anchor="end">@Num(tick)</ChartText>
+            }
+            @foreach (var tick in _xTicks)
+            {
+                <ChartText class="chart-tick" x="@Num(_x.Map(tick))" y="@Num(PlotBottom + 16)" text-anchor="middle">@Num(tick)</ChartText>
+            }
+
+            <line class="chart-baseline" x1="@Num(PlotLeft)" y1="@Num(PlotBottom)" x2="@Num(PlotRight)" y2="@Num(PlotBottom)" />
+            <ChartText class="chart-axis-title" x="@Num((PlotLeft + PlotRight) / 2)" y="@Num(PlotBottom + 36)" text-anchor="middle">@XTitle</ChartText>
+            <ChartText class="chart-axis-title" x="@Num(PlotLeft - 8)" y="@Num(PlotTop - 4)" text-anchor="end">@YTitle</ChartText>
+
+            @for (var s = 0; s < _series.Count; s++)
+            {
+                <polyline class="chart-line" points="@_polylines[s]" style="stroke: @ChartPalette.Series(_series[s].Slot)" />
+            }
+
+            @for (var s = 0; s < _series.Count; s++)
+            {
+                foreach (var point in _series[s].Points.OrderBy(p => p.X))
+                {
+                    <circle class="chart-hit" cx="@Num(_x.Map(point.X))" cy="@Num(_y.Map(point.Y))" r="8">
+                        <title>@_series[s].Name, @XTitle @Num(point.X): @Num(point.Y)</title>
+                    </circle>
+                }
+            }
+
+            @for (var s = 0; s < _series.Count; s++)
+            {
+                var series = _series[s];
+                <circle class="chart-ring" cx="@Num(_endX[s])" cy="@Num(_endY[s])" r="4" style="fill: @ChartPalette.Series(series.Slot)" />
+                <ChartText class="chart-label" x="@Num(_endX[s] + 8)" y="@Num(_labelY[s] + 4)">@series.Name</ChartText>
+            }
+        </svg>
+        <ChartLegend Items="_legend" />
+        <ChartTable Headers="_tableHeaders" Rows="_tableRows" />
+    }
+</ChartFrame>
+
+@code {
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string XTitle { get; set; } = "";
+
+    [Parameter]
+    public string YTitle { get; set; } = "";
+
+    /// <summary>One line per series. Two or more lines get a legend.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<LineSeries> Series { get; set; } = [];
+
+    private const double Width = 720;
+    private const double Height = 320;
+    private const double PlotLeft = 56;
+    private const double PlotRight = 580;
+    private const double PlotTop = 24;
+    private const double PlotBottom = 280;
+    private const double LabelGap = 14;
+
+    private List<LineSeries> _series = [];
+    private LinearScale _x;
+    private LinearScale _y;
+    private IReadOnlyList<double> _xTicks = [];
+    private IReadOnlyList<double> _yTicks = [];
+    private double[] _endX = [];
+    private double[] _endY = [];
+    private double[] _labelY = [];
+    private string[] _polylines = [];
+    private string _viewBox = "";
+    private IReadOnlyList<ChartLegendItem> _legend = [];
+    private IReadOnlyList<string> _tableHeaders = [];
+    private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
+
+    protected override void OnParametersSet()
+    {
+        _series = Series.Where(s => s.Points.Count > 0).ToList();
+        _viewBox = $"0 0 {Num(Width)} {Num(Height)}";
+        _tableHeaders = ["Series", XTitle, YTitle];
+        _legend = _series.Select(s => new ChartLegendItem(s.Name, ChartPalette.Series(s.Slot))).ToList();
+        _tableRows = _series
+            .SelectMany(s => s.Points.OrderBy(p => p.X).Select(p => (IReadOnlyList<string>)new[] { s.Name, Num(p.X), Num(p.Y) }))
+            .ToList();
+
+        if (_series.Count == 0)
+            return;
+
+        var points = _series.SelectMany(s => s.Points).ToList();
+        var (xLow, xHigh, xTicks) = NiceAxis(points.Min(p => p.X), points.Max(p => p.X));
+        var (yLow, yHigh, yTicks) = NiceAxis(points.Min(p => p.Y), points.Max(p => p.Y));
+        _x = new LinearScale(xLow, xHigh, PlotLeft, PlotRight);
+        _y = new LinearScale(yLow, yHigh, PlotBottom, PlotTop);
+        _xTicks = xTicks;
+        _yTicks = yTicks;
+
+        _polylines = _series
+            .Select(s => string.Join(" ", s.Points.OrderBy(p => p.X).Select(p => $"{Num(_x.Map(p.X))},{Num(_y.Map(p.Y))}")))
+            .ToArray();
+
+        var ends = _series.Select(s => s.Points.MaxBy(p => p.X)!).ToArray();
+        _endX = ends.Select(p => _x.Map(p.X)).ToArray();
+        _endY = ends.Select(p => _y.Map(p.Y)).ToArray();
+        _labelY = SeparateLabels(_endY, LabelGap);
+    }
+}
