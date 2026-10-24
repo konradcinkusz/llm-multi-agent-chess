@@ -1,0 +1,19 @@
+@* Razor reserves the <text> tag and rejects attributes on it, so the SVG text element is rendered from code. *@
+@Render
+
+@code {
+    /// <summary>Attributes of the SVG text element: x, y, class, text-anchor, transform and so on.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IDictionary<string, object>? Attributes { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private RenderFragment Render => builder =>
+    {
+        builder.OpenElement(0, "text");
+        builder.AddMultipleAttributes(1, Attributes);
+        builder.AddContent(2, ChildContent);
+        builder.CloseElement();
+    };
+}

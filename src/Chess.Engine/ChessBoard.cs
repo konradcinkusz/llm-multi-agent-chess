@@ -156,7 +156,12 @@ public class ChessBoard
     }
 
     public ChessMove? FindBySan(string san)
-        => GetLegalMoves().FirstOrDefault(m => m.San == san);
+    {
+        // FirstOrDefault would return a default (0→0) struct, not null, when nothing matches.
+        foreach (var m in GetLegalMoves())
+            if (m.San == san) return m;
+        return null;
+    }
 
     // ── Apply move ───────────────────────────────────────────────────────────
     public bool ApplyMoveSan(string san)
@@ -527,14 +532,16 @@ public class ChessBoard
     // ── Game status ───────────────────────────────────────────────────────────
     public GameStatus GetStatus()
     {
+        // A mate or stalemate on the move that reaches a draw count is still a mate or stalemate.
+        bool inCheck = IsInCheck(_sideToMove);
+        bool hasLegal = HasAnyLegalMove(_sideToMove);
+        if (!hasLegal) return inCheck ? GameStatus.Checkmate : GameStatus.Stalemate;
+
         string key = PositionKey();
         if (_positionHistory.Count(p => p == key) >= 3) return GameStatus.DrawRepetition;
         if (_halfMoveClock >= 100) return GameStatus.DrawFiftyMoves;
         if (IsInsufficientMaterial()) return GameStatus.DrawInsufficientMaterial;
 
-        bool inCheck = IsInCheck(_sideToMove);
-        bool hasLegal = HasAnyLegalMove(_sideToMove);
-        if (!hasLegal) return inCheck ? GameStatus.Checkmate : GameStatus.Stalemate;
         return inCheck ? GameStatus.Check : GameStatus.Ongoing;
     }
 
@@ -554,17 +561,22 @@ public class ChessBoard
         GameStatus.Checkmate or GameStatus.Stalemate or
         GameStatus.DrawInsufficientMaterial or GameStatus.DrawFiftyMoves or GameStatus.DrawRepetition;
 
+    // FIDE dead positions: K v K, K+minor v K, and K+B v K+B with both bishops on one colour.
     private bool IsInsufficientMaterial()
     {
-        var pieces = Enumerable.Range(0, 64).Select(i => _squares[i]).Where(p => !p.IsEmpty).ToList();
-        if (pieces.Count == 2) return true; // K vs K
-        if (pieces.Count == 3)
-        {
-            var nonK = pieces.Where(p => p.Type != PieceType.King).ToList();
-            return nonK.Count == 1 && nonK[0].Type is PieceType.Knight or PieceType.Bishop;
-        }
+        var nonKing = new List<(int Square, Piece Piece)>();
+        for (int i = 0; i < 64; i++)
+            if (!_squares[i].IsEmpty && _squares[i].Type != PieceType.King) nonKing.Add((i, _squares[i]));
+
+        if (nonKing.Count == 0) return true;
+        if (nonKing.Count == 1) return nonKing[0].Piece.Type is PieceType.Knight or PieceType.Bishop;
+        if (nonKing.Count == 2 && nonKing.All(p => p.Piece.Type == PieceType.Bishop)
+            && nonKing[0].Piece.Color != nonKing[1].Piece.Color)
+            return SquareColour(nonKing[0].Square) == SquareColour(nonKing[1].Square);
         return false;
     }
+
+    private static int SquareColour(int sq) => (File(sq) + Rank(sq)) % 2;
 
     // ── Analysis helpers ─────────────────────────────────────────────────────
     public (int white, int black) MaterialCounts()

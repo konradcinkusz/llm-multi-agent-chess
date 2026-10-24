@@ -1,0 +1,58 @@
+:root {
+    color-scheme: light dark;
+    --gutter: 16px;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: Canvas;
+    color: CanvasText;
+}
+
+.app-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 12px var(--gutter);
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+}
+
+.brand {
+    font-weight: 600;
+}
+
+.nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.nav a.active {
+    font-weight: 600;
+}
+
+.status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 6px var(--gutter);
+    font-size: 0.875rem;
+    opacity: 0.85;
+}
+
+.status-error {
+    color: #c0392b;
+}
+
+.app-main {
+    max-width: 1200px;
+    padding: 16px var(--gutter);
+}
+
+.chess-board {
+    width: 100%;
+    max-width: 480px;
+    height: auto;
+}

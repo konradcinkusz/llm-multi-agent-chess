@@ -1,0 +1,57 @@
+.h2h-pickers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.h2h-pickers label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 220px;
+}
+
+.h2h-reading {
+    font-size: 1.125rem;
+}
+
+.h2h-figures {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 8px 24px;
+}
+
+.h2h-figures dt {
+    font-weight: 600;
+}
+
+.h2h-figures dd {
+    margin: 0;
+}
+
+.h2h-games {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.h2h-games th,
+.h2h-games td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.muted {
+    opacity: 0.75;
+    font-size: 0.875rem;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
