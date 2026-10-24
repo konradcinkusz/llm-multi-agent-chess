@@ -1,0 +1,10 @@
+.cancel-confirm {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.danger {
+    color: #c0392b;
+}

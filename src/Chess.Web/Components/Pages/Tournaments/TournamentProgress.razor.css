@@ -1,0 +1,12 @@
+.tournament-progress {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+progress {
+    width: 120px;
+    height: 10px;
+}

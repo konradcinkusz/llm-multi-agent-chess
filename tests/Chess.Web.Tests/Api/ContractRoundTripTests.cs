@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
 using ApiDto = Chess.Api.Contracts;
+using ApiTournaments = Chess.Api.Tournaments;
 using WebDto = Chess.Web.Api;
 
 namespace Chess.Web.Tests.Api;
@@ -39,6 +40,14 @@ public class ContractRoundTripTests
             new ApiDto.CreateTournamentRequest("Spring", ["a", "b"], 2, 2));
         AssertRoundTrip<ApiDto.TournamentDto, WebDto.TournamentDto>(
             new ApiDto.TournamentDto(Id, "Spring", ["a", "b"], 2, "running", 4, 1, At, null));
+        AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
+            new ApiTournaments.ModelPremiumEstimateDto("gpt-5", 960));
+        AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
+            new ApiTournaments.ModelPremiumEstimateDto("random", null));
+        AssertRoundTrip<ApiTournaments.TournamentCreatedDto, WebDto.TournamentCreatedDto>(
+            new ApiTournaments.TournamentCreatedDto(
+                new ApiDto.TournamentDto(Id, "Spring", ["a", "b"], 2, "running", 2, 0, At, null),
+                [new ApiTournaments.ModelPremiumEstimateDto("a", 160), new ApiTournaments.ModelPremiumEstimateDto("b", null)]));
         AssertRoundTrip<ApiDto.ModelDto, WebDto.ModelDto>(new ApiDto.ModelDto("gpt-5", "GPT-5", 1.0, true));
         AssertRoundTrip<ApiDto.ModelDto, WebDto.ModelDto>(new ApiDto.ModelDto("random", "Random", null, false));
         AssertRoundTrip<ApiDto.StatusDto, WebDto.StatusDto>(new ApiDto.StatusDto("Ready", "signed in", "ok", "absent"));
