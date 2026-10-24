@@ -36,8 +36,10 @@ public sealed class GameRunner(
     public async ValueTask EnqueueAsync(Guid gameId, CancellationToken ct)
     {
         // A game that is already queued or running is not queued twice.
-        if (!_slots.TryAdd(gameId, new GameSlot()))
+        var slot = new GameSlot();
+        if (!_slots.TryAdd(gameId, slot))
         {
+            slot.Dispose();
             return;
         }
 
@@ -47,7 +49,7 @@ public sealed class GameRunner(
         }
         catch
         {
-            _slots.TryRemove(gameId, out _);
+            RemoveSlot(gameId);
             throw;
         }
     }
@@ -145,6 +147,7 @@ public sealed class GameRunner(
         var slot = new GameSlot();
         if (!_slots.TryAdd(gameId, slot))
         {
+            slot.Dispose();
             throw new InvalidOperationException($"Game {gameId} is already queued or running.");
         }
 
@@ -155,7 +158,7 @@ public sealed class GameRunner(
         }
         finally
         {
-            _slots.TryRemove(gameId, out _);
+            RemoveSlot(gameId);
         }
     }
 
@@ -167,7 +170,16 @@ public sealed class GameRunner(
         }
         finally
         {
-            _slots.TryRemove(gameId, out _);
+            RemoveSlot(gameId);
+        }
+    }
+
+    /// <summary>Removes a game's slot from the table and releases its cancellation source.</summary>
+    private void RemoveSlot(Guid gameId)
+    {
+        if (_slots.TryRemove(gameId, out var slot))
+        {
+            slot.Dispose();
         }
     }
 
@@ -246,19 +258,44 @@ public sealed class GameRunner(
     }
 
     /// <summary>A queued or running game: its cancellation, and whether it was asked to stop by an abort.</summary>
-    private sealed class GameSlot
+    private sealed class GameSlot : IDisposable
     {
         private readonly CancellationTokenSource _cancellation = new();
+        private readonly object _gate = new();
         private volatile bool _abortRequested;
+        private bool _disposed;
 
         public CancellationToken Token => _cancellation.Token;
 
         public bool AbortRequested => _abortRequested;
 
+        // TryAbort can fetch a slot just before its game's finally disposes it, so an abort after disposal does nothing.
         public void Abort()
         {
-            _abortRequested = true;
-            _cancellation.Cancel();
+            lock (_gate)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _abortRequested = true;
+                _cancellation.Cancel();
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_gate)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                _cancellation.Dispose();
+            }
         }
     }
 }
