@@ -363,6 +363,66 @@ public class EndpointsTests
         Assert.True(await HasErrorKeyAsync(response, "slots"));
     }
 
+    // ---- POST /api/broadcast/schedules/{id}/{start|pause|resume|stop} ----
+
+    [Theory]
+    [InlineData("start", ScheduleStatus.Draft, ScheduleStatus.Running)]
+    [InlineData("start", ScheduleStatus.Scheduled, ScheduleStatus.Running)]
+    [InlineData("pause", ScheduleStatus.Running, ScheduleStatus.Paused)]
+    [InlineData("resume", ScheduleStatus.Paused, ScheduleStatus.Running)]
+    [InlineData("stop", ScheduleStatus.Scheduled, ScheduleStatus.Cancelled)]
+    [InlineData("stop", ScheduleStatus.Running, ScheduleStatus.Cancelled)]
+    [InlineData("stop", ScheduleStatus.Paused, ScheduleStatus.Cancelled)]
+    public async Task An_accepted_command_is_handed_to_the_controller_and_answers_with_the_new_state(
+        string command, string from, string to)
+    {
+        using var h = new BroadcastHarness();
+        var id = await SeedAsync(h, from, SlotState.Pending);
+
+        var response = await h.Client.PostAsync($"/api/broadcast/schedules/{id}/{command}", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = await ReadAsync<ScheduleDetailDto>(response);
+        Assert.Equal(to, detail.Schedule.Status);
+        Assert.Equal(id, detail.Schedule.Id);
+        Assert.Equal(1, detail.Schedule.SlotsTotal);
+        Assert.Contains((command, id), h.App.Controller.Calls);
+    }
+
+    [Theory]
+    [InlineData("start")]
+    [InlineData("pause")]
+    [InlineData("resume")]
+    [InlineData("stop")]
+    public async Task A_command_on_an_unknown_schedule_is_not_found(string command)
+    {
+        using var h = new BroadcastHarness();
+        h.App.Controller.Result = BroadcastCommandResult.NotFound;
+
+        var response = await h.Client.PostAsync($"/api/broadcast/schedules/{Guid.NewGuid()}/{command}", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("Schedule not found", await TitleAsync(response));
+    }
+
+    [Theory]
+    [InlineData("start", ScheduleStatus.Finished)]
+    [InlineData("pause", ScheduleStatus.Draft)]
+    [InlineData("resume", ScheduleStatus.Running)]
+    [InlineData("stop", ScheduleStatus.Finished)]
+    public async Task A_command_the_controller_refuses_is_a_conflict_with_the_current_status(string command, string status)
+    {
+        using var h = new BroadcastHarness();
+        var id = await SeedAsync(h, status, SlotState.Pending);
+        h.App.Controller.Result = BroadcastCommandResult.Conflict;
+
+        var response = await h.Client.PostAsync($"/api/broadcast/schedules/{id}/{command}", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Schedule status does not allow this", await TitleAsync(response));
+        Assert.Contains($"The schedule is {status}.", await ProblemDetailAsync(response));
+    }
+
     // ---- helpers ----
 
     private static SlotEdit Edit(PlayerSpec white, PlayerSpec black, int index, int minutes = 0, int startHours = 0)
@@ -428,5 +488,11 @@ public class EndpointsTests
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return document.RootElement.TryGetProperty("title", out var title) ? title.GetString() : null;
+    }
+
+    private static async Task<string?> ProblemDetailAsync(HttpResponseMessage response)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.TryGetProperty("detail", out var detail) ? detail.GetString() : null;
     }
 }

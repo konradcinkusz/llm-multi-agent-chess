@@ -29,9 +29,6 @@ public static class BroadcastEndpoints
     /// <summary>The longest window a plan may cover. A week of slots is already far beyond one broadcast day.</summary>
     public const int MaxDurationHours = 168;
 
-    /// <summary>How many upcoming slots <c>/now</c> lists (03 §9.4: "Up next", next 3 slots).</summary>
-    public const int NextCount = 3;
-
     private const string LlmKind = "llm";
     private const string RandomKind = "random";
 
@@ -43,6 +40,18 @@ public static class BroadcastEndpoints
         broadcast.MapGet("/schedules/{id:guid}", GetAsync);
         broadcast.MapPut("/schedules/{id:guid}/slots", ReplaceSlotsAsync);
         broadcast.MapGet("/now", NowAsync);
+        broadcast.MapPost("/schedules/{id:guid}/start", (Guid id, IBroadcastController controller,
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
+            CommandAsync(id, controller.StartAsync, factory, catalog, ct));
+        broadcast.MapPost("/schedules/{id:guid}/pause", (Guid id, IBroadcastController controller,
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
+            CommandAsync(id, controller.PauseAsync, factory, catalog, ct));
+        broadcast.MapPost("/schedules/{id:guid}/resume", (Guid id, IBroadcastController controller,
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
+            CommandAsync(id, controller.ResumeAsync, factory, catalog, ct));
+        broadcast.MapPost("/schedules/{id:guid}/stop", (Guid id, IBroadcastController controller,
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
+            CommandAsync(id, controller.StopAsync, factory, catalog, ct));
         return endpoints;
     }
 
@@ -215,28 +224,39 @@ public static class BroadcastEndpoints
             replaced.Select(ToSlotDto).ToList()));
     }
 
-    private static async Task<IResult> NowAsync(IDbContextFactory<ArenaDbContext> factory, CancellationToken ct)
-    {
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var active = await db.BroadcastSchedules.AsNoTracking()
-            .Where(s => s.Status == ScheduleStatus.Running || s.Status == ScheduleStatus.Paused)
-            .OrderByDescending(s => s.StartsAt)
-            .FirstOrDefaultAsync(ct);
+    /// <summary>
+    /// The controller owns what the broadcast page shows (its status, the game in play, the next slots and the
+    /// technical-break notice), so this route passes its answer through.
+    /// </summary>
+    private static async Task<IResult> NowAsync(IBroadcastController controller, CancellationToken ct) =>
+        TypedResults.Ok(await controller.NowAsync(ct));
 
-        if (active is null)
+    /// <summary>
+    /// Runs a schedule command on the controller and answers with the schedule as stored: 200 when accepted, 404 when
+    /// the schedule does not exist, 409 when its status does not allow the command.
+    /// </summary>
+    private static async Task<IResult> CommandAsync(Guid id,
+        Func<Guid, CancellationToken, Task<BroadcastCommandResult>> command,
+        IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct)
+    {
+        var result = await command(id, ct);
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var loaded = await LoadAsync(db, id, ct);
+        if (result == BroadcastCommandResult.NotFound || loaded is null)
         {
-            return TypedResults.Ok(new NowNextDto("idle", null, [], Notice: null, EndsAt: null));
+            return NotFound(id);
         }
 
-        var slots = await db.BroadcastSlots.AsNoTracking()
-            .Where(s => s.ScheduleId == active.Id)
-            .OrderBy(s => s.Index)
-            .ToListAsync(ct);
+        if (result == BroadcastCommandResult.Conflict)
+        {
+            return Conflict(loaded.Value.Schedule.Status, "That command does not apply to a schedule in this state.");
+        }
 
-        var current = slots.FirstOrDefault(s => s.State == SlotState.Running);
-        var next = slots.Where(s => s.State == SlotState.Pending).Take(NextCount).Select(ToSlotDto).ToList();
-        return TypedResults.Ok(new NowNextDto(active.Status, current is null ? null : ToSlotDto(current), next,
-            Notice: null, EndsAt: active.EndsAt));
+        var multipliers = Multipliers(await catalog.GetModelsAsync(ct));
+        var (schedule, slots) = loaded.Value;
+        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, multipliers),
+            slots.Select(ToSlotDto).ToList()));
     }
 
     private static async Task<(BroadcastScheduleEntity Schedule, List<BroadcastSlotEntity> Slots)?> LoadAsync(

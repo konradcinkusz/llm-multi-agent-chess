@@ -8,8 +8,8 @@ using Xunit;
 namespace Chess.Api.Tests.Broadcast;
 
 /// <summary>
-/// <c>GET /api/broadcast/now</c> (03 §9.2, §9.4): what the OBS page shows. Each test starts from its own empty store, so
-/// the only active schedule is the one the test seeds.
+/// <c>GET /api/broadcast/now</c> (03 §9.2, §9.4): the answer of <see cref="IBroadcastController.NowAsync"/>, passed
+/// through unchanged to the broadcast page and OBS. The controller decides what is showing; these tests pin the shapes.
 /// </summary>
 public class EndpointsNowTests
 {
@@ -20,11 +20,10 @@ public class EndpointsNowTests
     private static readonly TimeSpan SlotLength = TimeSpan.FromMinutes(10);
 
     [Fact]
-    public async Task Now_is_idle_when_no_schedule_is_active()
+    public async Task Now_is_idle_with_nothing_on_screen_when_no_schedule_is_playing()
     {
         using var h = new BroadcastHarness();
-        await SeedAsync(h, ScheduleStatus.Draft, SlotState.Pending, SlotState.Pending);
-        await SeedAsync(h, ScheduleStatus.Finished, SlotState.Finished);
+        h.App.Controller.Now = new NowNextDto("idle", null, [], Notice: null, EndsAt: null);
 
         var now = await NowAsync(h);
 
@@ -36,29 +35,28 @@ public class EndpointsNowTests
     }
 
     [Fact]
-    public async Task Now_while_running_shows_the_playing_slot_and_the_next_three()
+    public async Task Now_while_running_carries_the_game_in_play_the_next_slots_and_the_window_end()
     {
         using var h = new BroadcastHarness();
-        var id = await SeedAsync(h, ScheduleStatus.Running, SlotState.Finished, SlotState.Running, SlotState.Pending,
-            SlotState.Pending, SlotState.Pending, SlotState.Pending);
+        var playing = Slot(1, SlotState.Running);
+        var next = new[] { Slot(2, SlotState.Pending), Slot(3, SlotState.Pending), Slot(4, SlotState.Pending) };
+        h.App.Controller.Now = new NowNextDto("running", playing, next, Notice: null, EndsAt: Start.AddHours(24));
 
         var now = await NowAsync(h);
 
         Assert.Equal("running", now.Status);
-        Assert.NotNull(now.Current);
-        Assert.Equal(1, now.Current.Index);
-        Assert.Equal(SlotState.Running, now.Current.State);
-        Assert.Equal(new[] { 2, 3, 4 }, now.Next.Select(s => s.Index));
-        Assert.All(now.Next, slot => Assert.Equal(SlotState.Pending, slot.State));
+        Assert.Equal(playing, now.Current);
+        Assert.Equal(next, now.Next);
         Assert.Equal(Start.AddHours(24), now.EndsAt);
-        Assert.Equal(id, await ScheduleIdOfAsync(h, now.Current.Id));
+        Assert.Null(now.Notice);
     }
 
     [Fact]
-    public async Task Now_between_games_has_no_current_slot_but_still_lists_what_is_next()
+    public async Task Now_between_games_has_no_current_slot()
     {
         using var h = new BroadcastHarness();
-        await SeedAsync(h, ScheduleStatus.Running, SlotState.Finished, SlotState.Finished, SlotState.Pending);
+        h.App.Controller.Now = new NowNextDto("running", null, [Slot(2, SlotState.Pending)], Notice: null,
+            EndsAt: Start.AddHours(24));
 
         var now = await NowAsync(h);
 
@@ -68,28 +66,36 @@ public class EndpointsNowTests
     }
 
     [Fact]
-    public async Task Now_while_paused_reports_paused_with_the_slot_that_was_playing()
+    public async Task Now_while_paused_reports_paused_with_the_game_it_holds()
     {
         using var h = new BroadcastHarness();
-        await SeedAsync(h, ScheduleStatus.Paused, SlotState.Finished, SlotState.Running, SlotState.Pending);
+        h.App.Controller.Now = new NowNextDto("paused", Slot(1, SlotState.Running), [Slot(2, SlotState.Pending)],
+            Notice: null, EndsAt: Start.AddHours(24));
 
         var now = await NowAsync(h);
 
         Assert.Equal("paused", now.Status);
         Assert.Equal(1, now.Current?.Index);
-        Assert.Equal(new[] { 2 }, now.Next.Select(s => s.Index));
     }
 
     [Fact]
-    public async Task Now_lists_no_more_than_the_next_three_pending_slots()
+    public async Task Now_carries_the_technical_break_notice_when_the_controller_is_backing_off()
     {
         using var h = new BroadcastHarness();
-        await SeedAsync(h, ScheduleStatus.Running, Enumerable.Repeat(SlotState.Pending, 10).ToArray());
+        const string notice = "Technical break: retrying game 17 in 30 s";
+        h.App.Controller.Now = new NowNextDto("running", null, [Slot(1, SlotState.Pending)], notice,
+            Start.AddHours(24));
 
         var now = await NowAsync(h);
 
-        Assert.Equal(BroadcastEndpoints.NextCount, now.Next.Count);
-        Assert.Equal(new[] { 0, 1, 2 }, now.Next.Select(s => s.Index));
+        Assert.Equal(notice, now.Notice);
+        Assert.Null(now.Current);
+    }
+
+    private static SlotDto Slot(int index, string state)
+    {
+        var start = Start.AddMinutes(index * (SlotLength.TotalMinutes + 10));
+        return new SlotDto(Guid.NewGuid(), index, FakeA, FakeB, start, start + SlotLength, state, null);
     }
 
     private static async Task<NowNextDto> NowAsync(BroadcastHarness h)
@@ -97,52 +103,5 @@ public class EndpointsNowTests
         var response = await h.Client.GetAsync("/api/broadcast/now");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<NowNextDto>(Json))!;
-    }
-
-    private static async Task<Guid?> ScheduleIdOfAsync(BroadcastHarness h, Guid slotId)
-    {
-        using var db = h.App.NewContext();
-        return (await db.BroadcastSlots.FindAsync(slotId))?.ScheduleId;
-    }
-
-    /// <summary>Stores a schedule in the given status with one slot per state, alternating colours, back to back.</summary>
-    private static async Task<Guid> SeedAsync(BroadcastHarness h, string status, params string[] slotStates)
-    {
-        var id = Guid.NewGuid();
-        using var db = h.App.NewContext();
-        db.BroadcastSchedules.Add(new BroadcastScheduleEntity
-        {
-            Id = id,
-            Name = "Seeded",
-            Status = status,
-            StartsAt = Start,
-            EndsAt = Start.AddHours(24),
-            MoveDelayMs = 4000,
-            GameGapSeconds = 20,
-            Seed = 7,
-            Models = ["fake-a", "fake-b"],
-            CreatedAt = Start.AddDays(-1),
-        });
-        for (var index = 0; index < slotStates.Length; index++)
-        {
-            var start = Start.AddMinutes(index * (SlotLength.TotalMinutes + 10));
-            var white = index % 2 == 0 ? FakeA : FakeB;
-            var black = index % 2 == 0 ? FakeB : FakeA;
-            db.BroadcastSlots.Add(new BroadcastSlotEntity
-            {
-                Id = Guid.NewGuid(),
-                ScheduleId = id,
-                Index = index,
-                WhiteKind = white.Kind,
-                WhiteModel = white.ModelId,
-                BlackKind = black.Kind,
-                BlackModel = black.ModelId,
-                PlannedStart = start,
-                PlannedEnd = start + SlotLength,
-                State = slotStates[index],
-            });
-        }
-        await db.SaveChangesAsync();
-        return id;
     }
 }

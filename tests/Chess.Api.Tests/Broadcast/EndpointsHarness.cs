@@ -16,6 +16,9 @@ namespace Chess.Api.Tests.Broadcast;
 /// </summary>
 internal sealed class BroadcastApp(string databaseName) : WebApplicationFactory<Program>
 {
+    /// <summary>The controller the app uses in place of the runner's, so routes are tested without playing games.</summary>
+    public FakeBroadcastController Controller { get; } = new(databaseName);
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Database:Provider", "InMemory");
@@ -25,6 +28,8 @@ internal sealed class BroadcastApp(string databaseName) : WebApplicationFactory<
         {
             services.RemoveAll<ILlmGateway>();
             services.AddSingleton<ILlmGateway>(new PricedGateway());
+            services.RemoveAll<IBroadcastController>();
+            services.AddSingleton<IBroadcastController>(Controller);
         });
     }
 
@@ -50,6 +55,57 @@ internal sealed class PricedGateway : ILlmGateway
 
     public Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct) =>
         throw new NotSupportedException("The broadcast endpoints do not talk to models.");
+}
+
+/// <summary>
+/// Stands in for the runner's controller. Each command returns <see cref="Result"/>; when that is Accepted the schedule
+/// takes the status the command leads to (03 §9.1), as the real controller writes it. <see cref="Now"/> is what
+/// <c>/now</c> returns.
+/// </summary>
+internal sealed class FakeBroadcastController(string databaseName) : IBroadcastController
+{
+    private readonly List<(string Command, Guid ScheduleId)> _calls = [];
+
+    public IReadOnlyList<(string Command, Guid ScheduleId)> Calls => _calls;
+
+    public BroadcastCommandResult Result { get; set; } = BroadcastCommandResult.Accepted;
+
+    public NowNextDto Now { get; set; } = new("idle", null, [], Notice: null, EndsAt: null);
+
+    public Task<BroadcastCommandResult> StartAsync(Guid scheduleId, CancellationToken ct) =>
+        CommandAsync("start", scheduleId, ScheduleStatus.Running);
+
+    public Task<BroadcastCommandResult> PauseAsync(Guid scheduleId, CancellationToken ct) =>
+        CommandAsync("pause", scheduleId, ScheduleStatus.Paused);
+
+    public Task<BroadcastCommandResult> ResumeAsync(Guid scheduleId, CancellationToken ct) =>
+        CommandAsync("resume", scheduleId, ScheduleStatus.Running);
+
+    public Task<BroadcastCommandResult> StopAsync(Guid scheduleId, CancellationToken ct) =>
+        CommandAsync("stop", scheduleId, ScheduleStatus.Cancelled);
+
+    public Task<NowNextDto> NowAsync(CancellationToken ct) => Task.FromResult(Now);
+
+    private async Task<BroadcastCommandResult> CommandAsync(string command, Guid scheduleId, string target)
+    {
+        _calls.Add((command, scheduleId));
+        if (Result != BroadcastCommandResult.Accepted)
+        {
+            return Result;
+        }
+
+        await using var db = new ArenaDbContext(new DbContextOptionsBuilder<ArenaDbContext>()
+            .UseInMemoryDatabase(databaseName).Options);
+        var schedule = await db.BroadcastSchedules.FirstOrDefaultAsync(s => s.Id == scheduleId);
+        if (schedule is null)
+        {
+            return BroadcastCommandResult.NotFound;
+        }
+
+        schedule.Status = target;
+        await db.SaveChangesAsync();
+        return BroadcastCommandResult.Accepted;
+    }
 }
 
 /// <summary>One app with its own store and client, so that each test starts from the database it names.</summary>
