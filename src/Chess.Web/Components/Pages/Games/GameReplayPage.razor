@@ -1,0 +1,209 @@
+@page "/games/{Id:guid}"
+@using System.Net
+@using Chess.Web.Api
+@using Chess.Web.Components.Shared
+@implements IDisposable
+@inject ArenaApiClient Api
+
+<PageTitle>Game replay · LLM Chess Arena</PageTitle>
+
+<p class="replay-back"><a href="/games">All games</a></p>
+
+@if (_error is not null)
+{
+    <p class="status-error" role="alert" data-testid="replay-error">@_error</p>
+}
+else if (_game is not { } game)
+{
+    <p>Loading game…</p>
+}
+else
+{
+    var summary = game.Summary;
+    var fen = Replay.FenAt(game, _ply);
+    var lastMove = Replay.LastMove(game, _ply);
+    var move = _ply == 0 ? null : game.Moves[_ply - 1];
+    var lastPly = game.Moves.Count;
+
+    <h1>@GameFormat.Matchup(summary)</h1>
+
+    <p class="replay-summary" data-testid="replay-summary">
+        @GameFormat.State(summary.State) · result @summary.Result · @GameFormat.Termination(summary.Termination) ·
+        @summary.PlyCount plies · @GameFormat.When(summary.CreatedAt)
+        @if (summary.TournamentId is { } tournamentId)
+        {
+            <span> · <a href="/tournaments/@tournamentId">Tournament</a></span>
+        }
+    </p>
+
+    @if (summary.State != "finished")
+    {
+        <p class="replay-notice" role="status">
+            This game has not finished, so the replay shows only the moves played so far.
+        </p>
+    }
+
+    <div class="replay-layout">
+        <div class="replay-main">
+            <div class="replay-board" tabindex="0" role="region" data-testid="replay-board"
+                 aria-label="Replay board. Use the arrow keys to step through the moves."
+                 @onkeydown="OnKey">
+                <ChessBoardSvg Fen="@fen" LastMove="@lastMove" />
+            </div>
+
+            <div class="replay-controls" role="group" aria-label="Replay controls">
+                <button type="button" data-testid="replay-first" disabled="@(_ply == 0)" @onclick="First">First</button>
+                <button type="button" data-testid="replay-prev" disabled="@(_ply == 0)" @onclick="Previous">Previous</button>
+                <span class="replay-ply" data-testid="replay-ply" aria-live="polite">Ply @_ply of @lastPly</span>
+                <button type="button" data-testid="replay-next" disabled="@(_ply == lastPly)" @onclick="Next">Next</button>
+                <button type="button" data-testid="replay-last" disabled="@(_ply == lastPly)" @onclick="Last">Last</button>
+            </div>
+            <p class="muted">Click the board, then use the arrow keys, Home and End to step through the moves.</p>
+
+            @if (_pgnHref is { } href)
+            {
+                <a class="pgn-download" data-testid="pgn-download" href="@href" download="@PgnDownload.FileName(summary.Id)">Download PGN</a>
+            }
+            else if (_pgnError is not null)
+            {
+                <p class="status-error" role="alert">The PGN could not be loaded: @_pgnError</p>
+            }
+            else
+            {
+                <p class="muted" data-testid="pgn-unavailable">The PGN is available once the game has finished.</p>
+            }
+        </div>
+
+        <aside class="replay-side">
+            <MoveDetails Move="@move" />
+
+            <h2>Moves</h2>
+            @if (game.Moves.Count == 0)
+            {
+                <p>No moves yet.</p>
+            }
+            else
+            {
+                <div class="moves-scroll">
+                    <table class="moves-table" data-testid="moves-table">
+                        <thead>
+                            <tr><th>Ply</th><th>Move</th><th>Attempts</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var played in game.Moves)
+                            {
+                                <tr data-testid="move-row" class="@(played.Ply == _ply ? "current" : null)"
+                                    aria-current="@(played.Ply == _ply ? "step" : null)">
+                                    <td>@played.Ply</td>
+                                    <td>
+                                        <button type="button" class="move-button" data-testid="move-select"
+                                                @onclick="() => GoTo(played.Ply)">@played.San</button>
+                                    </td>
+                                    <td>@played.Attempts</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </aside>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private Guid? _loadedId;
+    private GameDetailDto? _game;
+    private string? _error;
+    private string? _pgnHref;
+    private string? _pgnError;
+    private int _ply;
+
+    /// <summary>The game to replay, from the route.</summary>
+    [Parameter]
+    public Guid Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id)
+        {
+            return;
+        }
+
+        _loadedId = Id;
+        await LoadAsync(Id);
+    }
+
+    private async Task LoadAsync(Guid id)
+    {
+        _game = null;
+        _error = null;
+        _pgnHref = null;
+        _pgnError = null;
+        _ply = 0;
+
+        try
+        {
+            _game = await Api.GetGameAsync(id, _cts.Token);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            _error = "No game has this id.";
+            return;
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"Could not load the game: {ex.Message}";
+            return;
+        }
+
+        // The PGN is written when the game ends, so only a finished game has one to download.
+        if (_game.Summary.State == "finished")
+        {
+            await LoadPgnAsync(id);
+        }
+    }
+
+    private async Task LoadPgnAsync(Guid id)
+    {
+        try
+        {
+            _pgnHref = PgnDownload.Href(await Api.GetGamePgnAsync(id, _cts.Token));
+        }
+        catch (HttpRequestException ex)
+        {
+            _pgnError = ex.Message;
+        }
+    }
+
+    private void GoTo(int ply) => _ply = Replay.Clamp(ply, _game?.Moves.Count ?? 0);
+
+    private void First() => GoTo(0);
+
+    private void Previous() => GoTo(_ply - 1);
+
+    private void Next() => GoTo(_ply + 1);
+
+    private void Last() => GoTo(_game?.Moves.Count ?? 0);
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowLeft":
+                Previous();
+                break;
+            case "ArrowRight":
+                Next();
+                break;
+            case "Home":
+                First();
+                break;
+            case "End":
+                Last();
+                break;
+        }
+    }
+
+    public void Dispose() => _cts.Cancel();
+}

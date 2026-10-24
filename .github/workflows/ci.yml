@@ -57,8 +57,11 @@ jobs:
           tar -xzf gitleaks.tgz gitleaks
           sudo install gitleaks /usr/local/bin/gitleaks
 
+      # --log-opts=HEAD limits the scan to commits reachable from the checked-out revision.
+      # Without it gitleaks runs `git log --all`, and fetch-depth 0 brings in every branch,
+      # so an unmerged branch (e.g. a deliberate canary) turns every other PR red.
       - name: Scan every commit reachable from HEAD
-        run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
+        run: gitleaks detect --source . --config .gitleaks.toml --log-opts="HEAD" --redact --no-banner --verbose
 
   kernel-size:
     name: kernel size guard (ServiceDefaults <= 400 lines)

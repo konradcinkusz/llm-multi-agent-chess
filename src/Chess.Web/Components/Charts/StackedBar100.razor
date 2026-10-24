@@ -1,0 +1,112 @@
+@using static Chess.Web.Components.Charts.ChartGeometry
+
+<ChartFrame Title="@Title" Description="@Description">
+    @if (_pieces.Count == 0)
+    {
+        <p class="chart-empty">No data.</p>
+    }
+    else
+    {
+        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+            @foreach (var share in new[] { 0.0, 0.5, 1.0 })
+            {
+                <line class="chart-grid" x1="@Num(PlotLeft + share * PlotWidth)" y1="@Num(PlotTop)" x2="@Num(PlotLeft + share * PlotWidth)" y2="@Num(PlotBottom)" />
+                <ChartText class="chart-tick" x="@Num(PlotLeft + share * PlotWidth)" y="@Num(PlotBottom + 16)" text-anchor="middle">@Fixed(share * 100, "0")%</ChartText>
+            }
+
+            @for (var r = 0; r < _rows.Count; r++)
+            {
+                var rowLabel = _rows[r].Label;
+                <ChartText class="chart-label" x="@Num(PlotLeft - 8)" y="@Num(PlotTop + r * RowHeight + RowHeight / 2 + 4)" text-anchor="end">@rowLabel</ChartText>
+            }
+
+            @foreach (var piece in _pieces)
+            {
+                <path d="@HorizontalBar(piece.X, piece.Y, piece.Width, BarHeight, piece.RoundEnd)" style="fill: @piece.Fill">
+                    <title>@piece.Title</title>
+                </path>
+            }
+        </svg>
+        <ChartLegend Items="_legend" />
+        <ChartTable Headers="_tableHeaders" Rows="_tableRows" />
+    }
+</ChartFrame>
+
+@code {
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>One bar per row; each row's segments are shown as shares of that row's total.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<StackRow> Rows { get; set; } = [];
+
+    private const double LabelWidth = 170;
+    private const double PlotLeft = 178;
+    private const double PlotRight = 620;
+    private const double PlotWidth = PlotRight - PlotLeft;
+    private const double Width = 640;
+    private const double PlotTop = 8;
+    private const double RowHeight = 34;
+    private const double BarHeight = 22;
+
+    private double PlotBottom => PlotTop + _rows.Count * RowHeight;
+
+    private List<StackRow> _rows = [];
+    private List<Piece> _pieces = [];
+    private List<ChartLegendItem> _legend = [];
+    private string _viewBox = "";
+    private IReadOnlyList<string> _tableHeaders = [];
+    private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
+
+    /// <summary>One drawn segment. The interior edges are inset by 1 px each, so adjacent segments sit 2 px apart.</summary>
+    private sealed record Piece(double X, double Y, double Width, string Fill, bool RoundEnd, string Title);
+
+    protected override void OnParametersSet()
+    {
+        _rows = Rows.ToList();
+        _viewBox = $"0 0 {Num(Width)} {Num(PlotBottom + 28)}";
+
+        _pieces = [];
+        for (var r = 0; r < _rows.Count; r++)
+        {
+            var segments = _rows[r].Segments.Where(s => s.Value > 0).ToList();
+            var total = segments.Sum(s => s.Value);
+            var y = PlotTop + r * RowHeight + (RowHeight - BarHeight) / 2;
+            var cumulative = 0.0;
+            for (var k = 0; k < segments.Count; k++)
+            {
+                var segment = segments[k];
+                var start = PlotLeft + cumulative / total * PlotWidth;
+                cumulative += segment.Value;
+                var end = PlotLeft + cumulative / total * PlotWidth;
+                var x = start + (k > 0 ? 1 : 0);
+                var right = end - (k < segments.Count - 1 ? 1 : 0);
+                var percent = Fixed(segment.Value / total * 100, "0.#");
+                _pieces.Add(new Piece(x, y, right - x, ChartPalette.Series(segment.Slot), k == segments.Count - 1,
+                    $"{_rows[r].Label} · {segment.Name}: {percent}%"));
+            }
+        }
+
+        _legend = Rows.SelectMany(r => r.Segments)
+            .GroupBy(s => s.Name)
+            .Select(g => g.First())
+            .OrderBy(s => s.Slot)
+            .Select(s => new ChartLegendItem(s.Name, ChartPalette.Series(s.Slot)))
+            .ToList();
+
+        var names = _legend.Select(l => l.Name).ToList();
+        _tableHeaders = new[] { "Row" }.Concat(names).ToList();
+        _tableRows = _rows.Select(row =>
+        {
+            var total = row.Segments.Sum(s => s.Value);
+            return (IReadOnlyList<string>)new[] { row.Label }
+                .Concat(names.Select(name =>
+                    total <= 0 ? "—" : Fixed(row.Segments.Where(s => s.Name == name).Sum(s => s.Value) / total * 100, "0.#") + "%"))
+                .ToList();
+        }).ToList();
+    }
+}

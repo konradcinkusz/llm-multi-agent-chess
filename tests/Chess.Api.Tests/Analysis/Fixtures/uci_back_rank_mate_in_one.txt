@@ -1,0 +1,9 @@
+info depth 1 seldepth 1 multipv 1 score mate 1 nodes 20 nps 10000 hashfull 0 tbhits 0 time 2 pv a1a8
+info depth 2 seldepth 2 multipv 1 score mate 1 nodes 40 nps 20000 hashfull 0 tbhits 0 time 2 pv a1a8
+info depth 3 seldepth 2 multipv 1 score mate 1 nodes 60 nps 30000 hashfull 0 tbhits 0 time 2 pv a1a8
+info depth 4 seldepth 2 multipv 1 score mate 1 nodes 80 nps 40000 hashfull 0 tbhits 0 time 2 pv a1a8
+info depth 5 seldepth 2 multipv 1 score mate 1 nodes 100 nps 50000 hashfull 0 tbhits 0 time 2 pv a1a8
+info depth 6 seldepth 2 multipv 1 score mate 1 nodes 120 nps 60000 hashfull 0 tbhits 0 time 2 pv a1a8
+info depth 7 seldepth 2 multipv 1 score mate 1 nodes 140 nps 70000 hashfull 0 tbhits 0 time 2 pv a1a8
+info depth 8 seldepth 2 multipv 1 score mate 1 nodes 160 nps 80000 hashfull 0 tbhits 0 time 2 pv a1a8
+bestmove a1a8
