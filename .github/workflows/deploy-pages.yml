@@ -38,7 +38,11 @@ jobs:
         run: |
           mkdir -p _site/assets
           cp docs/index.html _site/
-          cp docs/assets/*.svg _site/assets/
+          # The logo is optional (generate-github-page §5): with no docs/assets/*.svg the glob matches nothing
+          # and a bare cp fails the whole deploy. This repo has no logo.
+          if compgen -G 'docs/assets/*.svg' > /dev/null; then
+            cp docs/assets/*.svg _site/assets/
+          fi
 
       - uses: actions/configure-pages@v6
 
