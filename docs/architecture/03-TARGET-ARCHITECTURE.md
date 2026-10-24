@@ -385,3 +385,84 @@ mark has an SVG `<title>` tooltip (hover) and the page has a table view; light a
 Unavailable | Fake`), `stockfish` (`available | absent`). The startup log prints the same
 three lines. With Copilot unavailable the app still runs: `random` players and the archive
 work, LLM games are refused with a 503 problem that says how to log in.
+
+## 9. Broadcast mode — a 24-hour scheduled channel (owner requirement 2026-10-24)
+
+The owner runs the arena as a 24/7 YouTube channel ("LLM Chess 24h"). Broadcast mode lets them
+**plan the next 24 hours of games in advance, press start once, and leave it running**, and gives
+OBS one clean page to capture. Game-by-game play, tournaments and ratings are unchanged; broadcast
+games are ordinary **rated** games, so the Results page keeps accumulating the ranking.
+
+**What the app does not do:** it does not push video to YouTube. The owner adds `/broadcast` as an
+OBS *Browser Source* (1920×1080) and streams from OBS. (A video encoder or RTMP client would break
+the dependency budget and is not the product.)
+
+### 9.1 Model
+
+- A **schedule** is a named plan: `startsAt`, `endsAt` (default start + 24 h), the pacing profile
+  and an ordered list of **slots** (one slot = one game: white model, black model, planned start,
+  planned end).
+- **Pacing** makes games watchable: `MoveDelayMs` (pause after every move so viewers can read, default
+  4000), `GameGapSeconds` (title-card pause between games, default 20), `MoveTimeoutSeconds`
+  as before. Pacing is a property of broadcast games only (stored on the schedule) — ordinary games
+  keep running at full speed.
+- **One game on screen at a time.** The broadcast runner plays slots strictly sequentially
+  (concurrency 1), independent of `Arena:MaxConcurrentGames`.
+- The **planner** is a pure function: given models, target duration, pacing and an estimated
+  average game length (plies × (average move latency + MoveDelayMs)), it produces the slot list:
+  balanced pairings (every pair, colours alternating), a deterministic order seeded by the
+  schedule seed that avoids the same model playing twice in a row, filling the window and
+  stopping with a final partial gap rather than starting a game that cannot finish before `endsAt`.
+  Its output includes the **premium-request estimate** for the whole day (per model).
+- Status: `Draft → Scheduled → Running ⇄ Paused → Finished | Cancelled`. A schedule that is
+  `Running` when the API restarts **resumes** at its next unfinished slot (the interrupted game is
+  marked `interrupted` and excluded from the rating, as in §7; the slot is marked `skipped`).
+- Failure policy: if a game cannot be played because Copilot is unavailable or rate-limited, the
+  runner **backs off** (30 s, 1 min, 2 min … capped at 10 min), shows an "technical break" card, and
+  retries the same slot; after 3 failed attempts the slot is `skipped` and the schedule moves on. The
+  stream never ends because of one bad game.
+
+### 9.2 Contracts (frozen by T5.1 in `Chess.Api/Broadcast/BroadcastContracts.cs`)
+
+```csharp
+namespace Chess.Api.Broadcast;
+
+public sealed record PacingProfile(int MoveDelayMs, int GameGapSeconds);
+public sealed record PlanRequest(string Name, IReadOnlyList<string> Models, DateTimeOffset StartsAt, int DurationHours,
+    PacingProfile Pacing, int Seed, double AssumedPlies, double AssumedMoveLatencyMs);
+public sealed record SlotDto(Guid Id, int Index, PlayerSpec White, PlayerSpec Black, DateTimeOffset PlannedStart,
+    DateTimeOffset PlannedEnd, string State, Guid? GameId);              // State: pending|running|finished|skipped
+public sealed record ScheduleDto(Guid Id, string Name, string Status, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
+    PacingProfile Pacing, int Seed, IReadOnlyList<string> Models, int SlotsTotal, int SlotsFinished,
+    IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
+public sealed record ScheduleDetailDto(ScheduleDto Schedule, IReadOnlyList<SlotDto> Slots);
+public sealed record NowNextDto(string Status, SlotDto? Current, IReadOnlyList<SlotDto> Next, string? Notice,
+    DateTimeOffset? EndsAt);                                              // Notice: technical-break text, null when fine
+```
+
+Endpoints (`/api/broadcast/…`): `POST /plan` (PlanRequest → ScheduleDetailDto, saved as Draft — nothing
+runs), `GET /schedules`, `GET /schedules/{id}`, `PUT /schedules/{id}/slots` (replace/reorder slots of a
+Draft/Scheduled schedule), `POST /schedules/{id}/start` (Scheduled → Running now, or at `startsAt`),
+`POST /pause`, `POST /resume`, `POST /stop`, `GET /now` (NowNextDto — for the broadcast page and OBS).
+Live game events reuse `GET /api/games/{id}/events`.
+
+### 9.3 Persistence (Postgres, migration `AddBroadcast`)
+
+`broadcast_schedules` (`id, name, status, starts_at, ends_at, move_delay_ms, game_gap_seconds, seed,
+models jsonb, created_at, started_at?, finished_at?`) and `broadcast_slots` (`id, schedule_id, index,
+white_kind, white_model, black_kind, black_model, planned_start, planned_end, state, game_id?,
+attempts, note?`). Everything the channel plays is stored; nothing about the schedule lives in memory only.
+
+### 9.4 Pages
+
+- `/broadcast/plan` (in the app navigation): the planner form — pick models (premium multiplier
+  shown), start time, 24 h default, pacing, seed; **preview timeline** of all slots and the day's
+  premium-request estimate **before** anything is saved; edit/reorder/delete slots; Save as draft;
+  Start. Lists existing schedules with status and a Pause/Resume/Stop control.
+- `/broadcast` (**not** in the navigation, no app chrome — the OBS Browser Source): full-viewport
+  1920×1080 layout on a dark theme, readable at stream bitrates: large board with last-move
+  highlight; both model names with colours; move list tail; "move N · thinking…" indicator; a header
+  "LLM Chess 24h — Game 17 of 48"; a **mini leaderboard** (top 8, arena score + rating) refreshed after every
+  game; **Up next** (next 3 slots with start times); local clock; "technical break" and "intermission
+  between games" cards; auto-reconnect of the live stream; no scrollbars, no cursor, no text
+  smaller than 28 px. Query options: `?theme=light`, `?top=5`.

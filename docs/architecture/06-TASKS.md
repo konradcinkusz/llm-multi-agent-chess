@@ -42,7 +42,13 @@ Legacy reference: the last state of the old code is commit `f0f5845`; port from 
 | T3.6 | UI: attempts log | T1.9, T2.7 | todo |
 | T4.1 | E2E (Playwright) on the AppHost with the fake gateway | T1.2, T3.1, T3.5 | todo |
 | T4.2 | AI evals: offline scenario suite + live smoke script | T2.1, T2.2 | todo |
-| T4.3 | README, CLAUDE.md, CHANGELOG final | T3.0 – T3.6 | todo |
+| T5.1 | Broadcast domain: contracts, planner, persistence | — | todo |
+| T5.2 | Broadcast runner: paced sequential play, resume, failure policy | T5.1 | todo |
+| T5.3 | Broadcast API endpoints | T5.1 | todo |
+| T5.4 | UI: broadcast planner page | T5.3 | todo |
+| T5.5 | UI: /broadcast OBS view | T5.3 | todo |
+| T5.6 | 24h soak test + runbook (OBS → YouTube) | T5.2, T5.3, T5.5 | todo |
+| T4.3 | README, CLAUDE.md, CHANGELOG final | T5.4, T5.5, T5.6 | todo |
 | T4.5 | GitHub Pages one-pager + deploy workflow | T4.3 | todo |
 | T4.4 | Final architecture review | T4.1, T4.2, T4.3, T4.5 | todo |
 
@@ -553,7 +559,7 @@ plies, prints result, attempts and latency.
 `docs/architecture/0*-*.md`.
 README: what it is, prerequisites (.NET 10, Docker, Copilot CLI logged in, optional Stockfish),
 `dotnet run --project src/Chess.AppHost`, the fake profile, how ratings work (link RATING.md),
-the Results page, cost warning, troubleshooting by `/health` state, project layout, link to
+the Results page, **Broadcast mode (planning a 24 h channel, `/broadcast` as an OBS Browser Source, link to docs/BROADCAST.md)**, cost warning, troubleshooting by `/health` state, project layout, link to
 `docs/architecture/`. Accurate against the code — every command run.
 Follow the architecture-standards guides (attach or fetch
 `konradcinkusz/architecture-standards`): **README-BADGES** (`docs/guides/README-BADGES.md` —
@@ -577,6 +583,85 @@ linking `docs/RATING.md` and `docs/architecture/`; real license line; no logo un
 Copy `.github/workflows/deploy-pages.yml` from architecture-standards **verbatim**. Run the
 skill's §8 verification (no `{{`/`CUSTOMIZE` left, links resolve). State in the PR the one
 manual step — Settings → Pages → Source → "GitHub Actions" — for the owner.
+
+---
+
+## Wave 5 — Broadcast mode (03 §9, ADR-011)
+
+Common context for T5.*: read 03 §9 and ADR-011 first. Everything is stored in Postgres; tests use
+InMemory + `FakeLlmGateway` + random players. A broadcast game is an ordinary rated game created
+through the same game runner path; pacing is applied **only** to games that belong to a broadcast slot.
+
+### T5.1 — Broadcast domain: contracts, planner, persistence
+**Owns:** `src/Chess.Api/Broadcast/**` except runner/endpoint files created by T5.2/T5.3
+(i.e. you own `BroadcastContracts.cs`, `BroadcastPlanner.cs`, `BroadcastEntities.cs`, `BroadcastExtensions.cs`),
+`src/Chess.Api/Persistence/**` (new entities, DbSets, the `AddBroadcast` migration), `tests/Chess.Api.Tests/Broadcast/Planner*`, `tests/Chess.Api.Tests/Persistence/**`, and `Program.cs` additions
+`builder.AddBroadcast(); api.MapBroadcastEndpoints();` (stubs for T5.2/T5.3 in their own files: `BroadcastRunnerExtensions.cs`, `BroadcastEndpoints.cs`).
+**Do:** the records of 03 §9.2 verbatim; EF entities/tables of 03 §9.3 + migration; the pure
+`BroadcastPlanner.Plan(PlanRequest, IReadOnlyDictionary<string,double?> premiumMultipliers)`:
+all unordered pairs repeated round-robin until the window is filled, colours alternating per repeat,
+no model plays two slots in a row unless only two models exist, deterministic for `Seed`, slot duration =
+`AssumedPlies × (AssumedMoveLatencyMs + MoveDelayMs) + GameGapSeconds`, last slot only if it ends ≤ `endsAt`,
+returns slots + premium estimate (`slots-per-model × AssumedPlies/2 × multiplier`).
+**Done when:** planner tests: 24 h / 3 models / defaults fills the window within one game length;
+deterministic per seed, different per seed; never two identical consecutive pairings; colour balance within 1;
+`Random` kind allowed as a model; fewer than 2 models → validation error. Migration applies (script contains both tables).
+**Verify:** V-NET.
+
+### T5.2 — Broadcast runner
+**Owns:** `src/Chess.Api/Broadcast/BroadcastRunner*.cs`, `BroadcastRunnerExtensions.cs`,
+`src/Chess.Api/Games/GameRunner*.cs` and `GameRun.cs` **only** to add an optional per-game pacing delay and a
+way to run one game to completion awaitably (no change to existing behaviour or contracts),
+`tests/Chess.Api.Tests/Broadcast/Runner*`.
+**Do:** `BroadcastRunner : BackgroundService`: when a schedule is `Running`, take the next `pending` slot at/after
+its planned start (wait until then), create the game (rated, via the same persistence as `POST /api/games`), run it
+with `MoveDelayMs` between moves, wait `GameGapSeconds`, mark the slot, publish a `NowNext` change; pause/resume/stop
+honoured between moves; on startup resume a `Running` schedule (interrupted game → slot `skipped`); failure policy of
+03 §9.1 (backoff 30 s→10 min, 3 attempts then `skipped`, `Notice` text while backing off); never throws out of
+`ExecuteAsync`. Expose `IBroadcastController` (start/pause/resume/stop/now) for T5.3. All delays through an injectable
+`TimeProvider` so tests run instantly.
+**Done when:** with a fake time provider: slots run in order and only one game at a time; per-move delay observed;
+pause holds the next move; restart resumes at the next slot and marks the interrupted one skipped; a gateway that always
+fails → 3 attempts, `skipped`, next slot runs; stop cancels the running game as `aborted`.
+**Verify:** V-NET.
+
+### T5.3 — Broadcast API endpoints
+**Owns:** `src/Chess.Api/Broadcast/BroadcastEndpoints.cs`, `tests/Chess.Api.Tests/Broadcast/Endpoints*`.
+**Do:** all endpoints of 03 §9.2 (validation → problem details; plan returns Draft with slots + estimate; slot edits only
+for Draft/Scheduled; start/pause/resume/stop via `IBroadcastController`; `GET /now` builds `NowNextDto`).
+**Done when:** WebApplicationFactory tests for each route incl. validation, illegal state transitions (409), and `/now` shapes
+in Idle/Running/Paused/Notice.
+**Verify:** V-NET.
+
+### T5.4 — UI: broadcast planner (`/broadcast/plan`)
+**Owns:** `src/Chess.Web/Components/Pages/Broadcast/Plan*`, `src/Chess.Web/Api/BroadcastApiClient.cs` + `BroadcastContracts.cs` (copies of 03 §9.2 records),
+`tests/Chess.Web.Tests/Broadcast/Plan*`, and one nav link added to `NavMenu.razor` (the single allowed edit outside the folder).
+**Do:** per 03 §9.4: form, preview timeline (pure SVG/CSS, no JS), premium-request estimate before saving, slot
+edit/reorder/delete, Save draft / Start, schedules list with Pause/Resume/Stop. `data-testid`s on every control.
+**Done when:** bUnit: preview renders slots from a stub; estimate visible before save; start disabled until saved; controls call the right client methods.
+**Verify:** V-NET.
+
+### T5.5 — UI: `/broadcast` OBS view
+**Owns:** `src/Chess.Web/Components/Pages/Broadcast/Live*`, `src/Chess.Web/Components/Layout/BroadcastLayout.razor(.css)`,
+`tests/Chess.Web.Tests/Broadcast/Live*`.
+**Do:** per 03 §9.4 — chrome-less layout (`@layout BroadcastLayout`), 1920×1080 fixed-aspect scaling, big board
+(reuse `ChessBoardSvg`), header with game N of M, move tail, thinking indicator, mini leaderboard from `/api/ratings`
+(refresh after each game), Up next, clock, intermission/technical-break cards from `/api/broadcast/now`, SSE
+auto-reconnect with back-off, `?theme=` / `?top=` options, minimum 28 px text. No scrollbars, no cursor. Reads `/api/broadcast/now` every 5 s.
+**Done when:** bUnit: shows current slot players and board from stub; intermission card when `Current` is null; technical-break card when `Notice` set; leaderboard limited by `?top`.
+**Verify:** V-NET.
+
+### T5.6 — 24-hour soak test + runbook
+**Owns:** `tests/Chess.Api.Tests/Broadcast/Soak*`, `docs/BROADCAST.md`, `scripts/broadcast-smoke.sh`.
+**Do:** an accelerated soak test: fake `TimeProvider` advancing 24 simulated hours with random + fake players and induced
+gateway failures and one simulated restart — asserts every slot ends `finished|skipped`, no overlap, ratings still computable,
+schedule `Finished`, no unhandled exceptions. `docs/BROADCAST.md`: how to plan and start a day, cost estimate guidance
+(premium multipliers, requests per day), OBS setup step by step (Browser Source `http://localhost:5070/broadcast`, 1920×1080,
+"control audio via OBS" off, custom CSS none), YouTube Live settings pointer, keeping the machine awake (disable sleep), what
+happens on restart / Copilot outage, how to stop. `scripts/broadcast-smoke.sh` (shellcheck-clean): starts the fake profile, plans a
+1-hour schedule at 50 ms moves, starts it and prints `/api/broadcast/now` until finished.
+**Done when:** soak test green and fast (< 60 s real time); runbook commands verified.
+**Verify:** V-NET (+ shellcheck if installable).
 
 ### T4.4 — Final architecture review
 **Owns:** `docs/architecture/ARCHITECTURE_REVIEW.md`, board statuses in this file,

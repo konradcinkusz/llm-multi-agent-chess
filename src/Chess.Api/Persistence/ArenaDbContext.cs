@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Chess.Api.Broadcast;
 using Chess.Api.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -22,6 +23,8 @@ public sealed class ArenaDbContext(DbContextOptions<ArenaDbContext> options) : D
     public DbSet<MoveAttemptEntity> MoveAttempts => Set<MoveAttemptEntity>();
     public DbSet<TournamentEntity> Tournaments => Set<TournamentEntity>();
     public DbSet<RatingSnapshotEntity> RatingSnapshots => Set<RatingSnapshotEntity>();
+    public DbSet<BroadcastScheduleEntity> BroadcastSchedules => Set<BroadcastScheduleEntity>();
+    public DbSet<BroadcastSlotEntity> BroadcastSlots => Set<BroadcastSlotEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -62,6 +65,24 @@ public sealed class ArenaDbContext(DbContextOptions<ArenaDbContext> options) : D
             e.HasKey(s => s.Id);
             e.HasIndex(s => new { s.Model, s.TakenAt });
             e.HasOne<GameEntity>().WithMany().HasForeignKey(s => s.AfterGameId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BroadcastScheduleEntity>(e =>
+        {
+            e.ToTable("broadcast_schedules");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Models)
+                .HasConversion(ModelsConverter, ModelsComparer)
+                .HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<BroadcastSlotEntity>(e =>
+        {
+            e.ToTable("broadcast_slots");
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => new { s.ScheduleId, s.Index }).IsUnique();
+            e.HasOne<BroadcastScheduleEntity>().WithMany().HasForeignKey(s => s.ScheduleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<GameEntity>().WithMany().HasForeignKey(s => s.GameId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // Column names are snake_case (03 §4) without a third-party naming package.
