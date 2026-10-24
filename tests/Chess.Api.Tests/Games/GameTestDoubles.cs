@@ -120,7 +120,7 @@ internal sealed class GameHarness : IAsyncDisposable
 {
     public const string StartFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-    private static readonly DateTimeOffset CreatedAt = new(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
+    public static readonly DateTimeOffset CreatedAt = new(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
 
     public GameHarness(
         IChessPlayerFactory players,
@@ -134,6 +134,7 @@ internal sealed class GameHarness : IAsyncDisposable
         _services = services.BuildServiceProvider();
         Factory = _services.GetRequiredService<IDbContextFactory<ArenaDbContext>>();
         Events = new InMemoryGameEventStream();
+        Readiness = new DatabaseReadiness();
         Runner = new GameRunner(
             Factory,
             players,
@@ -141,6 +142,7 @@ internal sealed class GameHarness : IAsyncDisposable
             Events,
             Options.Create(new GameRunnerOptions { MaxConcurrentGames = maxConcurrentGames, MaxPlies = maxPlies }),
             TimeProvider.System,
+            Readiness,
             NullLogger<GameRunner>.Instance);
     }
 
@@ -150,6 +152,8 @@ internal sealed class GameHarness : IAsyncDisposable
 
     public InMemoryGameEventStream Events { get; }
 
+    public DatabaseReadiness Readiness { get; }
+
     public GameRunner Runner { get; }
 
     /// <summary>The players every test uses unless it needs scripted ones: the real factory, with the fake gateway.</summary>
@@ -158,7 +162,11 @@ internal sealed class GameHarness : IAsyncDisposable
 
     public Task StartAsync() => Runner.StartAsync(CancellationToken.None);
 
-    public async Task<Guid> SeedGameAsync(PlayerDescriptor white, PlayerDescriptor black, string? startFen = null)
+    /// <summary>Completes the schema step the app runs before the runner requeues games. Until then the runner waits.</summary>
+    public void FinishMigration() => Readiness.MarkReady(0);
+
+    public async Task<Guid> SeedGameAsync(
+        PlayerDescriptor white, PlayerDescriptor black, string? startFen = null, DateTimeOffset? createdAt = null)
     {
         var id = Guid.NewGuid();
         var fen = startFen ?? StartFen;
@@ -174,10 +182,22 @@ internal sealed class GameHarness : IAsyncDisposable
             Result = "*",
             StartFen = fen,
             CurrentFen = fen,
-            CreatedAt = CreatedAt,
+            CreatedAt = createdAt ?? CreatedAt,
         });
         await db.SaveChangesAsync();
         return id;
+    }
+
+    /// <summary>Makes a seeded game look finished, as a game that ended before a restart does.</summary>
+    public async Task MarkFinishedAsync(Guid gameId, string result, string termination)
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        var game = await db.Games.SingleAsync(g => g.Id == gameId);
+        game.Result = result;
+        game.Termination = termination;
+        game.StartedAt = game.CreatedAt.AddMinutes(1);
+        game.FinishedAt = game.CreatedAt.AddMinutes(2);
+        await db.SaveChangesAsync();
     }
 
     /// <summary>Subscribes to the game's events now, so none are missed, and reads them as they come.</summary>
