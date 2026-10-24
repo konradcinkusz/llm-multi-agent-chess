@@ -1,7 +1,7 @@
 # 04 — Migration plan
 
 How the repository gets from [01-CURRENT-STATE](01-CURRENT-STATE.md) to
-[03-TARGET-ARCHITECTURE](03-TARGET-ARCHITECTURE.md). The work is split into **33 atomic
+[03-TARGET-ARCHITECTURE](03-TARGET-ARCHITECTURE.md). The work is split into **39 atomic
 tasks** ([06-TASKS](06-TASKS.md)), each small enough for one implementation session
 (Claude Haiku 5.5) and one pull request, and each owning a disjoint set of files so that tasks
 in the same wave can run in parallel without merge conflicts (ADR-010).
@@ -44,6 +44,10 @@ flowchart LR
     T12 & T31 & T35 --> T41[T4.1 E2E]
     T21 & T22 --> T42[T4.2 AI evals]
     T30 & T31 & T32 & T33 & T34 & T35 & T36 --> T43[T4.3 docs]
+    T02 --> T51[T5.1 broadcast domain] --> T52[T5.2 broadcast runner] & T53[T5.3 broadcast API]
+    T53 --> T54[T5.4 planner UI] & T55[T5.5 OBS view]
+    T52 & T53 & T55 --> T56[T5.6 soak + runbook]
+    T54 & T55 & T56 --> T43
     T43 --> T45[T4.5 GitHub Pages]
     T41 & T42 & T43 & T45 --> T44[T4.4 final review]
 ```
@@ -54,6 +58,7 @@ flowchart LR
 | 1 | T1.1 – T1.10 | up to 10 (recommended ≤ 6 at once) | each PR green; after the last merge, `main` green |
 | 2 | T2.1 – T2.9 | up to 9, each as soon as its dependencies are merged | — |
 | 3 | T3.0 – T3.6 | up to 7 (T3.2 after T3.0) | — |
+| 5 | T5.1 – T5.6 (broadcast, 03 §9) | T5.1, then T5.2 ∥ T5.3, then T5.4 ∥ T5.5, then T5.6 | soak test green |
 | 4 | T4.1 – T4.5 | 3, then T4.5, then T4.4 alone | review finds no blocking item |
 
 A task starts **as soon as all its dependencies are merged**, not when its whole wave is
