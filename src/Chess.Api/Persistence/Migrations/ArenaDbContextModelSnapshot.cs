@@ -22,6 +22,135 @@ namespace Chess.Api.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Chess.Api.Broadcast.BroadcastScheduleEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("GameGapSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("game_gap_seconds");
+
+                    b.Property<string>("Models")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("models");
+
+                    b.Property<int>("MoveDelayMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("move_delay_ms");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Seed")
+                        .HasColumnType("integer")
+                        .HasColumnName("seed");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<DateTimeOffset>("StartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("broadcast_schedules", (string)null);
+                });
+
+            modelBuilder.Entity("Chess.Api.Broadcast.BroadcastSlotEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("BlackKind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("black_kind");
+
+                    b.Property<string>("BlackModel")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("black_model");
+
+                    b.Property<Guid?>("GameId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("game_id");
+
+                    b.Property<int>("Index")
+                        .HasColumnType("integer")
+                        .HasColumnName("index");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<DateTimeOffset>("PlannedEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("planned_end");
+
+                    b.Property<DateTimeOffset>("PlannedStart")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("planned_start");
+
+                    b.Property<Guid>("ScheduleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("schedule_id");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<string>("WhiteKind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("white_kind");
+
+                    b.Property<string>("WhiteModel")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("white_model");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId");
+
+                    b.HasIndex("ScheduleId", "Index")
+                        .IsUnique();
+
+                    b.ToTable("broadcast_slots", (string)null);
+                });
+
             modelBuilder.Entity("Chess.Api.Persistence.Entities.GameEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -314,6 +443,20 @@ namespace Chess.Api.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("tournaments", (string)null);
+                });
+
+            modelBuilder.Entity("Chess.Api.Broadcast.BroadcastSlotEntity", b =>
+                {
+                    b.HasOne("Chess.Api.Persistence.Entities.GameEntity", null)
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Chess.Api.Broadcast.BroadcastScheduleEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ScheduleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Chess.Api.Persistence.Entities.GameEntity", b =>
