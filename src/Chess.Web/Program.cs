@@ -1,20 +1,14 @@
-using ChessBlazor;
-using ChessBlazor.Services;
-using Microsoft.AspNetCore.Components.Web;
-using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Chess.ServiceDefaults;
+using Chess.Web.Components;
 
-var builder = WebAssemblyHostBuilder.CreateDefault(args);
-builder.RootComponents.Add<App>("#app");
-builder.RootComponents.Add<HeadOutlet>("head::after");
+var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
-// HttpClient base address — relative calls go through nginx proxy in production
-builder.Services.AddScoped(sp => new HttpClient
-{
-    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
-});
+var app = builder.Build();
+app.MapDefaultEndpoints();
+app.UseAntiforgery();
+app.MapStaticAssets();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
-builder.Services.AddScoped<ChessApiClient>();
-builder.Services.AddScoped<GameHubService>();
-builder.Services.AddScoped<AdminApiClient>();
-
-await builder.Build().RunAsync();
+app.Run();

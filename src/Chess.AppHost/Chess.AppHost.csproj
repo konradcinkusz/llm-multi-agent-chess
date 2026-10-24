@@ -1,0 +1,19 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- The Aspire CLI bundle is not needed to run the AppHost; the Verify build treats warnings as errors. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Chess.Api\Chess.Api.csproj" />
+    <ProjectReference Include="..\Chess.Web\Chess.Web.csproj" />
+  </ItemGroup>
+
+</Project>
