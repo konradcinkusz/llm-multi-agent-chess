@@ -17,8 +17,10 @@ public sealed class TournamentJourney(ArenaFixture arena)
 
         await using var context = await arena.NewContextAsync();
         var page = await context.NewPageAsync();
+        var circuit = new CircuitWatch(page);
 
         await page.GotoAsync("/tournaments");
+        await circuit.WaitAsync();
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "New round robin", Exact = true })).ToBeVisibleAsync();
 
         var start = page.GetByRole(AriaRole.Button, new() { Name = "Start tournament", Exact = true });

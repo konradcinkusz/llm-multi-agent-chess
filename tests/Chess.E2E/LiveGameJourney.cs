@@ -19,8 +19,10 @@ public sealed class LiveGameJourney(ArenaFixture arena)
     {
         await using var context = await arena.NewContextAsync();
         var page = await context.NewPageAsync();
+        var circuit = new CircuitWatch(page);
 
         await page.GotoAsync("/");
+        await circuit.WaitAsync();
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Live game", Exact = true })).ToBeVisibleAsync();
 
         // Starting creates the game, so the input is repeated only while the page still shows no game.

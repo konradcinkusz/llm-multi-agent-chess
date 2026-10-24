@@ -7,6 +7,37 @@ namespace Chess.E2E;
 /// An input that lands earlier is dropped without an error, so the journeys send it again until the page shows that it
 /// took effect. Use only for inputs that are safe to repeat, and only with an effect the input alone must cause.
 /// </summary>
+/// <summary>
+/// Completes once the page's Blazor circuit has answered its StartCircuit request. Until then the prerendered page
+/// accepts input that the server then discards when it re-initialises the page. Create it before navigating, so the
+/// websocket is seen from the start.
+/// </summary>
+public sealed class CircuitWatch
+{
+    private readonly TaskCompletionSource _connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public CircuitWatch(IPage page)
+    {
+        page.WebSocket += (_, socket) =>
+        {
+            var startSent = false;
+            socket.FrameSent += (_, frame) =>
+            {
+                startSent |= frame.Text?.Contains("StartCircuit", StringComparison.Ordinal) == true;
+            };
+            socket.FrameReceived += (_, _) =>
+            {
+                if (startSent)
+                {
+                    _connected.TrySetResult();
+                }
+            };
+        };
+    }
+
+    public Task WaitAsync() => _connected.Task.WaitAsync(TimeSpan.FromSeconds(30));
+}
+
 public static class Interaction
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
