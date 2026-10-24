@@ -1,5 +1,6 @@
 using Chess.Web.Api;
 using Chess.Web.Components.Pages.HeadToHead;
+using Chess.Web.Components.Pages.Shared;
 using Xunit;
 
 namespace Chess.Web.Tests.HeadToHead;
@@ -35,10 +36,10 @@ public class VerbalReadingTests
     [Fact]
     public void IntervalContainingHalfIsNotSignificantWhateverThePointValue()
     {
-        Assert.False(VerbalReading.IsSignificant(0.45, 0.95));
-        Assert.False(VerbalReading.IsSignificant(0.5, 0.9));
-        Assert.True(VerbalReading.IsSignificant(0.51, 0.9));
-        Assert.True(VerbalReading.IsSignificant(0.1, 0.49));
+        Assert.False(Significance.IsSignificant(Pair("gpt", "claude", rqc: 0.7, low: 0.45, high: 0.95), bothEstablished: true));
+        Assert.False(Significance.IsSignificant(Pair("gpt", "claude", rqc: 0.7, low: 0.5, high: 0.9), bothEstablished: true));
+        Assert.True(Significance.IsSignificant(Pair("gpt", "claude", rqc: 0.7, low: 0.51, high: 0.9), bothEstablished: true));
+        Assert.True(Significance.IsSignificant(Pair("gpt", "claude", rqc: 0.3, low: 0.1, high: 0.49), bothEstablished: true));
     }
 
     [Fact]
@@ -46,7 +47,7 @@ public class VerbalReadingTests
     {
         var pair = Pair("gpt", "claude", rqc: 0.62, low: 0.55, high: 0.69);
 
-        Assert.Equal("gpt is slightly better than claude.", VerbalReading.Sentence(pair));
+        Assert.Equal("gpt is slightly better than claude.", VerbalReading.Sentence(pair, bothEstablished: true));
     }
 
     [Fact]
@@ -54,7 +55,7 @@ public class VerbalReadingTests
     {
         var pair = Pair("gpt", "claude", rqc: 0.1, low: 0.05, high: 0.15);
 
-        Assert.Equal("claude is dominant over gpt.", VerbalReading.Sentence(pair));
+        Assert.Equal("claude is dominant over gpt.", VerbalReading.Sentence(pair, bothEstablished: true));
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public class VerbalReadingTests
     {
         var pair = Pair("gpt", "claude", rqc: 0.9, low: 0.85, high: 0.95);
 
-        Assert.Equal("gpt is dominant over claude.", VerbalReading.Sentence(pair));
+        Assert.Equal("gpt is dominant over claude.", VerbalReading.Sentence(pair, bothEstablished: true));
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public class VerbalReadingTests
         var pair = Pair("gpt", "claude", rqc: 0.5, low: 0.4, high: 0.6);
 
         Assert.Equal("gpt and claude are indistinguishable. Not significant: the 95 % interval contains 0.5.",
-            VerbalReading.Sentence(pair));
+            VerbalReading.Sentence(pair, bothEstablished: true));
     }
 
     [Fact]
@@ -79,7 +80,39 @@ public class VerbalReadingTests
     {
         var pair = Pair("gpt", "claude", rqc: 0.7, low: 0.45, high: 0.85);
 
-        Assert.EndsWith("Not significant: the 95 % interval contains 0.5.", VerbalReading.Sentence(pair), StringComparison.Ordinal);
+        Assert.EndsWith("Not significant: the 95 % interval contains 0.5.", VerbalReading.Sentence(pair, bothEstablished: true), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASingleGameIsNotSignificantEvenWithAPointIntervalAwayFromHalf()
+    {
+        // One game: the bootstrap interval collapses to the point estimate, so it must not read as a lead.
+        var pair = Pair("gpt", "claude", rqc: 0.7, low: 0.7, high: 0.7);
+
+        var sentence = VerbalReading.Sentence(pair, bothEstablished: true);
+
+        Assert.False(Significance.IsSignificant(pair, bothEstablished: true));
+        Assert.EndsWith("Not significant: the 95 % interval has no width.", sentence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AProvisionalModelIsNotSignificantEvenWithAWideSeparation()
+    {
+        var pair = Pair("gpt", "claude", rqc: 0.9, low: 0.85, high: 0.95);
+
+        var sentence = VerbalReading.Sentence(pair, bothEstablished: false);
+
+        Assert.False(Significance.IsSignificant(pair, bothEstablished: false));
+        Assert.Equal("gpt is dominant over claude. Not yet significant: too few games (need 20 rated games per model).", sentence);
+    }
+
+    [Fact]
+    public void AnEstablishedLeadWithAnIntervalAboveHalfIsSignificant()
+    {
+        var pair = Pair("gpt", "claude", rqc: 0.62, low: 0.55, high: 0.70);
+
+        Assert.True(Significance.IsSignificant(pair, bothEstablished: true));
+        Assert.Equal("gpt is slightly better than claude.", VerbalReading.Sentence(pair, bothEstablished: true));
     }
 
     private static PairwiseCoefficient Pair(string a, string b, double rqc, double low, double high) =>
