@@ -9,11 +9,12 @@ namespace Chess.Web.Tests.Components;
 
 public class NavigationTests
 {
-    // Every route of 03 §6 and the planner page of 03 §9.4, in the order they are listed there.
+    // Every route of 03 §6 and the broadcast pages of 03 §9.4, in the order they are listed there.
+    // "/broadcast" is the chrome-less OBS page: a route, but deliberately NOT in the navigation (NavHrefs).
     private static readonly string[] Section6Routes =
     [
         "/results", "/", "/head-to-head", "/tournaments", "/tournaments/{Id:guid}",
-        "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan",
+        "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan", "/broadcast",
     ];
 
     // The navigation shows the top-level routes, Results first; the detail routes are reached from their lists.
