@@ -158,7 +158,7 @@ few games (need 20 rated games per model)."
 
 ## 8. What is deliberately not in the score
 
-Latency, tokens, and Copilot premium-request cost are recorded per move and shown on the
-leaderboard as separate columns. They are **never** folded into `R`, `Q` or `RQC`: a cheap,
+Latency, tokens, and cost are recorded per move and shown beside the ranking on the Results page
+(the "Strength vs cost" chart). Cost is in AI credits, with a dollar figure at `Arena:Cost:UsdPerAiCredit`. They are **never** folded into `R`, `Q` or `RQC`: a cheap,
 fast model that plays badly must not outrank an expensive one that plays well, and the reader
 should make the cost trade-off themselves.

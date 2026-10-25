@@ -512,6 +512,31 @@ public sealed record AttemptRecorded(Guid GameId, DateTimeOffset At, int Ply, in
 New endpoint: `GET /api/games/{id}/usage` → `GameUsageDto` (404 for an unknown game). `GET /api/attempts?gameId=` returns
 the new `AttemptDto` fields. `GET /api/models` fills `Pricing`.
 
+Additions made after the freeze, each additive (no existing field changed), as the supervisor authorised them for G2, G5 and B2:
+
+```csharp
+// Chess.Api (G5): GET /api/cost/inputs, what the forms need to estimate before anything is saved
+public sealed record CostInputsDto(double UsdPerAiCredit, int AssumedInputTokensPerMove, int AssumedOutputTokensPerMove,
+    IReadOnlyList<ModelTokenAverageDto> Models);
+// A model's average tokens per move over its stored moves that reported both counts. A model with no stored moves is absent.
+public sealed record ModelTokenAverageDto(string ModelId, int Moves, double? AverageInputTokens, double? AverageOutputTokens);
+
+// Chess.Api/Players (G2): the five optional parameters after Error, carried into AttemptDto and AttemptRecorded
+// MoveAttempt(..., string? Error, string? Reasoning = null, int? ReasoningTokens = null, int? CachedInputTokens = null,
+//             double? AiCredits = null, string? RejectionKind = null)
+
+// Chess.Api (B2): POST /api/benchmarks answers 201 with the run and its premium-request estimate per model
+public sealed record BenchmarkCreatedDto(BenchmarkDto Benchmark, IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
+```
+
+Decisions taken with B2 (03 §12.2):
+
+- **Default opponents.** A request that names no opponents plays every enabled model in the catalog except the candidate's base
+  model (whatever its effort) and Copilot's `auto` model. The random player is an opponent like any other. A request that names
+  opponents plays exactly that list.
+- **Unbounded Elo.** A score of 0 or 1 is an unbounded difference. The point estimate and any unbounded bound are reported as
+  null, never as infinity.
+
 ### 10.2 Cost model
 
 - **Per reply, in AI credits:** the reported cost when the runtime reports one (`TotalNanoAiu / 1e9`, summed over the

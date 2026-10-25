@@ -680,6 +680,8 @@ low items are in its §6 alignment table. None is blocking. These rows are not o
 | ID | Title | Depends on | Status |
 |---|---|---|---|
 | F1 | Reject cross-origin requests to the loopback app (review H-1) | — | done (F5, #65) |
+| F8 | Make ResultsJourney robust | — | done (#84) |
+| F9 | Make LiveGameJourney robust | — | done (#97) |
 
 ### F1 — Reject cross-origin requests to the loopback app
 
@@ -712,7 +714,7 @@ classes). These rows are not on the board above.
 | U4 | Live game, games list and replay | U1 | in progress |
 | U5 | Tournaments, broadcast planner, attempts log | U1 | in progress |
 | U6 | Charts fill their card on wide screens | U2 | todo |
-| U7 | Stockfish status reads `available` or `absent` | U1 | todo |
+| U7 | Stockfish status reads `available` or `absent` | U1 | done (#74) |
 
 Common to every U task: follow 07-UI-STYLE §1 (no dependencies, tokens only, both themes, phone width, accessibility, test
 hooks unchanged) and prove the work as in §7. **Verify:** `dotnet build Chess.sln -warnaserror`;
@@ -819,12 +821,12 @@ G1 and G2 run in parallel; G3 starts when U4 and G2 are merged; G4 after G3; G5 
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| G1 | Gateway: tokens, reasoning, AI credits and model prices from the SDK | — | todo |
-| G2 | API: store and stream every attempt with usage; rejection kinds; usage endpoint; model prices | — | todo |
-| G3 | Live game page: player bars, turn, move table, engine log, game summary, model prices | U4, G2 | todo |
-| G4 | Replay page: the same move table, engine log and summary for stored games | G3 | todo |
-| G5 | Estimates in AI credits and USD on the tournament form and the broadcast planner | U5, G2 | todo |
-| G6 | Docs: README, RATING.md §8, BROADCAST.md §2, CLAUDE.md, smoke script output | G1–G5 | todo |
+| G1 | Gateway: tokens, reasoning, AI credits and model prices from the SDK | — | done (#79) |
+| G2 | API: store and stream every attempt with usage; rejection kinds; usage endpoint; model prices | — | done (#83) |
+| G3 | Live game page: player bars, turn, move table, engine log, game summary, model prices | U4, G2 | done (#81) |
+| G4 | Replay page: the same move table, engine log and summary for stored games | G3 | done (#85) |
+| G5 | Estimates in AI credits and USD on the tournament form and the broadcast planner | U5, G2 | done (#80) |
+| G6 | Docs: README, RATING.md §8, BROADCAST.md §2, CLAUDE.md, smoke script output | G1–G5 | done |
 
 Common **Verify** for G tasks: `dotnet build Chess.sln -warnaserror`; `E2E_CHROMIUM_PATH=<chromium> dotnet test Chess.sln`;
 for UI tasks the 07-UI-STYLE §7 screenshots.
@@ -917,11 +919,11 @@ wording where it is now wrong; a lessons-learned entry for the multiplier. Every
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| S1 | Static export: results, head-to-head, games list, tournaments, about, JSON | — | todo |
-| S2 | Static export: one page per game with boards, move table, engine log, usage, PGN | S1, G3, G4 | todo |
-| S3 | Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README | — | todo |
-| P1 | Viewer pace on the live page | G3 | todo |
-| R1 | Conservative ranking order (lower bound of the arena score) | — | todo |
+| S1 | Static export: results, head-to-head, games list, tournaments, about, JSON | — | done (#89) |
+| S2 | Static export: one page per game with boards, move table, engine log, usage, PGN | S1, G3, G4 | done (#91) |
+| S3 | Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README | — | done (#88) |
+| P1 | Viewer pace on the live page | G3 | done (#90) |
+| R1 | Conservative ranking order (lower bound of the arena score) | — | done (#87) |
 
 ### S1 — Static export: results, head-to-head, games list, tournaments, about, JSON
 
@@ -993,11 +995,13 @@ the control switches the order and the headline names it. E2E `ResultsJourney` s
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| B1 | Gateway: reasoning effort, effort lists, custom models via the SDK provider config | — | todo |
-| B2 | API: variants (`model@effort`), benchmark runs, report (JSON + Markdown) | G2, G5, B1 contracts | todo |
-| B3 | UI: `/benchmark` (create, progress, report, downloads) | B2 | todo |
-| B4 | `scripts/benchmark.sh` + `.ps1`, `docs/BENCHMARK.md`, README section | B2 | todo |
-| M1 | Model map (bubble chart of two chosen coefficients) on the Results page | G2, R1, F8 | todo |
+| B1 | Gateway: reasoning effort, effort lists, custom models via the SDK provider config | — | done (#86) |
+| B2 | API: variants (`model@effort`), benchmark runs, report (JSON + Markdown) | G2, G5, B1 contracts | done (#93) |
+| B3 | UI: `/benchmark` (create, progress, report, downloads) | B2 | done (#96) |
+| B4 | `scripts/benchmark.sh` + `.ps1`, `docs/BENCHMARK.md`, README section | B2 | done (#95) |
+| B5 | Accept `model@effort` in single games and price variants by their base model | B2 | done (#94) |
+| B6 | Custom models through the AppHost, variants in broadcasts | B1, B2 | done (#98) |
+| M1 | Model map (bubble chart of two chosen coefficients) on the Results page | G2, R1, F8 | done (#92) |
 
 ### B1 — Gateway: reasoning effort, effort lists, custom models
 

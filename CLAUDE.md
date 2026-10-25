@@ -39,16 +39,20 @@ src/
   Chess.Rating/           pure rating maths (RATING.md): Bradley-Terry fit, RQC, bootstrap. No I/O, clock or EF
   Chess.Api/              the one service: Players, Games (runner, SSE), Tournaments, Ratings, Results (snapshots),
                           Quality (post-game move quality), Attempts, Catalog (models, status), Broadcast (planner,
-                          runner, endpoints), Persistence (EF Core, migrations, startup sweep), Contracts (DTOs)
+                          runner, endpoints), Benchmarks (variant runs, schedule, report, Markdown), Usage (game cost
+                          and token figures, model prices), Persistence (EF Core, migrations, startup sweep), Contracts (DTOs)
   Chess.Web/              Blazor Web App, interactive server rendering. Api/ holds its own DTO copies, the typed
                           ArenaApiClient and the SSE GameEventsClient. Components/: Layout, Charts (pure SVG),
-                          Shared (ChessBoardSvg, StatusStrip), Pages (Play, Results, HeadToHead, Tournaments,
-                          Games, Admin, Broadcast)
+                          Shared (ChessBoardSvg, StatusStrip, Game: player bars, move table, engine log, usage summary),
+                          Pages (Play, Results, HeadToHead, Tournaments, Games, Benchmark, Admin, Broadcast), Site
+                          (the pages of the static public site). Site/: the static export (SiteExporter, one page per
+                          game) and the publishing to gh-pages (GitSitePublisher, auto-publish)
 tests/
   Chess.Engine.Tests/  Chess.Rating.Tests/  Chess.Llm.Tests/  Chess.Api.Tests/  Chess.Web.Tests/
-  Chess.E2E/              Playwright journeys on the fake profile: live game, replay, results, tournament (CI job `e2e`)
-docs/  RATING.md, BROADCAST.md, EVALS.md (linked from the README); architecture/ (owned by the supervisor)
-scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh (owner's live run), broadcast-smoke.sh (fake profile)
+  Chess.E2E/              Playwright journeys on the fake profile: live game, replay, results, tournament, benchmark (CI job `e2e`)
+docs/  RATING.md, BROADCAST.md, BENCHMARK.md, EVALS.md (linked from the README); architecture/ (owned by the supervisor)
+scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh (owner's live run), broadcast-smoke.sh (fake profile),
+                          benchmark.sh and benchmark.ps1 (a benchmark against a running arena; refuse under CI)
 ```
 
 Project references are the allowed edges: `Chess.Api` → ServiceDefaults, Engine, Llm, Analysis,
@@ -83,6 +87,10 @@ These hold on `main`. The CI jobs named in brackets enforce the ones they name.
 - A broadcast game is an ordinary rated game; pacing applies only to games that belong to a broadcast slot (03 §9).
 - The Copilot health check is never Unhealthy: a missing login is Degraded and the rest of the app keeps running (P8).
 - The API and the web app answer 403 to a request from another site: a foreign `Origin`, or `Sec-Fetch-Site: cross-site` (ADR-006, amended). [Tests: `Chess.Api.Tests` `OriginGuardTests.Foreign_origin_cannot_start_a_broadcast_schedule`; `Chess.Web.Tests` `OriginGuardTests.Foreign_origin_cannot_negotiate_a_blazor_circuit`]
+- Cost never enters the rating. `Chess.Rating` takes no cost input, and latency, tokens and cost stay out of `R`, `Q` and `RQC` (RATING.md §8). Cost is AI credits, with a dollar figure at `Arena:Cost:UsdPerAiCredit`.
+- The public site has no script. No page of the static export carries a `<script>` element or refers to Blazor. [Tests: `Chess.Web.Tests` `SiteExportTests.No_page_has_a_script_or_a_blazor_reference`]
+- Site publishing never touches `main` or the working tree. The publisher works in its own folder (`Arena:Site:WorkDir`) and refuses a folder inside the repository the app runs from.
+- The benchmark scripts refuse to run under CI (`CI` or `GITHUB_ACTIONS` set): a benchmark plays real games against a live arena.
 
 ## Working rules
 
@@ -118,3 +126,13 @@ Fixes merged to `main`, with their pull request numbers in brackets. Keep them i
 - **Broadcast is outside the Copilot cap by decision.** `Arena:MaxConcurrentGames` caps games from `POST /api/games` and
   tournaments only. A broadcast plays one game at a time beside them (ADR-011, amended). Do not run a tournament during a
   broadcast, or lower the tournament's concurrency. Changing this needs a new supervisor decision, not a quiet change to the runner.
+- **Copilot bills AI credits per token, so a null multiplier is not an unknown cost (since June 2026).** `ModelBilling.Multiplier`
+  is null for the token-billed models, so their prices come from the token prices (`TokenPrices`, shown as `ModelPricingDto`),
+  and the cost is AI credits, with a dollar figure at `Arena:Cost:UsdPerAiCredit`. Do not write "multiplier unknown" as the
+  answer for cost: price the model from its token prices, and say "price unknown" only when the listing has none.
+- **A session can hit its usage limit and stop mid-task (process, no PR).** Before you resume such a session, check the branch,
+  the pull request and the working tree, and continue from what was pushed. Do not start the task again from `main`.
+- **Order before projecting on PostgreSQL (#78).** `RatedGameLoader` projected to a record and then ordered it. Npgsql cannot
+  translate an `OrderBy` over a constructed record, so `/api/ratings` and `/api/ratings/matrix` answered 500 and the Results
+  page did not load. The InMemory provider evaluates that query fine, so the tests did not catch it. Put `OrderBy` before
+  `Select` in any query that runs on PostgreSQL. A test on the InMemory provider does not prove the translation.

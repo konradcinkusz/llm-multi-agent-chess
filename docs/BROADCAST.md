@@ -78,22 +78,30 @@ A 409 means the schedule is not in a state the command can leave, for example st
 
 ## 2. Cost
 
-Every LLM move is one Copilot request. The planner's defaults (80 plies per game, 40 s average move latency, 4 s move delay,
-20 s gap) give:
+Copilot bills the arena's models by tokens, in **AI credits**: each move costs its input and output tokens at the model's token
+prices. The app shows credits and an estimate in US dollars, at `Arena:Cost:UsdPerAiCredit` (default 0.01 per credit). The
+planner's defaults (80 plies per game, 40 s average move latency, 4 s move delay, 20 s gap) give:
 
 - **Game length.** 80 plies × (40 s + 4 s) = 58 min 40 s per game, plus the 20 s gap: 59 min per slot.
 - **Games per day.** A 24-hour window holds **24 games** (the soak test checks this count with these defaults).
-- **Requests per side.** The planner assumes 80 plies ÷ 2 = **40 requests per side** per game.
-- **Requests per day.** 24 games × 2 sides × 40 = **1 920 requests** if both sides of every game are LLMs. A side playing
-  `random` costs nothing, so a day with random players costs less.
-- **Premium requests.** Each model's estimate is (its games) × 40 × its multiplier. A model with multiplier 3 that plays 16 of the
-  24 games costs 16 × 40 × 3 = **1 920 premium requests** on its own. Choose premium models knowingly; the planner page shows the
-  estimate before you save.
+- **Moves per side.** The planner assumes 80 plies ÷ 2 = **40 moves per side** per game.
+- **Tokens per move.** A model with no stored moves is assumed to use **700 input and 300 output tokens** per move. A model
+  with stored moves uses its own average over them. The preview's *Tokens per move* column says which basis it used.
+- **Cost per model.** Its games × 40 moves per side × (700 × input price + 300 × output price) ÷ 1 000 000, with prices in US
+  dollars per million tokens from the model's listing. The estimate charges every input token at the full input price, so
+  cache hits make the real cost lower.
+- **A day with random players** costs less: a side playing `random` costs nothing.
+- **Unknown prices.** A model whose listing has no prices shows an unknown cost, and the day's total leaves it out. Such a
+  total is an undercount until those prices are listed.
+- **Premium requests.** Copilot does not bill token-priced models by premium request. A model that still reports a premium
+  multiplier also gets a premium-request figure in the preview; a model without one shows that figure as unknown.
 
 The estimate is the normal case, not a ceiling:
 
-- A game that reaches the 200-ply cap costs up to 100 requests per side, 2.5 times the estimate.
-- A move the model answers illegally is retried, and each attempt is a request. The estimate does not count retries.
+- A game that reaches the 200-ply cap plays up to 100 moves per side, 2.5 times the estimate.
+- A move the model answers illegally is retried, and each attempt is billed. The estimate assumes one reply per move.
+- The conversion from the runtime's reported units to AI credits assumes 1 AI unit = 1 AI credit. The owner's live run has
+  not confirmed that yet.
 
 ## 3. OBS: Browser Source
 
