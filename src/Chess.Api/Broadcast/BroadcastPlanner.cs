@@ -7,7 +7,7 @@ namespace Chess.Api.Broadcast;
 public sealed record PlannedSlot(int Index, PlayerSpec White, PlayerSpec Black, DateTimeOffset PlannedStart,
     DateTimeOffset PlannedEnd);
 
-/// <summary>The planner's result: the slots in play order and the premium-request estimate per model.</summary>
+/// <summary>The planner's result: the slots in play order and the estimate per model (premium requests, AI credits, USD).</summary>
 public sealed record BroadcastPlan(IReadOnlyList<PlannedSlot> Slots,
     IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
 
@@ -16,7 +16,7 @@ public sealed class InvalidPlanException(string message) : Exception(message);
 
 /// <summary>
 /// Pure planner (03 §9.1, ADR-011): builds the slots of a broadcast window. No I/O, no clock, no EF.
-/// Deterministic for a given <see cref="PlanRequest"/> and premium multiplier table.
+/// Deterministic for a given <see cref="PlanRequest"/>, model inputs and cost options.
 /// </summary>
 public static class BroadcastPlanner
 {
@@ -26,11 +26,13 @@ public static class BroadcastPlanner
     /// White and Black counts differ by at most one. A game only starts when it can finish by <c>EndsAt</c>; the
     /// final gap is left empty rather than starting a game that cannot end.
     /// </summary>
-    /// <param name="premiumMultipliers">Premium-request multiplier per model id; a missing or null entry gives a null estimate.</param>
-    public static BroadcastPlan Plan(PlanRequest request, IReadOnlyDictionary<string, double?> premiumMultipliers)
+    /// <param name="inputs">Per model id: its premium multiplier, prices and stored moves. A missing entry gives null estimates.</param>
+    /// <param name="costs">The assumed tokens and the USD rate of an AI credit (ADR-012).</param>
+    public static BroadcastPlan Plan(PlanRequest request, IReadOnlyDictionary<string, ModelCostInputs> inputs, CostEstimateOptions costs)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(premiumMultipliers);
+        ArgumentNullException.ThrowIfNull(inputs);
+        ArgumentNullException.ThrowIfNull(costs);
 
         var models = Validate(request);
         var gameLength = TimeSpan.FromMilliseconds(request.AssumedPlies * (request.AssumedMoveLatencyMs + request.Pacing.MoveDelayMs));
@@ -76,8 +78,9 @@ public static class BroadcastPlanner
         var slots = windows.Select((window, index) => new PlannedSlot(index,
             SpecFor(models[colours[index].White]), SpecFor(models[colours[index].Black]), window.Start, window.End)).ToList();
 
-        return new BroadcastPlan(slots, models.Select(model => new ModelPremiumEstimateDto(
-            model, EstimateFor(model, slots, request.AssumedPlies, premiumMultipliers))).ToList());
+        return new BroadcastPlan(slots, models.Select(model => EstimateFor(model,
+            slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model),
+            request.AssumedPlies, inputs, costs)).ToList());
     }
 
     private static IReadOnlyList<string> Validate(PlanRequest request)
@@ -225,21 +228,21 @@ public static class BroadcastPlanner
     private static PlayerSpec SpecFor(string model) =>
         new(model == ModelCatalog.RandomModelId ? "random" : "llm", model);
 
-    // slots-per-model × (AssumedPlies / 2) moves per side × multiplier; the random player costs nothing.
-    private static double? EstimateFor(string model, IReadOnlyList<PlannedSlot> slots, double assumedPlies,
-        IReadOnlyDictionary<string, double?> premiumMultipliers)
+    /// <summary>
+    /// One model's estimate over a day of <paramref name="slotsForModel"/> games: the premium requests are slots × (plies / 2)
+    /// moves a side × its multiplier, and the AI credits and USD come from <see cref="CostEstimator"/> (03 §9.1, §10.2).
+    /// The random player costs nothing. Also used by the API for a stored schedule, so a plan and its saved copy agree.
+    /// </summary>
+    public static ModelPremiumEstimateDto EstimateFor(string model, int slotsForModel, double assumedPlies,
+        IReadOnlyDictionary<string, ModelCostInputs> inputs, CostEstimateOptions costs)
     {
-        if (model == ModelCatalog.RandomModelId)
-        {
-            return 0;
-        }
+        var entry = inputs.GetValueOrDefault(model);
+        var moves = slotsForModel * (assumedPlies / 2);
+        var cost = CostEstimator.Estimate(model, moves, entry, costs);
 
-        if (!premiumMultipliers.TryGetValue(model, out var multiplier) || multiplier is not { } value)
-        {
-            return null;
-        }
-
-        var slotsForModel = slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model);
-        return slotsForModel * (assumedPlies / 2) * value;
+        double? premium = model == ModelCatalog.RandomModelId ? 0
+            : entry?.PremiumMultiplier is { } multiplier ? moves * multiplier
+            : null;
+        return new ModelPremiumEstimateDto(model, premium, cost.AiCredits, cost.Usd, cost.Basis, cost.SampleMoves);
     }
 }

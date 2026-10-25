@@ -14,6 +14,8 @@ public static class TournamentExtensions
     /// </summary>
     public static IHostApplicationBuilder AddTournaments(this IHostApplicationBuilder builder)
     {
+        builder.Services.AddOptions<CostEstimateOptions>().BindConfiguration("Arena:Cost");
+        builder.Services.AddSingleton<CostInputs>();
         builder.Services.AddSingleton<TournamentService>();
         builder.Services.AddHostedService<TournamentScheduler>();
         return builder;

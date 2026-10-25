@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using ApiBroadcast = Chess.Api.Broadcast;
+using ApiTournaments = Chess.Api.Tournaments;
 using Chess.Web.Api;
 using Chess.Web.Tests.Support;
 using Chess.Web.Tests.Tournaments;
@@ -15,13 +16,17 @@ namespace Chess.Web.Tests.Broadcast;
 /// </summary>
 internal sealed class FakeBroadcast
 {
-    /// <summary>The premium multipliers the fake API knows: gpt 1, claude 1.5, random free.</summary>
-    private static readonly IReadOnlyDictionary<string, double?> Multipliers = new Dictionary<string, double?>(StringComparer.Ordinal)
-    {
-        ["gpt"] = 1,
-        ["claude"] = 1.5,
-        ["random"] = null,
-    };
+    /// <summary>
+    /// What the fake API lists: gpt is a multiplier-1 model priced at $3 / $15 per 1M tokens, claude a multiplier-1.5 model
+    /// without prices, random is free. The planner and the stored schedule estimate from these, as the real API does.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, ApiTournaments.ModelCostInputs> Inputs =
+        new Dictionary<string, ApiTournaments.ModelCostInputs>(StringComparer.Ordinal)
+        {
+            ["gpt"] = new(1, new(3.0, 15.0, null), null),
+            ["claude"] = new(1.5, null, null),
+            ["random"] = new(null, null, null),
+        };
 
     /// <summary>What the API charges per slot for one model: 80 plies, half a move a side (03 §9.1).</summary>
     private const double StoredAssumedPlies = 80;
@@ -94,7 +99,7 @@ internal sealed class FakeBroadcast
     private HttpResponseMessage Plan(string body)
     {
         var plan = JsonSerializer.Deserialize<ApiBroadcast.PlanRequest>(body, Json)!;
-        var planned = ApiBroadcast.BroadcastPlanner.Plan(plan, Multipliers);
+        var planned = ApiBroadcast.BroadcastPlanner.Plan(plan, Inputs, new ApiTournaments.CostEstimateOptions());
         var id = Guid.NewGuid();
         var slots = planned.Slots.Select(slot => new SlotDto(Guid.NewGuid(), slot.Index,
             new PlayerSpec(slot.White.Kind, slot.White.ModelId), new PlayerSpec(slot.Black.Kind, slot.Black.ModelId),
@@ -162,24 +167,18 @@ internal sealed class FakeBroadcast
         var starts = first?.PlannedStart ?? new DateTimeOffset(2026, 10, 24, 10, 0, 0, TimeSpan.Zero);
         var ends = stored.Slots.Count == 0 ? starts : stored.Slots.Max(slot => slot.PlannedEnd);
         var models = stored.Slots.SelectMany(slot => new[] { slot.White.ModelId, slot.Black.ModelId }).Distinct().ToList();
-        var estimate = models.Select(model => new ModelPremiumEstimateDto(model, Estimate(model, stored.Slots))).ToList();
+        var estimate = models.Select(model => Estimate(model, stored.Slots)).ToList();
         return new ScheduleDto(id, stored.Name, stored.Status, starts, ends, new PacingProfile(4000, 20), 1, models,
             stored.Slots.Count, stored.Slots.Count(slot => slot.State == "finished"), estimate);
     }
 
-    private static double? Estimate(string model, IReadOnlyList<SlotDto> slots)
+    private static ModelPremiumEstimateDto Estimate(string model, IReadOnlyList<SlotDto> slots)
     {
-        if (model == "random")
-        {
-            return 0;
-        }
-
-        if (!Multipliers.TryGetValue(model, out var multiplier) || multiplier is not { } value)
-        {
-            return null;
-        }
-
-        return slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model) * (StoredAssumedPlies / 2) * value;
+        var estimate = ApiBroadcast.BroadcastPlanner.EstimateFor(model,
+            slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model), StoredAssumedPlies,
+            Inputs, new ApiTournaments.CostEstimateOptions());
+        return new ModelPremiumEstimateDto(estimate.ModelId, estimate.EstimatedPremiumRequests,
+            estimate.EstimatedAiCredits, estimate.EstimatedUsd, estimate.TokenBasis, estimate.SampleMoves);
     }
 
     private sealed record Stored(string Name, string Status, List<SlotDto> Slots);

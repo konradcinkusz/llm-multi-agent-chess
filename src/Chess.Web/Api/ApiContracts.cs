@@ -16,7 +16,10 @@ public sealed record CreateTournamentRequest(string Name, IReadOnlyList<string> 
 public sealed record TournamentDto(Guid Id, string Name, IReadOnlyList<string> Models, int GamesPerPair, string Status,
     int GamesTotal, int GamesFinished, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt);  // Status: running | finished | cancelled
 public sealed record TournamentCreatedDto(TournamentDto Tournament, IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
-public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests);  // null: multiplier unknown
+// Premium requests are null when the multiplier is unknown; the credit and USD estimates are null when the prices are.
+// TokenBasis: history | assumed | free | unknown (03 §10.2); SampleMoves is set for history.
+public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests,
+    double? EstimatedAiCredits = null, double? EstimatedUsd = null, string? TokenBasis = null, int? SampleMoves = null);
 public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null);
 public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
     double? CachedInputUsdPerMillionTokens);

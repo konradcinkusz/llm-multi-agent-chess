@@ -71,7 +71,7 @@
                         <input data-testid="plan-model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
                                @onchange="e => Toggle(model.Id, e.Value)" />
                         @model.DisplayName
-                        <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
+                        <span class="muted">@TournamentFormat.Cost(model)</span>
                     </label>
                 }
             </div>
@@ -111,18 +111,19 @@
             <h3>Premium requests for the day (estimate, before saving)</h3>
             <p class="muted">
                 Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
+                AI credits and USD are estimated by the API when the draft is saved, from the stored moves.
             </p>
             <div class="table-wrap">
                 <table class="table-compact">
                     <thead>
-                        <tr><th>Model</th><th class="num">Multiplier</th><th class="num">Games</th><th class="num">Premium requests</th></tr>
+                        <tr><th>Model</th><th>Price</th><th class="num">Games</th><th class="num">Premium requests</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var model in request.Models)
                         {
                             <tr>
                                 <td>@NameOf(model)</td>
-                                <td class="num">@TournamentFormat.Multiplier(Find(model)?.PremiumMultiplier)</td>
+                                <td>@TournamentFormat.Price(Find(model)?.Pricing)</td>
                                 <td class="num">@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
                                 <td class="num">@TournamentFormat.Requests(RequestsFor(model))</td>
                             </tr>
@@ -213,6 +214,40 @@
             </p>
         }
 
+        @if (_saved is { } estimated && !Dirty)
+        {
+            <div class="callout callout-info plan-cost" data-testid="plan-cost" role="status">
+                <h3>AI credits and USD (estimate, from the API)</h3>
+                <p class="muted">
+                    Tokens per move are the model's average over its stored moves, or the assumed tokens when it has none.
+                    USD is credits × the rate in Arena:Cost:UsdPerAiCredit.
+                </p>
+                <div class="table-wrap">
+                    <table class="table-compact">
+                        <thead>
+                            <tr><th>Model</th><th class="num">Games</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var estimate in estimated.Schedule.EstimatedPremiumRequests)
+                            {
+                                <tr>
+                                    <td>@NameOf(estimate.ModelId)</td>
+                                    <td class="num">@estimated.Slots.Count(slot => slot.White.ModelId == estimate.ModelId || slot.Black.ModelId == estimate.ModelId)</td>
+                                    <td class="num">@TournamentFormat.Credits(estimate.EstimatedAiCredits)</td>
+                                    <td class="num">@TournamentFormat.Usd(estimate.EstimatedUsd)</td>
+                                    <td>@TournamentFormat.Basis(estimate.TokenBasis, estimate.SampleMoves)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p>
+                    Known total: @TournamentFormat.Credits(KnownCredits(estimated.Schedule.EstimatedPremiumRequests))
+                    (@TournamentFormat.Usd(KnownUsd(estimated.Schedule.EstimatedPremiumRequests)))
+                </p>
+            </div>
+        }
+
     </section>
 }
 
@@ -242,7 +277,7 @@
                         <th>Status</th>
                         <th>Window (UTC)</th>
                         <th>Games</th>
-                        <th>Premium requests (estimate)</th>
+                        <th>Estimate (AI credits, USD)</th>
                         <th><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
@@ -255,8 +290,7 @@
                             <td>@PlanFormat.Utc(schedule.StartsAt) to @PlanFormat.Utc(schedule.EndsAt)</td>
                             <td class="num">@schedule.SlotsFinished of @schedule.SlotsTotal</td>
                             <td>
-                                @string.Join(", ", schedule.EstimatedPremiumRequests.Select(estimate =>
-                                    $"{NameOf(estimate.ModelId)} {TournamentFormat.Requests(estimate.EstimatedPremiumRequests)}"))
+                                @string.Join(", ", schedule.EstimatedPremiumRequests.Select(EstimateText))
                             </td>
                             <td class="plan-row-actions">
                                 @if (schedule.Status is ScheduleStatuses.Draft or ScheduleStatuses.Scheduled)
@@ -418,6 +452,28 @@
     private ModelDto? Find(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId);
 
     private string NameOf(string modelId) => Find(modelId)?.DisplayName ?? modelId;
+
+    /// <summary>A schedule's estimate for one model on its row: the premium requests when it has a multiplier, then the credits and USD.</summary>
+    private string EstimateText(ModelPremiumEstimateDto estimate)
+    {
+        var premium = estimate.EstimatedPremiumRequests is { } requests
+            ? $"{TournamentFormat.Requests(requests)} premium requests · "
+            : "";
+        var cost = estimate.EstimatedAiCredits is { } credits
+            ? $"{TournamentFormat.Credits(credits)} ({TournamentFormat.Usd(estimate.EstimatedUsd)})"
+            : "price unknown";
+        return $"{NameOf(estimate.ModelId)}: {premium}{cost}";
+    }
+
+    private static double? KnownCredits(IEnumerable<ModelPremiumEstimateDto> estimates) =>
+        estimates.Any(estimate => estimate.EstimatedAiCredits is not null)
+            ? estimates.Sum(estimate => estimate.EstimatedAiCredits ?? 0)
+            : null;
+
+    private static double? KnownUsd(IEnumerable<ModelPremiumEstimateDto> estimates) =>
+        estimates.Any(estimate => estimate.EstimatedUsd is not null)
+            ? estimates.Sum(estimate => estimate.EstimatedUsd ?? 0)
+            : null;
 
     private PlanRequest FormRequest(DateTimeOffset start) => new(_name.Trim(), SelectedModels, start, _hours,
         new PacingProfile(_moveDelayMs, _gameGapSeconds), _seed, AssumedPlies, AssumedMoveLatencyMs);

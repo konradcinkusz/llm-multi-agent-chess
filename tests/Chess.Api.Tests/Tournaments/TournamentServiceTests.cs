@@ -223,9 +223,10 @@ public class TournamentServiceTests
 
         Assert.Equal(
             [
-                new ModelPremiumEstimateDto("fake-a", 4 * 80 * 1.0),
-                new ModelPremiumEstimateDto("fake-b", 4 * 80 * 0.5),
-                new ModelPremiumEstimateDto("fake-c", null),
+                // Without listed prices the credits and USD stay unknown; the premium figure is unchanged.
+                new ModelPremiumEstimateDto("fake-a", 4 * 80 * 1.0, TokenBasis: CostEstimator.UnknownBasis),
+                new ModelPremiumEstimateDto("fake-b", 4 * 80 * 0.5, TokenBasis: CostEstimator.UnknownBasis),
+                new ModelPremiumEstimateDto("fake-c", null, TokenBasis: CostEstimator.UnknownBasis),
             ],
             created.EstimatedPremiumRequests);
     }
@@ -238,7 +239,10 @@ public class TournamentServiceTests
         var created = await harness.CreateAsync(["fake-a", "random"], gamesPerPair: 2);
 
         Assert.Equal(
-            [new ModelPremiumEstimateDto("fake-a", null), new ModelPremiumEstimateDto("random", 0)],
+            [
+                new ModelPremiumEstimateDto("fake-a", null, TokenBasis: CostEstimator.UnknownBasis),
+                new ModelPremiumEstimateDto("random", 0, 0, 0, CostEstimator.FreeBasis),
+            ],
             created.EstimatedPremiumRequests);
     }
 

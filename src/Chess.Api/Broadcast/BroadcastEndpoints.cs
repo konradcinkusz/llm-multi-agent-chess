@@ -1,6 +1,7 @@
 using Chess.Api.Catalog;
 using Chess.Api.Contracts;
 using Chess.Api.Persistence;
+using Chess.Api.Tournaments;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -41,17 +42,17 @@ public static class BroadcastEndpoints
         broadcast.MapPut("/schedules/{id:guid}/slots", ReplaceSlotsAsync);
         broadcast.MapGet("/now", NowAsync);
         broadcast.MapPost("/schedules/{id:guid}/start", (Guid id, IBroadcastController controller,
-            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
-            CommandAsync(id, controller.StartAsync, factory, catalog, ct));
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CostInputs costs, CancellationToken ct) =>
+            CommandAsync(id, controller.StartAsync, factory, catalog, costs, ct));
         broadcast.MapPost("/schedules/{id:guid}/pause", (Guid id, IBroadcastController controller,
-            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
-            CommandAsync(id, controller.PauseAsync, factory, catalog, ct));
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CostInputs costs, CancellationToken ct) =>
+            CommandAsync(id, controller.PauseAsync, factory, catalog, costs, ct));
         broadcast.MapPost("/schedules/{id:guid}/resume", (Guid id, IBroadcastController controller,
-            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
-            CommandAsync(id, controller.ResumeAsync, factory, catalog, ct));
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CostInputs costs, CancellationToken ct) =>
+            CommandAsync(id, controller.ResumeAsync, factory, catalog, costs, ct));
         broadcast.MapPost("/schedules/{id:guid}/stop", (Guid id, IBroadcastController controller,
-            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct) =>
-            CommandAsync(id, controller.StopAsync, factory, catalog, ct));
+            IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CostInputs costs, CancellationToken ct) =>
+            CommandAsync(id, controller.StopAsync, factory, catalog, costs, ct));
         return endpoints;
     }
 
@@ -59,6 +60,7 @@ public static class BroadcastEndpoints
         PlanRequest? request,
         IDbContextFactory<ArenaDbContext> factory,
         ModelCatalog catalog,
+        CostInputs costs,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -79,12 +81,12 @@ public static class BroadcastEndpoints
         }
 
         var listing = await catalog.GetModelsAsync(ct);
-        var multipliers = Multipliers(listing);
+        var inputs = await costs.ForAsync(listing, ct);
 
         BroadcastPlan plan;
         try
         {
-            plan = BroadcastPlanner.Plan(request, multipliers);
+            plan = BroadcastPlanner.Plan(request, inputs, costs.Options);
         }
         catch (InvalidPlanException ex)
         {
@@ -132,9 +134,10 @@ public static class BroadcastEndpoints
     private static async Task<IResult> ListAsync(
         IDbContextFactory<ArenaDbContext> factory,
         ModelCatalog catalog,
+        CostInputs costs,
         CancellationToken ct)
     {
-        var multipliers = Multipliers(await catalog.GetModelsAsync(ct));
+        var inputs = await costs.ForAsync(await catalog.GetModelsAsync(ct), ct);
 
         await using var db = await factory.CreateDbContextAsync(ct);
         var schedules = await db.BroadcastSchedules.AsNoTracking().OrderByDescending(s => s.CreatedAt).ToListAsync(ct);
@@ -143,7 +146,7 @@ public static class BroadcastEndpoints
         var dtos = schedules.Select(schedule =>
         {
             var own = slots.Where(s => s.ScheduleId == schedule.Id).ToList();
-            return ToScheduleDto(schedule, own, multipliers);
+            return ToScheduleDto(schedule, own, inputs, costs.Options);
         }).ToList();
         return TypedResults.Ok(dtos);
     }
@@ -152,9 +155,10 @@ public static class BroadcastEndpoints
         Guid id,
         IDbContextFactory<ArenaDbContext> factory,
         ModelCatalog catalog,
+        CostInputs costs,
         CancellationToken ct)
     {
-        var multipliers = Multipliers(await catalog.GetModelsAsync(ct));
+        var inputs = await costs.ForAsync(await catalog.GetModelsAsync(ct), ct);
 
         await using var db = await factory.CreateDbContextAsync(ct);
         var loaded = await LoadAsync(db, id, ct);
@@ -164,7 +168,7 @@ public static class BroadcastEndpoints
         }
 
         var (schedule, slots) = loaded.Value;
-        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, multipliers),
+        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, inputs, costs.Options),
             slots.Select(ToSlotDto).ToList()));
     }
 
@@ -173,6 +177,7 @@ public static class BroadcastEndpoints
         IReadOnlyList<SlotEdit>? edits,
         IDbContextFactory<ArenaDbContext> factory,
         ModelCatalog catalog,
+        CostInputs costs,
         CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -219,8 +224,8 @@ public static class BroadcastEndpoints
         db.BroadcastSlots.AddRange(replaced);
         await db.SaveChangesAsync(ct);
 
-        var multipliers = Multipliers(await catalog.GetModelsAsync(ct));
-        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, replaced, multipliers),
+        var inputs = await costs.ForAsync(await catalog.GetModelsAsync(ct), ct);
+        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, replaced, inputs, costs.Options),
             replaced.Select(ToSlotDto).ToList()));
     }
 
@@ -237,7 +242,7 @@ public static class BroadcastEndpoints
     /// </summary>
     private static async Task<IResult> CommandAsync(Guid id,
         Func<Guid, CancellationToken, Task<BroadcastCommandResult>> command,
-        IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CancellationToken ct)
+        IDbContextFactory<ArenaDbContext> factory, ModelCatalog catalog, CostInputs costs, CancellationToken ct)
     {
         var result = await command(id, ct);
 
@@ -253,9 +258,9 @@ public static class BroadcastEndpoints
             return Conflict(loaded.Value.Schedule.Status, "That command does not apply to a schedule in this state.");
         }
 
-        var multipliers = Multipliers(await catalog.GetModelsAsync(ct));
+        var inputs = await costs.ForAsync(await catalog.GetModelsAsync(ct), ct);
         var (schedule, slots) = loaded.Value;
-        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, multipliers),
+        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, inputs, costs.Options),
             slots.Select(ToSlotDto).ToList()));
     }
 
@@ -358,9 +363,6 @@ public static class BroadcastEndpoints
         return errors.Count == 0 ? null : new Dictionary<string, string[]> { ["slots"] = errors.ToArray() };
     }
 
-    private static IReadOnlyDictionary<string, double?> Multipliers(ModelListing listing) =>
-        listing.Models.ToDictionary(m => m.Id, m => m.PremiumMultiplier, StringComparer.Ordinal);
-
     private static BroadcastSlotEntity ToSlotEntity(Guid scheduleId, PlannedSlot slot) => new()
     {
         Id = Guid.NewGuid(),
@@ -388,28 +390,11 @@ public static class BroadcastEndpoints
 
     /// <summary>The schedule as stored: the estimate is recomputed from its slots (see <see cref="StoredAssumedPlies"/>).</summary>
     private static ScheduleDto ToScheduleDto(BroadcastScheduleEntity schedule, IReadOnlyList<BroadcastSlotEntity> slots,
-        IReadOnlyDictionary<string, double?> multipliers) =>
+        IReadOnlyDictionary<string, ModelCostInputs> inputs, CostEstimateOptions costs) =>
         ToScheduleDto(schedule, slots.Count, slots.Count(s => s.State == SlotState.Finished),
-            schedule.Models.Select(model => new ModelPremiumEstimateDto(model, EstimateFor(model, slots, multipliers)))
+            schedule.Models.Select(model => BroadcastPlanner.EstimateFor(model,
+                slots.Count(slot => slot.WhiteModel == model || slot.BlackModel == model), StoredAssumedPlies, inputs, costs))
                 .ToList());
-
-    // slots-per-model × (plies / 2) moves per side × multiplier; the random player costs nothing (as the planner).
-    private static double? EstimateFor(string model, IReadOnlyList<BroadcastSlotEntity> slots,
-        IReadOnlyDictionary<string, double?> multipliers)
-    {
-        if (model == ModelCatalog.RandomModelId)
-        {
-            return 0;
-        }
-
-        if (!multipliers.TryGetValue(model, out var multiplier) || multiplier is not { } value)
-        {
-            return null;
-        }
-
-        var slotsForModel = slots.Count(slot => slot.WhiteModel == model || slot.BlackModel == model);
-        return slotsForModel * (StoredAssumedPlies / 2) * value;
-    }
 
     private static ValidationProblem ValidationProblemFor(string key, string message) =>
         TypedResults.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });

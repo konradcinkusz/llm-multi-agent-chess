@@ -44,6 +44,10 @@ public class ContractRoundTripTests
             new ApiTournaments.ModelPremiumEstimateDto("gpt-5", 960));
         AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
             new ApiTournaments.ModelPremiumEstimateDto("random", null));
+        AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
+            new ApiTournaments.ModelPremiumEstimateDto("gpt-5", 960, 24.5, 0.245, "history", 12));
+        AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
+            new ApiTournaments.ModelPremiumEstimateDto("claude", null, 26.4, 0.264, "assumed"));
         AssertRoundTrip<ApiTournaments.TournamentCreatedDto, WebDto.TournamentCreatedDto>(
             new ApiTournaments.TournamentCreatedDto(
                 new ApiDto.TournamentDto(Id, "Spring", ["a", "b"], 2, "running", 2, 0, At, null),

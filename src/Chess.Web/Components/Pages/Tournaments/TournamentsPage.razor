@@ -61,7 +61,7 @@
                             <input id="model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
                                    @onchange="e => Toggle(model.Id, e.Value)" />
                             @model.DisplayName
-                            <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
+                            <span class="muted">@TournamentFormat.Cost(model)</span>
                         </label>
                     }
                 </div>
@@ -79,19 +79,20 @@
                     <p>
                         @gameCount @(gameCount == 1 ? "game" : "games") in @pairs @(pairs == 1 ? "pair" : "pairs").
                         Each game is estimated at @PremiumEstimate.RequestsPerGame requests for each of its models (ADR-004),
-                        so this is an upper bound, not a bill.
+                        so this is an upper bound, not a bill. AI credits and USD are estimated once the tournament starts,
+                        from the prices and the moves already stored.
                     </p>
                     <div class="table-wrap">
                         <table class="table-compact">
                             <thead>
-                                <tr><th>Model</th><th class="num">Multiplier</th><th class="num">Premium requests</th></tr>
+                                <tr><th>Model</th><th>Price</th><th class="num">Premium requests</th></tr>
                             </thead>
                             <tbody>
                                 @foreach (var estimate in estimates)
                                 {
                                     <tr>
                                         <td>@estimate.ModelId</td>
-                                        <td class="num">@TournamentFormat.Multiplier(Find(estimate.ModelId)?.PremiumMultiplier)</td>
+                                        <td>@TournamentFormat.Price(Find(estimate.ModelId)?.Pricing)</td>
                                         <td class="num">@TournamentFormat.Requests(estimate.Requests)</td>
                                     </tr>
                                 }
@@ -131,11 +132,21 @@
                         Started <strong>@created.Tournament.Name</strong> with @created.Tournament.GamesTotal games.
                         <a href="/tournaments/@created.Tournament.Id">Open the tournament</a>
                     </p>
-                    <p>Premium requests estimated by the API:</p>
+                    <p>Estimated by the API, per model: premium requests, then AI credits and USD from the models' prices and their past moves.</p>
                     <ul>
                         @foreach (var estimate in created.EstimatedPremiumRequests)
                         {
-                            <li>@estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)</li>
+                            <li>
+                                @estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)
+                                @if (estimate.EstimatedAiCredits is { } credits)
+                                {
+                                    <span>· @TournamentFormat.Credits(credits) · @TournamentFormat.Usd(estimate.EstimatedUsd) (@TournamentFormat.Basis(estimate.TokenBasis, estimate.SampleMoves))</span>
+                                }
+                                else
+                                {
+                                    <span>· @TournamentFormat.Basis(estimate.TokenBasis, estimate.SampleMoves)</span>
+                                }
+                            </li>
                         }
                     </ul>
                 </div>

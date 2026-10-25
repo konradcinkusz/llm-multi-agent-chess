@@ -4,6 +4,7 @@ using Chess.Api.Catalog;
 using Chess.Api.Games;
 using Chess.Api.Persistence;
 using Chess.Api.Persistence.Entities;
+using Chess.Api.Tournaments;
 using Chess.Api.Players;
 using Chess.Api.Tests.Games;
 using Chess.Engine;
@@ -132,7 +133,7 @@ internal sealed class SoakHarness : IAsyncDisposable
     /// <summary>Plans the day with the real planner and saves it as a scheduled schedule, the state a start is pressed from.</summary>
     public async Task<Guid> SeedDayAsync(PlanRequest request)
     {
-        var plan = BroadcastPlanner.Plan(request, new Dictionary<string, double?>());
+        var plan = BroadcastPlanner.Plan(request, new Dictionary<string, ModelCostInputs>(), new CostEstimateOptions());
         var id = Guid.NewGuid();
         await using var db = await Factory.CreateDbContextAsync();
         db.BroadcastSchedules.Add(new BroadcastScheduleEntity
