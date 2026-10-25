@@ -1,4 +1,6 @@
 using Chess.Api.Contracts;
+using Chess.Api.Usage;
+using Chess.Llm;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
@@ -12,6 +14,7 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
 {
     public const string RandomModelId = "random";
 
+    private const string AutoModelId = "auto";
     private const string CacheKey = "catalog:models";
     private static readonly ModelDto Random = new(RandomModelId, "Random", 0, true);
 
@@ -29,10 +32,15 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
             {
                 entry.AbsoluteExpirationRelativeToNow = options.Value.ModelCacheTtl;
                 var listed = await gateway.ListModelsAsync(ct);
-                return listed.Select(m => new ModelDto(m.Id, m.DisplayName, m.PremiumMultiplier, m.Enabled)).ToArray();
+                var rate = options.Value.Cost.UsdPerAiCredit;
+                return listed
+                    .Select(m => new ModelDto(m.Id, m.DisplayName, m.PremiumMultiplier, m.Enabled,
+                        ModelPricing.ToDto(m.Pricing, rate)))
+                    .ToArray();
             });
 
-            return new ModelListing([.. models ?? [], Random], Warning: null);
+            var offered = (models ?? []).Where(m => options.Value.ShowAutoModel || !IsAuto(m));
+            return new ModelListing([.. offered, Random], Warning: null);
         }
         catch (LlmUnavailableException)
         {
@@ -40,6 +48,8 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
             return NotReady(gateway.Status.State);
         }
     }
+
+    private static bool IsAuto(ModelDto model) => model.Id.Equals(AutoModelId, StringComparison.OrdinalIgnoreCase);
 
     private static ModelListing NotReady(LlmGatewayState state) =>
         new([Random], $"LLM gateway is {state}; only the random player is available");

@@ -77,7 +77,7 @@ public class LlmChessPlayerTests
         Assert.Equal(2, move.Attempts.Count);
         Assert.False(move.Attempts[0].Legal);
         Assert.Null(move.Attempts[0].RawReply);
-        Assert.Equal("TimeoutException: No reply within 60 s.", move.Attempts[0].Error);
+        Assert.Equal("timeout: No reply within 60 s.", move.Attempts[0].Error);
         Assert.Equal("No move was received.", conversation.Prompts[1].Split('\n')[0]);
     }
 
@@ -93,7 +93,7 @@ public class LlmChessPlayerTests
 
         Assert.True(move.Forfeit);
         Assert.Equal(2, move.Attempts.Count);
-        Assert.All(move.Attempts, a => Assert.Equal("LlmUnavailableException: runtime gone", a.Error));
+        Assert.All(move.Attempts, a => Assert.Equal("error: LlmUnavailableException: runtime gone", a.Error));
     }
 
     [Fact]

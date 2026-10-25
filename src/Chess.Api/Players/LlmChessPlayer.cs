@@ -56,8 +56,9 @@ public sealed class LlmChessPlayer : IChessPlayer
         {
             var reply = await _conversation.AskAsync(prompt, ct);
             var legal = MoveNotation.TryResolve(board, reply.Text, out var san);
+            var reason = legal ? null : RejectionClassifier.Classify(board, reply.Text).Reason;
             return new MoveAttempt(number, prompt, reply.Text, legal ? san : null, legal, clock.Elapsed,
-                reply.InputTokens, reply.OutputTokens, legal ? null : "Not a legal move in this position.");
+                reply.InputTokens, reply.OutputTokens, reason);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -66,8 +67,10 @@ public sealed class LlmChessPlayer : IChessPlayer
         catch (Exception ex)
         {
             // A timeout or a gateway failure is an attempt like any other, so the game goes on or forfeits.
-            return new MoveAttempt(number, prompt, null, null, false, clock.Elapsed, null, null,
-                $"{ex.GetType().Name}: {ex.Message}");
+            var reason = ex is TimeoutException
+                ? $"{RejectionClassifier.Timeout}: {ex.Message}"
+                : $"{RejectionClassifier.Error}: {ex.GetType().Name}: {ex.Message}";
+            return new MoveAttempt(number, prompt, null, null, false, clock.Elapsed, null, null, reason);
         }
     }
 }

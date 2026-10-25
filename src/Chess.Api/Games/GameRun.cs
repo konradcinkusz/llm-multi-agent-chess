@@ -97,12 +97,15 @@ internal sealed class GameRun(
                 LatencyMs = (long)attempt.Latency.TotalMilliseconds,
                 Error = attempt.Error,
                 CreatedAt = now,
+                InputTokens = attempt.InputTokens,
+                OutputTokens = attempt.OutputTokens,
             });
         }
 
         if (move.Forfeit)
         {
             await db.SaveChangesAsync(ct);
+            PublishRecorded(ply, color, mover.Descriptor.ModelId, move.Attempts);
             PublishRejected(ply, move.Attempts);
             return GameTermination.Forfeit(side);
         }
@@ -132,6 +135,7 @@ internal sealed class GameRun(
         });
         await db.SaveChangesAsync(ct);
 
+        PublishRecorded(ply, color, mover.Descriptor.ModelId, move.Attempts);
         PublishRejected(ply, move.Attempts);
         events.Publish(new MovePlayed(game.Id, clock.GetUtcNow(), ply, color, san, game.CurrentFen, move.Attempts.Count, latencyMs));
         return null;
@@ -142,6 +146,18 @@ internal sealed class GameRun(
         // Stockfish's verdict when it is there (RATING.md §2); the material difference otherwise.
         int? whiteCentipawns = analyzer.IsAvailable ? await analyzer.EvaluateAsync(board.ToFen(), ct) : null;
         return GameTermination.Adjudicate(board, whiteCentipawns);
+    }
+
+    /// <summary>03 §10: one event per stored attempt, legal or not, so the live log shows each reply as it is kept.</summary>
+    private void PublishRecorded(int ply, string color, string modelId, IEnumerable<MoveAttempt> attempts)
+    {
+        var now = clock.GetUtcNow();
+        foreach (var attempt in attempts)
+        {
+            events.Publish(new AttemptRecorded(game.Id, now, ply, attempt.Number, color, modelId, attempt.Prompt,
+                attempt.RawReply, Reasoning: null, attempt.ParsedSan, attempt.Legal, (long)attempt.Latency.TotalMilliseconds,
+                attempt.InputTokens, attempt.OutputTokens, ReasoningTokens: null, AiCredits: null, RejectionKind: null));
+        }
     }
 
     private void PublishRejected(int ply, IEnumerable<MoveAttempt> attempts)
