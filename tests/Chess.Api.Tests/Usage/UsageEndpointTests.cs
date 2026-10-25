@@ -125,7 +125,7 @@ public class UsageEndpointTests
     }
 
     /// <summary>Starts the game and waits until it is finished, then returns its id.</summary>
-    private static async Task<Guid> StartAndWaitAsync(HttpClient client, PlayerSpec white, PlayerSpec black)
+    internal static async Task<Guid> StartAndWaitAsync(HttpClient client, PlayerSpec white, PlayerSpec black)
     {
         var created = await client.PostAsJsonAsync("/api/games", new CreateGameRequest(white, black, Rated: false));
         created.EnsureSuccessStatusCode();
@@ -144,13 +144,13 @@ public class UsageEndpointTests
         }
     }
 
-    private static async Task<List<AttemptDto>> AttemptsAsync(HttpClient client, Guid gameId)
+    internal static async Task<List<AttemptDto>> AttemptsAsync(HttpClient client, Guid gameId)
     {
         var page = await client.GetFromJsonAsync<PageDto<AttemptDto>>($"/api/attempts?gameId={gameId}&pageSize=200");
         return page!.Items.ToList();
     }
 
     /// <summary>Credits from the stored tokens: (input × 1.0 + output × 4.0) per million, for the attempts on one side.</summary>
-    private static double ExpectedCredits(IEnumerable<AttemptDto> attempts, Func<int, bool> sideOfPly) =>
+    internal static double ExpectedCredits(IEnumerable<AttemptDto> attempts, Func<int, bool> sideOfPly) =>
         attempts.Where(a => sideOfPly(a.Ply)).Sum(a => (a.InputTokens!.Value * 1.0 + a.OutputTokens!.Value * 4.0) / 1_000_000);
 }
