@@ -21,8 +21,43 @@ reflection probe of `lib/net10.0/GitHub.Copilot.SDK.dll`.
 | Permissions | `Func<PermissionRequest, PermissionInvocation, Task<Rpc.PermissionDecision>>`; the handler returns `Rpc.PermissionDecision.Reject(string feedback)` for every request |
 | One move | `CopilotSession.SendAndWaitAsync(MessageOptions { Prompt }, TimeSpan? timeout, ct)` → `Task<AssistantMessageEvent?>`; `.Data.Content` is the reply text. It resolves on the session's idle event, and its own timeout defaults to 60 s, so the gateway always passes `LlmConversationOptions.Timeout` |
 | Abort on timeout | `CopilotSession.AbortAsync(ct)`. The docs say `SendAndWait` does not stop in-flight work, so a timed-out move is aborted |
-| Usage | `CopilotSession.On<AssistantUsageEvent>(handler)` (returns `IDisposable`); `AssistantUsageEvent.Data.InputTokens` / `.OutputTokens` (nullable numbers, summed per move) |
+| Usage | `CopilotSession.On<AssistantUsageEvent>(handler)` (returns `IDisposable`); per event `Data.InputTokens`, `OutputTokens`, `ReasoningTokens`, `CacheReadTokens` (nullable), `CopilotUsage.TotalNanoAiu` and `AiCreditsStatus`. Summed per reply (see Usage and cost) |
+| Reasoning | `CopilotSession.On<AssistantReasoningEvent>(handler)`, `Data.Content`; the final `AssistantMessageData.ReasoningText` (see Usage and cost) |
+| Token prices | `CopilotClient.ListModelsAsync` → `ModelInfo.Billing.TokenPrices` (`Rpc.ModelBillingTokenPrices`: `BatchSize`, `InputPrice`, `OutputPrice`, `CacheReadPrice`, deprecated `CachePrice`) |
+| Price unit | `CopilotClient.Rpc.Models.ListTokenPriceUnitsAsync(ct)` → `Units` of `ModelTokenPriceUnit { ModelId, Unit }`, `Unit` is `Rpc.TokenPriceUnit` (`AiCredits` or `NanoAiu`) |
 | Teardown | `CopilotSession.DisposeAsync()` (per conversation) |
+
+## Usage and cost (G1, owner request 2026-10-25)
+
+What the gateway returns, and where each number comes from. Cost is never part of the rating (RATING.md §8).
+
+**Per reply** (`LlmReply`), the events of that reply are summed (`UsageTally`):
+
+| Field | Source | Null when |
+|---|---|---|
+| `InputTokens`, `OutputTokens` | `AssistantUsageData.InputTokens` / `OutputTokens` | no event reported it |
+| `ReasoningTokens` | `AssistantUsageData.ReasoningTokens`. The SDK documents them as output tokens used for reasoning, so they are already inside `OutputTokens` and are not added again | no event reported it |
+| `CachedInputTokens` | `AssistantUsageData.CacheReadTokens` | no event reported it |
+| `AiCredits` | `CopilotUsage.TotalNanoAiu` ÷ 1 000 000 000, summed | no event carried `CopilotUsage`, or every such event has `AiCreditsStatus = Unavailable` |
+
+- `AiCreditsStatus.Unavailable` means "not reported", not "free": that event adds no cost and no zero.
+- `AiCreditsStatus.Partial` (the SDK: "the numeric value is only a reported subtotal") is summed as reported. The reply's credits can therefore undercount when the runtime says partial.
+- Unit assumption, not yet verified live: **1 AI unit = 1 AI credit**, so `credits = nanoAIU ÷ 1e9`. It is isolated in one constant, `UsageTally.NanoAiuPerAiCredit` for the usage side, and confirmed or corrected by the owner's live smoke run (`scripts/smoke-copilot.sh` prints the credits per request).
+
+**Reasoning** (`ReplyReasoning`): the final message's `ReasoningText` when it is not blank; otherwise the `AssistantReasoningEvent` contents of the reply, in order, joined by a blank line; otherwise null. Null means the model did not expose its reasoning.
+
+**Token prices** (`TokenPriceMapping`):
+
+- The runtime quotes each model's prices per `BatchSize` tokens, in the unit `models.listTokenPriceUnits` reports for that model. `ModelBillingTokenPrices` carries no unit of its own, so the unit is read from the second call.
+- `TokenPriceUnit.AiCredits`: the prices are already in AI credits and are kept as they are.
+- `TokenPriceUnit.NanoAiu`: the prices are in nano-AIU and are divided by 1 000 000 000.
+- The call returns one entry per model that publishes prices. A model with no entry, or with a unit other than these two, gets no `Pricing` (it is not guessed at). The same goes for a model with no `BatchSize`.
+- `CacheReadPrice` is the cached-input price. `CachePrice` is its deprecated alias and is used only when `CacheReadPrice` is absent.
+- The multiplier (`Billing.Multiplier`) is still read and returned in `PremiumMultiplier`. It is null for token-billed models.
+- If `models.listTokenPriceUnits` fails, the models are still listed, without prices, and a warning is logged. It does not change the gateway state.
+- Startup logs each model's raw billing at Debug (`multiplier …; token prices batch …, input …, output …, cache read …, cache …`). The unit is not in that line; it comes from the call above.
+
+**Fake gateway.** Usage is approximated from the text, four characters per token: input is the prompt, output is the reply plus the reasoning. The reasoning names the chosen move. Both fake models are priced at 1.0 input and 4.0 output AI credits per 1 000 000 tokens, so a fake reply costs well under a thousandth of a credit.
 
 Startup status: `GetStatusAsync` → `GetStatusResponse { Version, ProtocolVersion }` exists but is not
 used; the gateway's state comes from `GetAuthStatusAsync` and `ListModelsAsync`.
@@ -48,6 +83,11 @@ Unit tests cover only the degraded paths: a missing CLI path and a refused loopb
 `LlmGatewayState.Unavailable`, with no exception and no network. Checked against the docs alone:
 the session/send/usage flow, the abort on timeout, and the `ModelInfo.Billing` multiplier. The live
 check is the owner's, through the T4.2 smoke script.
+
+Also checked against the docs alone (G1): the usage and reasoning events, the token price fields and the
+`models.listTokenPriceUnits` unit. Not seen on a live reply: the 1 AI unit = 1 AI credit assumption, whether
+`CopilotUsage.TotalNanoAiu` is set on the usage events of a real move, and the price values for each model.
+The owner's live smoke run confirms all three.
 
 ## Configuration
 
