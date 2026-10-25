@@ -3,7 +3,7 @@
 #
 # It starts Chess.Api with Llm:Provider=Copilot, plays one rated game (random as White against <model> as Black)
 # capped at 20 plies, and prints the result, the model's attempts and its latency. Every model move is a Copilot
-# request, so the run spends premium requests. It is never part of CI: it refuses to run when CI is set, and it
+# request, so the run spends AI credits. It is never part of CI: it refuses to run when CI is set, and it
 # refuses to run when Llm:Provider would be Fake.
 #
 # Usage:
@@ -33,7 +33,7 @@ die() {
 }
 
 if [[ -n "${CI:-}" ]]; then
-  die "refusing to run under CI. This script spends Copilot premium requests and is run by the owner only." 2
+  die "refusing to run under CI. This script spends Copilot AI credits and is run by the owner only." 2
 fi
 
 if [[ $# -ne 1 || -z "$1" ]]; then

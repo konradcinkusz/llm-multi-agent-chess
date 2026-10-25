@@ -100,8 +100,8 @@ public class TournamentsPageTests
         cut.Find("#model-gpt").Change(true);
         cut.Find("#model-random").Change(true);
 
-        cut.WaitForAssertion(() => Assert.Contains("plus 1 model with an unknown multiplier", cut.Markup));
-        Assert.Equal("unknown", cut.FindAll(".tournament-estimate tbody tr")[1].Children[2].TextContent);
+        cut.WaitForAssertion(() => Assert.Contains("plus 1 model billed by token, counted in AI credits", cut.Markup));
+        Assert.Equal("by token", cut.FindAll(".tournament-estimate tbody tr")[1].Children[2].TextContent);
     }
 
     [Fact]

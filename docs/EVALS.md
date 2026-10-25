@@ -7,7 +7,7 @@ and the suite must be shown able to fail). There are two parts:
 | Part | Where | Runs | Needs |
 |---|---|---|---|
 | Offline scenario suite | `tests/Chess.Api.Tests/Evals/` | every `dotnet test`, in CI | nothing: the scripted `FakeLlmGateway` |
-| Live smoke | `scripts/smoke-copilot.sh` | by the owner, by hand | a Copilot login, PostgreSQL, and premium requests |
+| Live smoke | `scripts/smoke-copilot.sh` | by the owner, by hand | a Copilot login, PostgreSQL, and AI credits |
 
 ## Behaviour spec
 
@@ -173,7 +173,7 @@ Latency:   820 ms average per request
 
 **It refuses to run in these cases** (exit 2, before anything starts):
 
-- `CI` is set: the script spends premium requests and is never part of CI.
+- `CI` is set: the script spends Copilot AI credits and is never part of CI.
 - The effective `Llm:Provider` is not Copilot: an environment override (`Llm__Provider`, any letter case) wins over
   `appsettings.json`. A value of `Fake` is refused, and the API is started with `Llm__Provider=Copilot` regardless.
 - `ARENA_CONNECTION_STRING` is not set, or no model id is given.

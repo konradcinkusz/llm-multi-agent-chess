@@ -86,8 +86,8 @@ CI=true scripts/benchmark.sh --candidate fake-a@high
 
 ## 3. Cost and how to cut it
 
-Every LLM move is a request. With the Copilot models a move costs premium requests, depending on the model's multiplier
-(see [the README's cost section](../README.md#cost-every-move-is-a-copilot-request)). A benchmark costs the same as the
+Every LLM move is a request. With the Copilot models a move costs AI credits, priced per token for each model
+(see [the README's cost section](../README.md#cost-ai-credits-per-move)). A benchmark costs the same as the
 games it plays:
 
 **games = opponents × games per opponent.** The default of 30 games against 12 opponents is 360 games, which is roughly
@@ -266,5 +266,5 @@ The API refuses a request from another website, so a page in your browser cannot
 - The price data for a Copilot model comes from the Copilot runtime. A model without a price is left out of the estimate, and
   the script says how many.
 - A benchmark's games count against `Arena:MaxConcurrentGames`, as a tournament's do. A broadcast plays outside that cap (see the
-  [README](../README.md#cost-every-move-is-a-copilot-request)), so a benchmark started during a broadcast adds requests on top
+  [README](../README.md#cost-ai-credits-per-move)), so a benchmark started during a broadcast adds requests on top
   of the broadcast's.
