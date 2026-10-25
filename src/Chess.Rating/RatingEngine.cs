@@ -36,6 +36,7 @@ internal static class RatingEngine
         var moves = MoveStatistics(stats);
         var skills = models.ToDictionary(m => m, m => SkillOf(m, moves, options.MoveQualityWeight), StringComparer.Ordinal);
         var arena = ArenaScores(models, fit.Ratings, skills, options.ResultWeight);
+        var arenaSamples = ArenaSamples(samples, skills, options.ResultWeight);
 
         var rows = models.Select(model =>
         {
@@ -43,21 +44,39 @@ internal static class RatingEngine
             var skill = skills[model];
             var rating = fit.Ratings[model];
             var (low, high) = Interval(RatingSamples(model, samples), rating);
+            var (arenaLow, arenaHigh) = Interval(arenaSamples.TryGetValue(model, out var values) ? values : [], arena[model]);
             return new ModelRating(
                 model, rating, low, high,
                 tally.Games, tally.Points / tally.Games,
                 skill.Legality, skill.MoveQuality, skill.Quality,
                 arena[model],
-                tally.Games < options.ProvisionalBelowGames || high - low > ProvisionalRatingWidth);
-        })
+                tally.Games < options.ProvisionalBelowGames || high - low > ProvisionalRatingWidth,
+                arenaLow, arenaHigh);
+        }).ToList();
+
+        return new RatingReport(Sort(rows, RatingOrder.Score), fit.WhiteAdvantage, ordered.Count);
+    }
+
+    // Score: today's leaderboard (RATING.md §6). Conservative: the lower bound of the arena score first, so a model with more
+    // games (narrower interval) outranks one with the same point score and fewer games. Provisional models sort last in both.
+    // A row without bounds (built outside Compute) uses its arena score as its lower bound.
+    public static List<ModelRating> Sort(IEnumerable<ModelRating> rows, RatingOrder order) => order switch
+    {
+        RatingOrder.Score => rows
             .OrderBy(r => r.Provisional)
             .ThenByDescending(r => r.ArenaScore)
             .ThenByDescending(r => r.Rating)
             .ThenBy(r => r.Model, StringComparer.Ordinal)
-            .ToList();
-
-        return new RatingReport(rows, fit.WhiteAdvantage, ordered.Count);
-    }
+            .ToList(),
+        RatingOrder.Conservative => rows
+            .OrderBy(r => r.Provisional)
+            .ThenByDescending(r => r.ArenaScoreLow ?? r.ArenaScore)
+            .ThenByDescending(r => r.ArenaScore)
+            .ThenByDescending(r => r.Rating)
+            .ThenBy(r => r.Model, StringComparer.Ordinal)
+            .ToList(),
+        _ => throw new ArgumentOutOfRangeException(nameof(order), order, "Unknown ranking order."),
+    };
 
     public static PairwiseCoefficient Pairwise(RatingReport report, IReadOnlyList<GameOutcome> games, string a, string b)
     {
@@ -226,6 +245,30 @@ internal static class RatingEngine
 
     private static List<double> RatingSamples(string model, IEnumerable<BradleyTerry.Fitted> samples) =>
         samples.Where(s => s.Ratings.ContainsKey(model)).Select(s => s.Ratings[model]).ToList();
+
+    // RATING.md §6: the arena score of each model on each resample. Each resample has its own field, so a model is
+    // scored only against the models that resample rated; a model absent from a resample has no value there.
+    private static Dictionary<string, List<double>> ArenaSamples(
+        IReadOnlyList<BradleyTerry.Fitted> samples, IReadOnlyDictionary<string, Skill> skills, double resultWeight)
+    {
+        var values = new Dictionary<string, List<double>>(StringComparer.Ordinal);
+        foreach (var sample in samples)
+        {
+            var models = sample.Ratings.Keys.Order(StringComparer.Ordinal).ToArray();
+            foreach (var (model, score) in ArenaScores(models, sample.Ratings, skills, resultWeight))
+            {
+                if (!values.TryGetValue(model, out var list))
+                {
+                    list = [];
+                    values[model] = list;
+                }
+
+                list.Add(score);
+            }
+        }
+
+        return values;
+    }
 
     // The percentile interval of the bootstrap. Without samples the interval collapses to the point estimate.
     private static (double Low, double High) Interval(List<double> values, double point)

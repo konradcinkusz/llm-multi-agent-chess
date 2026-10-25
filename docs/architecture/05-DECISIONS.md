@@ -206,3 +206,33 @@ reported. Prices replace the multiplier in the UI. Copilot's Auto model is hidde
 machine, P5 unaffected). The 1 AI unit = 1 AI credit assumption and the price unit are unverified until the owner's live
 smoke run; both are isolated in one place each so a correction is one line. The multiplier-based estimates in the
 tournament form and the broadcast planner are replaced by AI-credit estimates (G5).
+
+## ADR-013 — The public results site is a static export on the `gh-pages` branch
+
+**Status:** Accepted (2026-10-25).
+
+**Context.** The owner wants a public page with every result and chart. Deploying the web app read-only (Fly.io, a hosted
+Postgres, a read-only mode, a SELECT-only role, caching of the on-read rating) was analysed and costs about 40 USD a month
+plus a new attack surface; the live game stream would not reach it anyway, because it lives in the local process.
+**Decision.** The local app exports a static snapshot (03 §11) and force-pushes it as one orphan commit to `gh-pages`;
+GitHub Pages serves the branch. ADR-002 holds: nothing runs anywhere but the owner's machine. The live view stays on
+YouTube; the site lags by at most the auto-publish interval.
+**Consequences.** No server, no database online, no cost. Everything the site shows is public by design. Pages' source
+moves from GitHub Actions to the `gh-pages` branch (one owner setting). The site is plain HTML and SVG, so it has no search
+or filtering; the JSON files are there for anyone who wants to analyse the data.
+
+## ADR-014 — Benchmark runs, player variants and custom models
+
+**Status:** Accepted (2026-10-25).
+
+**Context.** The owner wants anyone who clones the repository to benchmark one model configuration, including their own
+newly trained model, against the other models, with a shareable report.
+**Decision.** (1) A player id may carry a reasoning-effort suffix (`model@effort`), and each variant is ranked as its own
+player. (2) Custom models are served through the Copilot SDK's bring-your-own-key provider configuration
+(`SessionConfig.Provider`, OpenAI-compatible or Azure), so ADR-004 holds. (3) A benchmark is a gauntlet stored as a
+tournament of kind `benchmark`; its games are ordinary rated games. (4) Reports carry a fingerprint (app version, formula
+version, prompt version) so two reports can be compared honestly.
+**Consequences.** Cost scales with opponents × games: 30 games against 12 opponents is 360 games (about 14 000 candidate
+moves and as many opponent moves); the estimate is shown before start and the docs recommend a reference panel. A custom
+model's API key is a secret parameter. Early stopping (SPRT, as chess-engine testing uses) is a possible follow-up, not part
+of this decision.

@@ -20,14 +20,16 @@ public sealed record TournamentCreatedDto(TournamentDto Tournament, IReadOnlyLis
 // TokenBasis: history | assumed | free | unknown (03 §10.2); SampleMoves is set for history.
 public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests,
     double? EstimatedAiCredits = null, double? EstimatedUsd = null, string? TokenBasis = null, int? SampleMoves = null);
-public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null);
+public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null,
+    IReadOnlyList<string>? ReasoningEfforts = null, string? DefaultReasoningEffort = null, bool Custom = false);   // 03 §12.1
 public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
     double? CachedInputUsdPerMillionTokens);
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);
 
 // Local copies of Chess.Rating.ModelRating and PairwiseCoefficient (03 §3.4).
 public sealed record ModelRating(string Model, double Rating, double CiLow, double CiHigh, int Games, double Score,
-    double Legality, double? MoveQuality, double Quality, double ArenaScore, bool Provisional);
+    double Legality, double? MoveQuality, double Quality, double ArenaScore, bool Provisional,
+    double? ArenaScoreLow = null, double? ArenaScoreHigh = null);   // R1: 2.5 / 97.5 percentiles of the arena score
 public sealed record PairwiseCoefficient(string A, string B, double ExpectedScore, double QualityShare,
     double Rqc, double RqcLow, double RqcHigh, double EloEquivalent, int HeadToHeadGames, double? HeadToHeadScore);
 

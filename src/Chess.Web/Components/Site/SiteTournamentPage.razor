@@ -1,0 +1,138 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Components.Pages.Results
+@using Chess.Web.Components.Pages.Tournaments
+@using Chess.Web.Site
+
+<SiteLayout Title="@Tournament.Name" Frame="Frame" Active="tournaments">
+    <p class="back"><a href="@Frame.Link(SitePaths.Tournaments)">← All tournaments</a></p>
+
+    <div class="page-header">
+        <h1>@Tournament.Name</h1>
+    </div>
+
+    <section class="card" data-section="summary" aria-label="Tournament details">
+        <dl class="tournament-facts">
+            <dt>Status</dt>
+            <dd><span class="badge @TournamentFormat.StatusBadge(Tournament.Status)">@TournamentFormat.Status(Tournament.Status)</span></dd>
+            <dt>Models</dt>
+            <dd>@string.Join(", ", Tournament.Models)</dd>
+            <dt>Games per pair</dt>
+            <dd>@Tournament.GamesPerPair</dd>
+            <dt>Games</dt>
+            <dd>@Tournament.GamesFinished of @Tournament.GamesTotal finished</dd>
+            <dt>Created</dt>
+            <dd>@TournamentFormat.When(Tournament.CreatedAt)</dd>
+            @if (Tournament.FinishedAt is { } finished)
+            {
+                <dt>Finished</dt>
+                <dd>@TournamentFormat.When(finished)</dd>
+            }
+        </dl>
+    </section>
+
+    <section class="card" data-section="leaderboard" aria-labelledby="leaderboard-heading">
+        <h2 id="leaderboard-heading" class="card-title">Leaderboard</h2>
+        <p class="muted">Only the rated games of this tournament count. Ranked by arena score, as on the Results page.</p>
+        @if (Board.Models.Count == 0)
+        {
+            <p>No rated games have finished yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap table-compact">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="num">Rank</th>
+                            <th scope="col">Model</th>
+                            <th scope="col" class="num">Arena score</th>
+                            <th scope="col" class="num">Rating</th>
+                            <th scope="col" class="num">95 % interval</th>
+                            <th scope="col" class="num">Games</th>
+                            <th scope="col" class="num">Legal first try</th>
+                            <th scope="col" class="num">Quality</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < Board.Models.Count; i++)
+                        {
+                            var model = Board.Models[i];
+                            <tr>
+                                <td class="num">@(i + 1)</td>
+                                <td>@model.Model</td>
+                                <td class="num">@ResultsModel.Number(model.ArenaScore, "0.00")</td>
+                                <td class="num">@ResultsModel.Number(model.Rating, "0")</td>
+                                <td class="num">@ResultsModel.Number(model.CiLow, "0") – @ResultsModel.Number(model.CiHigh, "0")</td>
+                                <td class="num">@model.Games</td>
+                                <td class="num">@TournamentFormat.Percent(model.Legality)</td>
+                                <td class="num">@ResultsModel.Number(model.Quality, "0.00")</td>
+                                <td><span class="badge @(model.Provisional ? "badge-warning" : "badge-success")">@(model.Provisional ? "Provisional" : "Established")</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="card" data-section="games" aria-labelledby="games-heading">
+        <h2 id="games-heading" class="card-title">Games</h2>
+        @if (Games.Count == 0)
+        {
+            <p>No games yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap table-compact">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="num">#</th>
+                            <th scope="col">White</th>
+                            <th scope="col">Black</th>
+                            <th scope="col">State</th>
+                            <th scope="col">Result</th>
+                            <th scope="col">Termination</th>
+                            <th scope="col" class="num">Plies</th>
+                            <th scope="col"><span class="visually-hidden">Game</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < Games.Count; i++)
+                        {
+                            var game = Games[i];
+                            <tr>
+                                <td class="num">@(i + 1)</td>
+                                <td>@game.White.ModelId</td>
+                                <td>@game.Black.ModelId</td>
+                                <td>@GameFormat.State(game.State)</td>
+                                <td><span class="badge @GameFormat.ResultTone(game.Result)">@game.Result</span></td>
+                                <td>@GameFormat.Termination(game.Termination)</td>
+                                <td class="num">@game.PlyCount</td>
+                                <td><a href="@Frame.Link(SitePaths.Game(game.Id))">Game</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public TournamentDto Tournament { get; set; } = null!;
+
+    /// <summary>The tournament's own leaderboard (scoped to its games).</summary>
+    [Parameter, EditorRequired]
+    public LeaderboardDto Board { get; set; } = null!;
+
+    /// <summary>The tournament's games, oldest first.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<GameSummaryDto> Games { get; set; } = [];
+}

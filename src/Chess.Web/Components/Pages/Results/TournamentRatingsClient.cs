@@ -18,7 +18,17 @@ public sealed class TournamentRatingsClient(HttpClient http)
 
     /// <summary>Leaderboard of the games of one tournament, or of all games when <paramref name="tournamentId"/> is null.</summary>
     public Task<LeaderboardDto> GetLeaderboardAsync(Guid? tournamentId, CancellationToken ct = default) =>
-        GetJsonAsync<LeaderboardDto>(WithTournament("/api/ratings", tournamentId), ct);
+        GetLeaderboardAsync(tournamentId, RankingOrder.Score, ct);
+
+    /// <summary>
+    /// The same leaderboard in <paramref name="order"/> (<see cref="RankingOrder"/>). The score order is the API default, so
+    /// its request is the plain one.
+    /// </summary>
+    public Task<LeaderboardDto> GetLeaderboardAsync(Guid? tournamentId, string order, CancellationToken ct = default)
+    {
+        var url = WithTournament("/api/ratings", tournamentId);
+        return GetJsonAsync<LeaderboardDto>(order == RankingOrder.Score ? url : Append(url, $"order={Uri.EscapeDataString(order)}"), ct);
+    }
 
     public Task<PairwiseCoefficient> GetPairwiseAsync(string a, string b, Guid? tournamentId, CancellationToken ct = default) =>
         GetJsonAsync<PairwiseCoefficient>(
@@ -36,5 +46,7 @@ public sealed class TournamentRatingsClient(HttpClient http)
     }
 
     private static string WithTournament(string url, Guid? tournamentId) =>
-        tournamentId is not { } id ? url : $"{url}{(url.Contains('?') ? '&' : '?')}tournamentId={id:D}";
+        tournamentId is not { } id ? url : Append(url, $"tournamentId={id:D}");
+
+    private static string Append(string url, string parameter) => $"{url}{(url.Contains('?') ? '&' : '?')}{parameter}";
 }

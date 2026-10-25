@@ -15,17 +15,27 @@ public static class RatingExtensions
     /// <summary>
     /// <c>GET /api/ratings</c>, <c>/api/ratings/pairwise?a&amp;b</c> and <c>/api/ratings/matrix</c>. Each computes
     /// from the games table on every request (no caching) and takes an optional <c>tournamentId</c> to restrict the games.
+    /// <c>/api/ratings</c> also takes <c>order=score|conservative</c> (default <c>score</c>, RATING.md §6).
     /// </summary>
     public static IEndpointRouteBuilder MapRatingEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/ratings", async (IDbContextFactory<ArenaDbContext> factory, Guid? tournamentId, CancellationToken ct) =>
+        endpoints.MapGet("/ratings", async (IDbContextFactory<ArenaDbContext> factory, Guid? tournamentId, string? order, CancellationToken ct) =>
         {
+            if (!TryParseOrder(order, out var ranking))
+            {
+                return HttpResults.Problem(
+                    title: "Unknown order",
+                    detail: $"Order must be 'score' or 'conservative', was '{order}'.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
             var (_, report) = await ComputeAsync(factory, tournamentId, ct);
+            var ordered = RatingCalculator.Order(report, ranking);
             return HttpResults.Ok(new LeaderboardDto(
-                report.Models,
-                report.WhiteAdvantage,
-                report.Games,
-                report.Models.Any(m => m.MoveQuality is not null)));
+                ordered.Models,
+                ordered.WhiteAdvantage,
+                ordered.Games,
+                ordered.Models.Any(m => m.MoveQuality is not null)));
         });
 
         endpoints.MapGet("/ratings/pairwise", async (string a, string b, IDbContextFactory<ArenaDbContext> factory, Guid? tournamentId, CancellationToken ct) =>
@@ -55,6 +65,23 @@ public static class RatingExtensions
         });
 
         return endpoints;
+    }
+
+    // A missing order is the default (score). Anything other than the two names is a client error, not a fallback.
+    private static bool TryParseOrder(string? value, out RatingOrder order)
+    {
+        switch (value)
+        {
+            case null or "score":
+                order = RatingOrder.Score;
+                return true;
+            case "conservative":
+                order = RatingOrder.Conservative;
+                return true;
+            default:
+                order = default;
+                return false;
+        }
     }
 
     private static async Task<(RatedGames Rated, RatingReport Report)> ComputeAsync(

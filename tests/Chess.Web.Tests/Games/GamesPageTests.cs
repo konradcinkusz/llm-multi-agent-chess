@@ -68,7 +68,7 @@ public class GamesPageTests
         cut.Find("[data-testid=games-next]").Click();
 
         cut.WaitForAssertion(() => Assert.Contains("Page 2 of 2", cut.Markup));
-        Assert.Equal("/api/games?page=2&pageSize=20", handler.Requests[^1].Target);
+        Assert.Contains(handler.Requests, request => request.Target == "/api/games?page=2&pageSize=20");
         Assert.False(cut.Find("[data-testid=games-prev]").HasAttribute("disabled"));
         Assert.True(cut.Find("[data-testid=games-next]").HasAttribute("disabled"));
     }
@@ -96,7 +96,7 @@ public class GamesPageTests
         cut.Find("[data-testid=games-filter-model]").Change("gpt");
 
         cut.WaitForAssertion(() => Assert.Contains("Page 1 of 1", cut.Markup));
-        Assert.Equal("/api/games?page=1&pageSize=20&model=gpt", handler.Requests[^1].Target);
+        Assert.Contains(handler.Requests, request => request.Target == "/api/games?page=1&pageSize=20&model=gpt");
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class GamesPageTests
 
         cut.WaitForAssertion(() => Assert.Contains("No games match these filters.", cut.Markup));
         Assert.Empty(cut.FindAll("[data-testid=games-table]"));
-        Assert.Equal("/api/games?page=1&pageSize=20&status=queued", handler.Requests[^1].Target);
+        Assert.Contains(handler.Requests, request => request.Target == "/api/games?page=1&pageSize=20&status=queued");
     }
 
     [Fact]
@@ -136,6 +136,32 @@ public class GamesPageTests
 
         cut.WaitForAssertion(() => Assert.Contains("No games yet. Start one on the Live game page.", cut.Markup));
         Assert.Empty(cut.FindAll("[data-testid=games-table]"));
+    }
+
+    [Fact]
+    public void TheCostColumnShowsEachGamesEstimatedUsdAndADashWhenItIsUnknown()
+    {
+        var handler = Routes.Answer(new Dictionary<string, Func<HttpResponseMessage>>
+        {
+            ["GET /api/models"] = Reply.Json(Fixtures.Models),
+            ["GET /api/games?page=1&pageSize=20"] = Reply.Json(Fixtures.Json(Fixtures.Page(
+            [
+                Fixtures.Summary(FirstId, "gpt", "claude"),
+                Fixtures.Summary(SecondId, "claude", "gpt", "running", "*", null, 0),
+            ], 2))),
+            [$"GET /api/games/{FirstId}/usage"] = Reply.Json(Fixtures.Json(Fixtures.Usage(FirstId, 1.5))),
+            // SecondId has no usage route, so its usage cannot be read and its cost is unknown.
+        });
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, handler);
+
+        var cut = ctx.Render<GamesPage>();
+
+        cut.WaitForAssertion(() => Assert.Equal("$1.50", cut.FindAll("[data-testid=game-cost]")[0].TextContent));
+        var costs = cut.FindAll("[data-testid=game-cost]");
+        Assert.Equal("—", costs[1].TextContent);
+        Assert.True(costs[0].ClassList.Contains("num"));
+        Assert.Contains("Est. USD", cut.Find("[data-testid=games-table] thead").TextContent);
     }
 
     [Fact]
