@@ -679,7 +679,7 @@ low items are in its §6 alignment table. None is blocking. These rows are not o
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| F1 | Reject cross-origin requests to the loopback app (review H-1) | — | todo |
+| F1 | Reject cross-origin requests to the loopback app (review H-1) | — | done (F5, #65) |
 
 ### F1 — Reject cross-origin requests to the loopback app
 
@@ -697,3 +697,83 @@ binding and the absence of CORS keep the browser out. They keep out reads, not w
 **Done when:** a test sends `POST /api/broadcast/schedules/{id}/start` and `POST /_blazor/negotiate` with
 `Origin: http://evil.example` and gets 403; the same requests with `Origin: http://localhost:5070` succeed; the E2E journeys pass.
 **Verify:** V-NET; `E2E_CHROMIUM_PATH=<chromium> dotnet test tests/Chess.E2E`.
+
+## UI polish (owner request 2026-10-25)
+
+The owner asked for a better-looking UI. The design is frozen in [07-UI-STYLE](07-UI-STYLE.md): tokens, shared classes, the
+app shell and the direction for each area. U1 and U2 run in parallel; U3, U4 and U5 start when U1 is merged (they use its
+classes). These rows are not on the board above.
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| U1 | Design tokens, base styles, shared classes, app shell | — | todo |
+| U2 | Chart polish | — | todo |
+| U3 | Results and head-to-head pages | U1 | todo |
+| U4 | Live game, games list and replay | U1 | todo |
+| U5 | Tournaments, broadcast planner, attempts log | U1 | todo |
+
+Common to every U task: follow 07-UI-STYLE §1 (no dependencies, tokens only, both themes, phone width, accessibility, test
+hooks unchanged) and prove the work as in §7. **Verify:** `dotnet build Chess.sln -warnaserror`;
+`E2E_CHROMIUM_PATH=<chromium> dotnet test Chess.sln`; the §7 screenshots and phone-width check of the task's pages.
+
+### U1 — Design tokens, base styles, shared classes, app shell
+
+**Owns:** `src/Chess.Web/wwwroot/app.css`, `src/Chess.Web/Components/Layout/MainLayout.razor`, `NavMenu.razor` (and new
+`MainLayout.razor.css` / `NavMenu.razor.css` if wanted), `src/Chess.Web/Components/Shared/StatusStrip.razor` (and a new
+`StatusStrip.razor.css`), `tests/Chess.Web.Tests/Components/NavigationTests.cs`, `StatusStripTests.cs`, a new
+`tests/Chess.Web.Tests/Components/StyleContractTests.cs`.
+**Do:** every token of 07 §2 in light and dark; the base element styles of §3 scoped under `.app-shell`; every shared class of
+§4; the shell of §5 (sticky header with brand mark and pill nav, status strip with dots, centred main).
+**Done when:** `StyleContractTests` reads `app.css` and fails when any §2 token is missing from the light block or the dark
+block, or when any §4 class has no rule; bUnit: the status strip gives Copilot `Ready` a success dot, `NotAuthenticated` a
+warning dot and `Unavailable` a danger dot, and still shows the detail text; Results is still the first nav item; the
+`/broadcast` page renders as before (screenshot compared by eye, noted in the PR); every page at 390 px has no horizontal
+page scroll caused by the shell.
+
+### U2 — Chart polish
+
+**Owns:** `src/Chess.Web/Components/Charts/**`, `tests/Chess.Web.Tests/Charts/**`.
+**Do:** 07 §6 Charts. The frame is card-like with inner padding. Heatmap cells ≤ 72 px and labels at chart text size. Bar
+thickness ≤ 48 px with a 4 px rounded data end. A degenerate axis domain (all x or all y equal, as with the fake gateway's
+zero latency) shows one tick and the points still plot. The stacked 100 % bar uses the outcome colours of 07 §2 and its
+legend follows the stacking order (wins, draws, losses, forfeit losses). Chart text stays at least 11 px rendered at 390 px.
+The series palette and `ChartStylesheetTests` stay as they are.
+**Done when:** bUnit/unit tests: a scatter whose x values are all 0 renders exactly one x tick label; the heatmap cell size
+never exceeds 72 for 2 and for 12 models; the bar chart bar thickness never exceeds 48; the stacked bar legend order equals
+its segment order. Existing chart tests still pass.
+
+### U3 — Results and head-to-head pages
+
+**Owns:** `src/Chess.Web/Components/Pages/Results/**`, `src/Chess.Web/Components/Pages/HeadToHead/**`,
+`src/Chess.Web/Components/Pages/Shared/**` (only if markup there must change), `tests/Chess.Web.Tests/Results/**`,
+`tests/Chess.Web.Tests/HeadToHead/**`.
+**Do:** 07 §6 Results. Big Picture hero card, each section a card, leaderboard in `.table-wrap` with `.num` and badges, filter
+row styled as a `.field`. Head-to-head: the two pickers in a `.field-row`, the RQC result as a hero number with its verbal
+reading and interval, the direct record and games in a card.
+**Done when:** bUnit: the leader's name is in the hero element; provisional models carry a `.badge`; the leaderboard table is
+inside `.table-wrap`; section order and the existing significance tests unchanged; E2E `ResultsJourney` passes. The Big
+Picture headline and chart are visible without scrolling at 1366×768 (screenshot).
+
+### U4 — Live game, games list and replay
+
+**Owns:** `src/Chess.Web/Components/Pages/Play/**`, `src/Chess.Web/Components/Pages/Games/**`,
+`src/Chess.Web/Components/Shared/ChessBoardSvg.razor`, `tests/Chess.Web.Tests/Play/**`, `tests/Chess.Web.Tests/Games/**`,
+`tests/Chess.Web.Tests/Components/ChessBoardSvgTests.cs`.
+**Do:** 07 §6 Live game. Players panel and board in cards, primary start button, numbered two-column move list, result badge,
+board colours from tokens-compatible values (board squares may keep fixed wood colours, documented in the PR). Games list:
+filters in a `.field-row`, table in `.table-wrap`, result as a badge (win for White, win for Black, draw), dates compact.
+Replay: stepping buttons as a button group, move details in a card.
+**Done when:** bUnit: the start button has `.btn-primary`; the result renders as a `.badge`; the games table is inside
+`.table-wrap`; existing Play/Games tests pass; E2E live-game and replay journeys pass.
+
+### U5 — Tournaments, broadcast planner, attempts log
+
+**Owns:** `src/Chess.Web/Components/Pages/Tournaments/**`, `src/Chess.Web/Components/Pages/Broadcast/PlanPage.razor`,
+`PlanPage.razor.css`, `PlanTimeline.razor`, `PlanTimeline.razor.css`, `PlanTick.razor`, `src/Chess.Web/Components/Pages/Admin/**`,
+`tests/Chess.Web.Tests/Tournaments/**`, `tests/Chess.Web.Tests/Admin/**`, `tests/Chess.Web.Tests/Broadcast/Plan*.cs`.
+Not `LiveBroadcastPage` (the OBS view is out of scope).
+**Do:** 07 §6 Tournaments. Forms in cards with `.field-row`s and model `.chips`; estimates as `.callout-info`; primary and
+danger buttons; lists in `.table-wrap`; progress with `.progress`; attempts filters in a `.field-row` and prompt/reply
+`details` readable in monospace.
+**Done when:** bUnit: model pickers render as `.chips`; the create/plan buttons have `.btn-primary` and cancel/stop have
+`.btn-danger`; tables are inside `.table-wrap`; existing tests pass; E2E tournament journey passes.
