@@ -167,6 +167,35 @@ public class ResultsPageTests
     }
 
     [Fact]
+    public void ChoosingTheConservativeOrderRequestsItAndTheHeadlineNamesIt()
+    {
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.52, 0.68));
+        var cut = Render(ctx, handler);
+        cut.WaitForAssertion(() => Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent));
+
+        cut.Find("#results-order").Change("conservative");
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("/api/ratings?order=conservative", handler.Requests.Select(r => r.Target));
+            Assert.Contains("(lower bound of the arena score)", cut.Find(".headline").TextContent);
+            Assert.Contains("Ranked by the lower bound of the arena score", cut.Find(".results-note").TextContent);
+        });
+        Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent);
+    }
+
+    [Fact]
+    public void TheScoreOrderIsNamedInTheHeadlineByDefault()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: TwoModels, pair: Pair(0.52, 0.68)));
+
+        cut.WaitForAssertion(() => Assert.Contains("Ranked by arena score.", cut.Find(".headline").TextContent));
+        Assert.Equal("Arena score", cut.Find("#results-order option[selected]").TextContent);
+    }
+
+    [Fact]
     public void ShowsTheReasonWhenTheApiCannotBeReached()
     {
         using var ctx = new BunitContext();

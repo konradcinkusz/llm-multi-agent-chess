@@ -29,6 +29,28 @@ public sealed record ResultsReport(
     IReadOnlyList<ScatterPoint> Scatter);
 
 /// <summary>
+/// The two leaderboard orders of the Results page (RATING.md §6). The values are the API's <c>order</c> parameter.
+/// </summary>
+public static class RankingOrder
+{
+    public const string Score = "score";
+    public const string Conservative = "conservative";
+
+    /// <summary>The name of the order in the control.</summary>
+    public static string Option(string order) => order == Conservative ? "Conservative" : "Arena score";
+
+    /// <summary>The clause that says which order the headline uses.</summary>
+    public static string Clause(string order) => order == Conservative
+        ? "the conservative order (lower bound of the arena score)"
+        : "arena score";
+
+    /// <summary>The note under the leaderboard table.</summary>
+    public static string TableNote(string order) => order == Conservative
+        ? "Ranked by the lower bound of the arena score (2.5th percentile), then arena score and rating; provisional models sort after the others."
+        : "Ranked by arena score, then rating; provisional models sort after the others.";
+}
+
+/// <summary>
 /// Pure derivations from the API DTOs (no I/O, no clock). The rules they carry are 03 §6.1 and RATING.md §5–§6.
 /// </summary>
 public static class ResultsModel
@@ -61,6 +83,15 @@ public static class ResultsModel
                 StringComparer.Ordinal);
 
     /// <summary>
+    /// The whisker of a model's arena score: the bootstrap bounds the API sends (RATING.md §6). A payload without them
+    /// gets the pairwise approximation of <see cref="ArenaIntervals"/>.
+    /// </summary>
+    public static (double Low, double High)? Whisker(ModelRating model, IReadOnlyDictionary<string, (double Low, double High)> approximations) =>
+        model.ArenaScoreLow is { } low && model.ArenaScoreHigh is { } high
+            ? (low, high)
+            : approximations.TryGetValue(model.Model, out var approximation) ? approximation : null;
+
+    /// <summary>
     /// The sentence under the headline. Null when there is no #2 to compare with. A lead that is not significant only
     /// because a model is provisional says so in the words of <see cref="Significance.TooFewGames"/>.
     /// </summary>
@@ -87,7 +118,7 @@ public static class ResultsModel
         var bars = ranking
             .Select((m, rank) =>
             {
-                var interval = intervals.TryGetValue(m.Model, out var iv) ? iv : (((double Low, double High)?)null);
+                var interval = Whisker(m, intervals);
                 return new RankedBar(m.Model, m.ArenaScore, interval?.Low, interval?.High,
                     Highlighted: rank == 0, Provisional: m.Provisional);
             })

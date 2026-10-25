@@ -28,6 +28,28 @@ public class TournamentRatingsClientTests
     }
 
     [Fact]
+    public async Task TheConservativeOrderIsSentWithTheTournamentFilter()
+    {
+        var handler = new FakeHandler(_ => Canned.Json("""{"models":[],"whiteAdvantage":0,"games":0,"moveQualityAvailable":false}"""));
+        var ratings = new TournamentRatingsClient(Canned.Client(handler));
+
+        await ratings.GetLeaderboardAsync(TournamentId, RankingOrder.Conservative);
+
+        Assert.Equal($"/api/ratings?tournamentId={TournamentId:D}&order=conservative", Assert.Single(handler.Requests).Target);
+    }
+
+    [Fact]
+    public async Task TheScoreOrderIsTheDefaultRequest()
+    {
+        var handler = new FakeHandler(_ => Canned.Json("""{"models":[],"whiteAdvantage":0,"games":0,"moveQualityAvailable":false}"""));
+        var ratings = new TournamentRatingsClient(Canned.Client(handler));
+
+        await ratings.GetLeaderboardAsync(null, RankingOrder.Score);
+
+        Assert.Equal("/api/ratings", Assert.Single(handler.Requests).Target);
+    }
+
+    [Fact]
     public async Task AllGamesSendsNoTournamentFilter()
     {
         var handler = new FakeHandler(_ => Canned.Json("""{"models":[],"whiteAdvantage":0,"games":0,"moveQualityAvailable":false}"""));

@@ -35,6 +35,19 @@ public class RankedBarChartTests
     }
 
     [Fact]
+    public void KeepOrderDrawsTheBarsAsGiven()
+    {
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<RankedBarChart>(p => p
+            .Add(b => b.Title, "Arena score")
+            .Add(b => b.Items, Bars)
+            .Add(b => b.KeepOrder, true));
+
+        Assert.Equal(new[] { "beta", "alpha", "gamma" }, cut.FindAll("g.chart-bar").Select(g => g.GetAttribute("data-bar")));
+    }
+
+    [Fact]
     public void OnlyBarsWithAnIntervalGetAWhisker()
     {
         using var ctx = new BunitContext();
