@@ -73,7 +73,7 @@ The navigation lists them in this order:
 | Page | Route | What it shows |
 |---|---|---|
 | **Results** | `/results` | The ranking. The **Big picture** comes first: a headline naming the best model, with its arena score and rating, then a ranked bar chart with 95 % intervals. Below it: rating over time, head-to-head matrix, results breakdown, move quality, strength against cost, and a full table. A tournament filter and an **Order** control sit above the Big picture. The order is **Arena score** (the default) or **Conservative**, which ranks by the lower bound of the arena score, so a model with more games outranks one with the same score and fewer (RATING.md §6). |
-| Live game | `/` | Pick a model for each side (or `random`), start a game and watch the board, the moves, and rejected attempts as they happen. |
+| Live game | `/` | Pick a model for each side (or `random`), start a game and watch the board, the moves, and rejected attempts. The Pace control shows moves at least 1, 2, 3 or 5 seconds apart (or Live, as they happen); the game itself is not slowed. Catch up shows every move at once. Default 2 s, set by `Arena:Viewer:MinMovePauseSeconds`. |
 | Head-to-head | `/head-to-head` | Two models: relative coefficient with its interval, a plain-language reading, expected score, direct record and direct games. |
 | Tournaments | `/tournaments`, `/tournaments/{id}` | Round-robin creation with the premium-request estimate shown before you confirm, progress, a per-tournament leaderboard, and cancel. |
 | Games | `/games`, `/games/{id}` | Paged archive. Replay steps through the moves, with per-move attempts, latency, centipawn loss and best move, and a PGN download. |

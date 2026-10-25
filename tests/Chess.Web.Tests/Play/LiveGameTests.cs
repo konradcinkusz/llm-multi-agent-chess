@@ -203,6 +203,80 @@ public class LiveGameTests
         Assert.Equal(1, game.NextPly);
     }
 
+    [Fact]
+    public void TheShownGameHasOnlyTheMovesUpToItsPlyAndThatPosition()
+    {
+        var game = Started(plies: [("White", "e4", PlayFixtures.AfterE4), ("Black", "e5", PlayFixtures.AfterE5)]);
+
+        var shown = game.ShownUpTo(1);
+
+        Assert.Equal(["e4"], shown.Moves.Select(move => move.San));
+        Assert.Equal(PlayFixtures.AfterE4, shown.CurrentFen);
+        Assert.Equal(1, shown.AppliedPly);
+        Assert.Equal(new BoardMove("e2", "e4"), shown.LastMove);
+        Assert.Equal(2, game.AppliedPly);
+        Assert.Equal(2, game.Moves.Count);
+    }
+
+    [Fact]
+    public void TheStartPositionIsShownBeforeAnyMove()
+    {
+        var game = Started(plies: [("White", "e4", PlayFixtures.AfterE4)]);
+
+        var shown = game.ShownUpTo(0);
+
+        Assert.Empty(shown.Moves);
+        Assert.Equal(LiveGame.StartFen, shown.CurrentFen);
+        Assert.Null(shown.LastMove);
+    }
+
+    [Fact]
+    public void AnAttemptComesWithOrBeforeItsMoveAndNeverAfterIt()
+    {
+        var game = Started(plies: [("White", "e4", PlayFixtures.AfterE4), ("Black", "e5", PlayFixtures.AfterE5)]);
+        game.AddAttempts([
+            new EngineEntry(1, 1, "gpt", "prompt", "e4", null, "e4", true, null, 700, 100, 10, null, null, null),
+            new EngineEntry(2, 1, "claude", "prompt", "Ke9", null, null, false, "illegal", 800, 100, 10, null, null, null),
+            new EngineEntry(2, 2, "claude", "prompt", "e5", null, "e5", true, null, 900, 100, 10, null, null, null),
+        ]);
+
+        // Before the first move: nothing of ply 2 yet, but its first attempt may show while the viewer is on ply 1.
+        Assert.Equal(new[] { (1, 1) }, game.ShownUpTo(0).Attempts.Select(entry => (entry.Ply, entry.Attempt)));
+        Assert.Equal(new[] { (1, 1), (2, 1), (2, 2) }, game.ShownUpTo(1).Attempts.Select(entry => (entry.Ply, entry.Attempt)));
+        Assert.Equal(new[] { (1, 1), (2, 1), (2, 2) }, game.ShownUpTo(2).Attempts.Select(entry => (entry.Ply, entry.Attempt)));
+    }
+
+    [Fact]
+    public void ANoticeOfTheNextPlyShowsWhileTheModelIsStillDeciding()
+    {
+        var game = Started(plies: [("White", "e4", PlayFixtures.AfterE4), ("Black", "e5", PlayFixtures.AfterE5)]);
+        game.Apply(Event("AttemptRejected", PlayFixtures.AttemptRejected(3, 1, "Ke9", "illegal")));
+
+        Assert.Empty(game.ShownUpTo(1).Notices);
+        Assert.Single(game.ShownUpTo(2).Notices);
+    }
+
+    [Fact]
+    public void ThinkingAppearsOnlyOnceTheViewerHasCaughtUpWithTheGame()
+    {
+        var game = Started(plies: [("White", "e4", PlayFixtures.AfterE4), ("Black", "e5", PlayFixtures.AfterE5)]);
+        game.Apply(Event("MoveStarted", PlayFixtures.MoveStarted(3, "White", "gpt")));
+
+        Assert.Null(game.ShownUpTo(1).Thinking);
+        Assert.Equal(3, game.ShownUpTo(2).Thinking!.Ply);
+    }
+
+    [Fact]
+    public void TheOutcomeAppearsOnlyOnceTheViewerHasShownTheLastMove()
+    {
+        var game = Started(plies: [("White", "e4", PlayFixtures.AfterE4), ("Black", "e5", PlayFixtures.AfterE5)]);
+        game.Apply(Event("GameFinished", PlayFixtures.GameFinished("0-1", "checkmate")));
+
+        Assert.Null(game.ShownUpTo(1).Outcome);
+        Assert.False(game.ShownUpTo(1).IsFinished);
+        Assert.Equal(new GameOutcome("0-1", "checkmate"), game.ShownUpTo(2).Outcome);
+    }
+
     private static LiveGame Started(params (string Color, string San, string Fen)[] plies)
     {
         var detail = Detail("running", "*", null, plies);

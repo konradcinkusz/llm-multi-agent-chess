@@ -33,6 +33,9 @@ public sealed class LiveGame
     /// <summary>The highest ply applied. An event for this ply or a lower one is already known and is ignored.</summary>
     public int AppliedPly { get; private set; }
 
+    /// <summary>Counts every change to the server's state, so a view built from it can tell it is out of date.</summary>
+    public int Version { get; private set; }
+
     /// <summary>The ply the game is waiting for next.</summary>
     public int NextPly => AppliedPly + 1;
 
@@ -83,6 +86,7 @@ public sealed class LiveGame
             return;
         }
 
+        Version++;
         Summary = detail.Summary;
         CurrentFen = detail.CurrentFen;
         AppliedPly = detail.Summary.PlyCount;
@@ -102,6 +106,7 @@ public sealed class LiveGame
     /// </summary>
     public void AddAttempts(IEnumerable<EngineEntry> attempts)
     {
+        Version++;
         foreach (var attempt in attempts)
         {
             _attempts.TryAdd((attempt.Ply, attempt.Attempt), attempt);
@@ -114,6 +119,7 @@ public sealed class LiveGame
     /// </summary>
     public ApplyResult Apply(GameEventMessage message)
     {
+        Version++;
         switch (message.Type)
         {
             case "MoveStarted":
@@ -187,6 +193,33 @@ public sealed class LiveGame
             default:
                 return ApplyResult.Unknown;
         }
+    }
+
+    /// <summary>
+    /// The game as the viewer has been shown it up to <paramref name="ply"/> (03 §10.5): the moves up to that ply, and the
+    /// engine log up to the next one, so an attempt comes with or before its move. The thinking and the outcome appear only
+    /// once the viewer has reached the latest ply the game has.
+    /// </summary>
+    public LiveGame ShownUpTo(int ply)
+    {
+        var upTo = Math.Clamp(ply, 0, AppliedPly);
+        var shown = new LiveGame(Summary);
+        shown._moves.AddRange(_moves.Where(move => move.Ply <= upTo));
+        shown._notices.AddRange(_notices.Where(notice => notice.Ply <= upTo + 1));
+        foreach (var (key, entry) in _attempts.Where(pair => pair.Key.Ply <= upTo + 1))
+        {
+            shown._attempts[key] = entry;
+        }
+
+        shown.AppliedPly = upTo;
+        shown.CurrentFen = shown._moves.Count == 0 ? StartFen : shown._moves[^1].FenAfter;
+        if (upTo == AppliedPly)
+        {
+            shown.Thinking = Thinking;
+            shown.Outcome = Outcome;
+        }
+
+        return shown;
     }
 
     /// <summary>The model thinking about this ply is on the attempt after <paramref name="attempt"/>. Idempotent: the rejection and the record of one attempt both say so.</summary>
