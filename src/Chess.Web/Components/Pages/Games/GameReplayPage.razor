@@ -2,6 +2,7 @@
 @using System.Net
 @using Chess.Web.Api
 @using Chess.Web.Components.Shared
+@using Chess.Web.Components.Shared.Game
 @implements IDisposable
 @inject ArenaApiClient Api
 
@@ -84,51 +85,66 @@ else
 
             <section class="card stack" aria-labelledby="replay-moves-heading">
                 <h2 id="replay-moves-heading" class="card-title">Moves</h2>
-                @if (game.Moves.Count == 0)
-                {
-                    <p class="muted">No moves yet.</p>
-                }
-                else
-                {
-                    <div class="table-wrap replay-moves-table">
-                        <table class="table-compact moves-table" data-testid="moves-table">
-                            <thead>
-                                <tr><th>Ply</th><th>Move</th><th class="num">Attempts</th></tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var played in game.Moves)
-                                {
-                                    <tr data-testid="move-row" class="@(played.Ply == _ply ? "current" : null)"
-                                        aria-current="@(played.Ply == _ply ? "step" : null)">
-                                        <td>@played.Ply</td>
-                                        <td>
-                                            <button type="button" class="move-button" data-testid="move-select"
-                                                    @onclick="() => GoTo(played.Ply)">@played.San</button>
-                                        </td>
-                                        <td class="num">@played.Attempts</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
+                <MoveTable Moves="@game.Moves" SelectedPly="@SelectedPly" OnSelect="@SelectMove" />
             </section>
         </aside>
     </div>
+
+    <section class="card stack replay-summary-card" aria-labelledby="replay-summary-heading" data-testid="game-summary">
+        <div class="card-header">
+            <h2 id="replay-summary-heading" class="card-title">Game summary</h2>
+            <span class="muted">Tokens and estimated cost, per side</span>
+        </div>
+        <GameUsageSummary Usage="@_usage" Message="@_usageMessage" ModelName="@ModelName" />
+    </section>
+
+    <section class="card stack replay-log" aria-labelledby="replay-log-heading" data-testid="engine-panel">
+        <div class="card-header">
+            <h2 id="replay-log-heading" class="card-title">Engine log</h2>
+            <span class="muted">Every reply the models sent to the engine, newest first</span>
+        </div>
+        @if (_attemptsError is not null)
+        {
+            <p class="callout callout-danger" role="alert" data-testid="attempts-error">Could not load the engine log: @_attemptsError</p>
+        }
+        <EngineLog Entries="@_attempts" SelectedPly="@SelectedPly" ModelName="@ModelName" />
+    </section>
 }
 
 @code {
+    private const int MaxAttemptPages = 50;
+
     private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<ModelDto> _models = [];
     private Guid? _loadedId;
     private GameDetailDto? _game;
     private string? _error;
     private string? _pgnHref;
     private string? _pgnError;
+    private IReadOnlyList<EngineEntry> _attempts = [];
+    private string? _attemptsError;
+    private GameUsageDto? _usage;
+    private string? _usageMessage;
     private int _ply;
 
     /// <summary>The game to replay, from the route.</summary>
     [Parameter]
     public Guid Id { get; set; }
+
+    /// <summary>The ply on the board, highlighted in the move table and the engine log. The start position has none.</summary>
+    private int? SelectedPly => _ply == 0 ? null : _ply;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _models = await Api.GetModelsAsync(_cts.Token);
+        }
+        catch (HttpRequestException)
+        {
+            // The names are a nicety: without the models the log and the summary show the model ids.
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -147,6 +163,10 @@ else
         _error = null;
         _pgnHref = null;
         _pgnError = null;
+        _attempts = [];
+        _attemptsError = null;
+        _usage = null;
+        _usageMessage = null;
         _ply = 0;
 
         try
@@ -164,10 +184,41 @@ else
             return;
         }
 
-        // The PGN is written when the game ends, so only a finished game has one to download.
+        await LoadAttemptsAsync(id);
+
+        // The PGN is written when the game ends, and so is the usage summary: only a finished game has them.
         if (_game.Summary.State == "finished")
         {
             await LoadPgnAsync(id);
+            await LoadUsageAsync(id);
+        }
+        else
+        {
+            _usageMessage = "The summary is available once the game has finished.";
+        }
+    }
+
+    /// <summary>The engine log of the game: every attempt the API has, page by page.</summary>
+    private async Task LoadAttemptsAsync(Guid id)
+    {
+        try
+        {
+            var entries = new List<EngineEntry>();
+            for (var page = 1; page <= MaxAttemptPages; page++)
+            {
+                var result = await Api.GetAttemptsAsync(id, null, page, _cts.Token);
+                entries.AddRange(result.Items.Where(attempt => attempt.GameId == id).Select(EngineEntry.From));
+                if (result.Items.Count == 0 || page * result.PageSize >= result.Total)
+                {
+                    break;
+                }
+            }
+
+            _attempts = entries;
+        }
+        catch (HttpRequestException ex)
+        {
+            _attemptsError = ex.Message;
         }
     }
 
@@ -183,7 +234,30 @@ else
         }
     }
 
+    private async Task LoadUsageAsync(Guid id)
+    {
+        try
+        {
+            _usage = await Api.GetGameUsageAsync(id, _cts.Token);
+        }
+        catch (HttpRequestException ex)
+        {
+            _usageMessage = $"Could not load the usage of this game: {ex.Message}";
+        }
+    }
+
+    private string ModelName(string modelId) => _models.FirstOrDefault(model => model.Id == modelId)?.DisplayName ?? modelId;
+
     private void GoTo(int ply) => _ply = Replay.Clamp(ply, _game?.Moves.Count ?? 0);
+
+    /// <summary>Picking a move in the table jumps to it. Picking the move on the board again sends null, which keeps the ply.</summary>
+    private void SelectMove(int? ply)
+    {
+        if (ply is { } chosen)
+        {
+            GoTo(chosen);
+        }
+    }
 
     private void First() => GoTo(0);
 
