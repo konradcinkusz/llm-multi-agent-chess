@@ -1,0 +1,430 @@
+@page "/benchmark"
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Tournaments
+@implements IDisposable
+@inject ArenaApiClient Api
+
+<PageTitle>Benchmark · LLM Chess Arena</PageTitle>
+
+<div class="page-header">
+    <h1>Benchmark</h1>
+    <p class="page-lede">Play one model, at one reasoning effort, against the field: every other model or the ones you choose. Each run ends in a report you can download.</p>
+</div>
+
+<div class="stack-lg">
+<section class="benchmark-section" aria-labelledby="new-benchmark-heading">
+    <h2 id="new-benchmark-heading">New benchmark</h2>
+
+    @if (_models is null && _modelsError is null)
+    {
+        <p>Loading models…</p>
+    }
+    else if (_modelsError is not null)
+    {
+        <p class="status-error" role="alert">Could not load the models: @_modelsError</p>
+    }
+    else if (_candidates.Count == 0)
+    {
+        <p>No model can be a candidate yet. Enable a model on the API, then come back.</p>
+    }
+    else
+    {
+        <div class="card stack">
+            <div class="field-row">
+                <label class="field">
+                    Name
+                    <input id="benchmark-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" />
+                </label>
+
+                <label class="field">
+                    Candidate
+                    <select id="candidate" value="@_candidateId" @onchange="e => ChooseCandidate(e.Value?.ToString())">
+                        @foreach (var model in _candidates)
+                        {
+                            <option value="@model.Id">@BenchmarkChoices.Label(model)</option>
+                        }
+                    </select>
+                </label>
+
+                @if (CandidateEfforts is { Count: > 0 } efforts)
+                {
+                    <label class="field">
+                        Reasoning effort
+                        <select id="effort" value="@_effort" @onchange="e => _effort = e.Value?.ToString()">
+                            @foreach (var effort in efforts)
+                            {
+                                <option value="@effort">@effort@(effort == CandidateDefaultEffort ? " (default)" : "")</option>
+                            }
+                        </select>
+                        <span class="field-hint">Each effort is ranked as its own player, so a model at two efforts is two entries.</span>
+                    </label>
+                }
+            </div>
+
+            <div class="field-row">
+                <label class="field">
+                    Games per opponent
+                    <select id="games-per-opponent" @bind="_gamesPerOpponent">
+                        @foreach (var games in GamesPerOpponentChoices)
+                        {
+                            <option value="@games">@games@(games == DefaultGamesPerOpponent ? " (default)" : "")</option>
+                        }
+                    </select>
+                    <span class="field-hint">Colours alternate, so half the games are with the candidate as White.</span>
+                </label>
+
+                <label class="field">
+                    Max concurrency
+                    <select id="max-concurrency" @bind="_maxConcurrency">
+                        @for (var limit = 1; limit <= BenchmarkFormRules.MaxConcurrencyLimit; limit++)
+                        {
+                            <option value="@limit">@limit</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <fieldset class="benchmark-opponents">
+                <legend>Opponents</legend>
+                <div class="chips">
+                    <label class="chip">
+                        <input id="opponents-all" type="radio" name="opponents" checked="@_allOpponents" @onchange="() => _allOpponents = true" />
+                        All other enabled models (@_defaultOpponents.Count)
+                    </label>
+                    <label class="chip">
+                        <input id="opponents-choose" type="radio" name="opponents" checked="@(!_allOpponents)" @onchange="() => _allOpponents = false" />
+                        Choose opponents
+                    </label>
+                </div>
+
+                @if (!_allOpponents)
+                {
+                    <div class="chips">
+                        @foreach (var model in _defaultOpponents)
+                        {
+                            <label class="chip">
+                                <input id="opponent-@model.Id" type="checkbox" checked="@_chosen.Contains(model.Id)"
+                                       @onchange="e => Toggle(model.Id, e.Value)" />
+                                @BenchmarkChoices.Label(model)
+                            </label>
+                        }
+                    </div>
+                }
+            </fieldset>
+
+            @if (_estimate is { } estimate)
+            {
+                <div class="callout callout-info benchmark-estimate" data-testid="benchmark-estimate" aria-live="polite">
+                    <h3>Estimated cost</h3>
+                    <p>
+                        <strong>@estimate.Totals.Games @(estimate.Totals.Games == 1 ? "game" : "games")</strong>
+                        against @_opponents.Count @(_opponents.Count == 1 ? "opponent" : "opponents"), @_gamesPerOpponent each.
+                        The candidate plays all of them. Each side makes @CostPreview.MovesPerSidePerGame moves a game, so the
+                        figures are estimates from the API's prices and past moves, not a bill.
+                    </p>
+
+                    @if (BenchmarkEstimate.IsLarge(estimate.Totals))
+                    {
+                        <div class="callout callout-warning benchmark-large" data-testid="benchmark-large" role="note">
+                            <p>
+                                <strong>A large run.</strong>
+                                Cost grows with opponents × games. To cut it, play fewer games per opponent or choose fewer opponents.
+                            </p>
+                        </div>
+                    }
+
+                    <div class="table-wrap">
+                        <table class="table-compact">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th class="num">Games</th>
+                                    <th class="num">Premium requests</th>
+                                    <th class="num">AI credits</th>
+                                    <th class="num">USD</th>
+                                    <th>Tokens per move</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in estimate.Rows)
+                                {
+                                    <tr>
+                                        <td>@row.Player <span class="muted">@(row.Role == "candidate" ? "candidate" : "opponent")</span></td>
+                                        <td class="num">@row.Games</td>
+                                        <td class="num">@TournamentFormat.Requests(row.PremiumRequests)</td>
+                                        <td class="num">@TournamentFormat.Credits(row.AiCredits)</td>
+                                        <td class="num">@TournamentFormat.Usd(row.Usd)</td>
+                                        <td>@TournamentFormat.Basis(row.Basis, row.SampleMoves)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p>
+                        Known total: @TournamentFormat.Requests(estimate.Totals.PremiumRequests) premium requests
+                        @if (estimate.Totals.UnknownPremium > 0)
+                        {
+                            <span>, plus @estimate.Totals.UnknownPremium with an unknown multiplier</span>
+                        }
+                        · @TournamentFormat.Credits(estimate.Totals.AiCredits) · @TournamentFormat.Usd(estimate.Totals.Usd)
+                        @if (estimate.Totals.UnknownUsd > 0)
+                        {
+                            <span>, plus @estimate.Totals.UnknownUsd with an unknown price</span>
+                        }
+                    </p>
+                </div>
+            }
+
+            @foreach (var problem in Problems)
+            {
+                <p class="benchmark-problem error-text">@problem</p>
+            }
+
+            <div class="cluster">
+                <button id="start-benchmark" type="button" class="btn-primary" @onclick="StartAsync" disabled="@(Problems.Count > 0 || _submitting)">
+                    Start benchmark
+                </button>
+            </div>
+
+            @if (_createError is not null)
+            {
+                <p class="status-error" role="alert">@_createError</p>
+            }
+
+            @if (_created is { } created)
+            {
+                <div class="callout benchmark-created" role="status">
+                    <p>
+                        Started <strong>@created.Benchmark.Name</strong> with @created.Benchmark.GamesTotal games.
+                        <a href="/benchmark/@created.Benchmark.Id">Open the report</a>
+                    </p>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+<section class="benchmark-section" aria-labelledby="benchmark-list-heading">
+    <h2 id="benchmark-list-heading">Runs</h2>
+
+    @if (_listError is not null)
+    {
+        <p class="status-error" role="alert">Could not load the runs: @_listError</p>
+    }
+
+    @if (_benchmarks is null)
+    {
+        <p>Loading runs…</p>
+    }
+    else if (_benchmarks.Count == 0)
+    {
+        <p>No benchmark yet. Set one up above.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="benchmark-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Candidate</th>
+                        <th class="num">Opponents</th>
+                        <th class="num">Games each</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var benchmark in _benchmarks)
+                    {
+                        <tr>
+                            <td><a href="/benchmark/@benchmark.Id">@benchmark.Name</a></td>
+                            <td>@benchmark.Candidate</td>
+                            <td class="num">@benchmark.Opponents.Count</td>
+                            <td class="num">@benchmark.GamesPerOpponent</td>
+                            <td><span class="badge @TournamentFormat.StatusBadge(benchmark.Status)">@TournamentFormat.Status(benchmark.Status)</span></td>
+                            <td><TournamentProgress Finished="benchmark.GamesFinished" Total="benchmark.GamesTotal" /></td>
+                            <td>
+                                @if (TournamentFormat.IsRunning(benchmark.Status))
+                                {
+                                    <BenchmarkCancel BenchmarkId="benchmark.Id" Cancelled="ReloadListAsync" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+</div>
+
+@code {
+    private static readonly int[] GamesPerOpponentChoices = [2, 4, 6, 10, 20, 30, 40, 50];
+    private const int DefaultGamesPerOpponent = 30;
+
+    private readonly CancellationTokenSource _cts = new();
+
+    private IReadOnlyList<ModelDto>? _models;
+    private string? _modelsError;
+    private CostInputsDto? _costs;
+    private IReadOnlyList<ModelDto> _candidates = [];
+
+    private IReadOnlyList<BenchmarkDto>? _benchmarks;
+    private string? _listError;
+
+    private string _name = "";
+    private string? _candidateId;
+    private string? _effort;
+    private bool _allOpponents = true;
+    private readonly HashSet<string> _chosen = [];
+    private int _gamesPerOpponent = DefaultGamesPerOpponent;
+    private int _maxConcurrency = BenchmarkFormRules.MaxConcurrencyLimit;
+    private bool _submitting;
+    private string? _createError;
+    private BenchmarkCreatedDto? _created;
+
+    private ModelDto? CandidateModel => _models?.FirstOrDefault(model => model.Id == _candidateId);
+
+    private IReadOnlyList<string>? CandidateEfforts => CandidateModel?.ReasoningEfforts;
+
+    private string? CandidateDefaultEffort => CandidateModel is { } model ? BenchmarkChoices.DefaultEffort(model) : null;
+
+    /// <summary>The candidate as the API names it: <c>model@effort</c> when the model lists efforts.</summary>
+    private string? CandidatePlayer => _candidateId is null ? null : BenchmarkChoices.Variant(_candidateId, _effort);
+
+    /// <summary>Every enabled model but the candidate's, what "All" plays. The API applies the same rule by default.</summary>
+    private IReadOnlyList<ModelDto> _defaultOpponents = [];
+
+    /// <summary>The opponents the run plays: every default one, or the chosen ones in the order the form lists them.</summary>
+    private IReadOnlyList<ModelDto> _opponents =>
+        _allOpponents ? _defaultOpponents : _defaultOpponents.Where(model => _chosen.Contains(model.Id)).ToArray();
+
+    private BenchmarkEstimate.Result? _estimate =>
+        CandidateModel is { } candidate && CandidatePlayer is { } player && _opponents.Count > 0
+            ? BenchmarkEstimate.For(candidate, player, _opponents, _costs, _gamesPerOpponent)
+            : null;
+
+    private IReadOnlyList<string> Problems =>
+        BenchmarkFormRules.Problems(_name, CandidatePlayer, _opponents.Count, _gamesPerOpponent, _maxConcurrency);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _models = await Api.GetModelsAsync(_cts.Token);
+            _candidates = BenchmarkChoices.Candidates(_models);
+            ChooseCandidate(_candidates.FirstOrDefault()?.Id);
+        }
+        catch (HttpRequestException ex)
+        {
+            _modelsError = ex.Message;
+        }
+
+        await LoadCostInputsAsync();
+        await LoadBenchmarksAsync(_cts.Token);
+        _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        var ct = _cts.Token;
+        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                // The runs change on a timer thread, outside any UI event: re-render explicitly.
+                await InvokeAsync(async () =>
+                {
+                    await LoadBenchmarksAsync(ct);
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task LoadBenchmarksAsync(CancellationToken ct)
+    {
+        try
+        {
+            _benchmarks = await Api.GetBenchmarksAsync(ct);
+            _listError = null;
+        }
+        catch (HttpRequestException ex)
+        {
+            _listError = ex.Message;
+        }
+    }
+
+    private Task ReloadListAsync() => LoadBenchmarksAsync(_cts.Token);
+
+    /// <summary>
+    /// Picks the candidate and starts it on its default effort. The opponents are the other models, so a choice that the
+    /// new candidate's model now excludes is dropped.
+    /// </summary>
+    private void ChooseCandidate(string? modelId)
+    {
+        _candidateId = modelId;
+        _effort = CandidateDefaultEffort;
+        _defaultOpponents = _models is null || modelId is null
+            ? []
+            : BenchmarkChoices.Opponents(_models, modelId);
+        _chosen.RemoveWhere(id => _defaultOpponents.All(model => model.Id != id));
+    }
+
+    private void Toggle(string modelId, object? selected)
+    {
+        if (selected is true)
+        {
+            _chosen.Add(modelId);
+        }
+        else
+        {
+            _chosen.Remove(modelId);
+        }
+    }
+
+    /// <summary>The rate and the token averages the estimate uses. Null when they could not be loaded: the form then shows no USD.</summary>
+    private async Task LoadCostInputsAsync()
+    {
+        try
+        {
+            _costs = await Api.GetCostInputsAsync(_cts.Token);
+        }
+        catch (HttpRequestException)
+        {
+            _costs = null;
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        _submitting = true;
+        _createError = null;
+        _created = null;
+        try
+        {
+            var opponents = _allOpponents ? null : _opponents.Select(model => model.Id).ToArray();
+            var request = new CreateBenchmarkRequest(_name.Trim(), CandidatePlayer!, opponents, _gamesPerOpponent, _maxConcurrency);
+            _created = await Api.CreateBenchmarkAsync(request, _cts.Token);
+            _name = "";
+            await LoadBenchmarksAsync(_cts.Token);
+        }
+        catch (HttpRequestException ex)
+        {
+            _createError = $"The benchmark was not created: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    public void Dispose() => _cts.Cancel();
+}

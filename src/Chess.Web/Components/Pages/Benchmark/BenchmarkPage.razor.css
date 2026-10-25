@@ -1,0 +1,42 @@
+/* The benchmark form and the list of runs (03 §12.3, 07 §6). The estimate sits right above Start, as on the tournament form. */
+
+.benchmark-section {
+    margin: 0;
+}
+
+.benchmark-opponents {
+    margin: 0;
+}
+
+.benchmark-estimate h3 {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-base);
+}
+
+.benchmark-estimate p {
+    margin: var(--space-2) 0;
+}
+
+.benchmark-estimate .table-wrap {
+    margin: var(--space-2) 0;
+}
+
+.benchmark-large {
+    margin: var(--space-3) 0;
+}
+
+.benchmark-large p {
+    margin: var(--space-1) 0;
+}
+
+.benchmark-problem {
+    margin: 0;
+}
+
+.benchmark-created {
+    border-left-color: var(--success);
+}
+
+.benchmark-created p {
+    margin: var(--space-1) 0;
+}

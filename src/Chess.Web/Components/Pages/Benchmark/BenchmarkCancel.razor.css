@@ -1,0 +1,8 @@
+/* The two-step cancel of a running benchmark: the first click asks, the second aborts its games. */
+
+.cancel-confirm {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}

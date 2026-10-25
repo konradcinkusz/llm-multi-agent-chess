@@ -1,0 +1,41 @@
+/* The benchmark report (03 §12.3): the summary, the ranking chart, the per-opponent table, the fingerprint and the downloads. */
+
+.back-link {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+}
+
+.benchmark-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-4);
+    margin: var(--space-3) 0 0;
+}
+
+.benchmark-facts > div {
+    margin: 0;
+}
+
+.benchmark-facts dt {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.benchmark-facts dd {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.benchmark-opponent-table th[scope="row"] {
+    font-weight: 600;
+}
+
+.benchmark-interval {
+    display: block;
+    margin-top: var(--space-1);
+    color: var(--text-3);
+    font-size: var(--text-sm);
+    font-weight: 400;
+}

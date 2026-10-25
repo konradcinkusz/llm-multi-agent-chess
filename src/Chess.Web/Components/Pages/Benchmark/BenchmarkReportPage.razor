@@ -1,0 +1,266 @@
+@page "/benchmark/{Id:guid}"
+@using Chess.Web.Api
+@using Chess.Web.Components.Charts
+@using Chess.Web.Components.Pages.Tournaments
+@implements IDisposable
+@inject ArenaApiClient Api
+
+<PageTitle>@Title · LLM Chess Arena</PageTitle>
+
+<p class="back-link"><a href="/benchmark">All benchmarks</a></p>
+
+@if (_error is not null)
+{
+    <p class="status-error" role="alert">@_error</p>
+}
+else if (_report is not { } report)
+{
+    <p>Loading the report…</p>
+}
+else
+{
+    var benchmark = report.Benchmark;
+    var summary = report.Summary;
+    var running = TournamentFormat.IsRunning(benchmark.Status);
+    var ratingInterval = BenchmarkFormat.Interval(summary.RatingLow, summary.RatingHigh);
+
+    <div class="page-header">
+        <h1>@benchmark.Name</h1>
+        <p class="page-lede">
+            <span class="badge @TournamentFormat.StatusBadge(benchmark.Status)">@TournamentFormat.Status(benchmark.Status)</span>
+            @benchmark.Candidate against @benchmark.Opponents.Count @(benchmark.Opponents.Count == 1 ? "opponent" : "opponents"),
+            @benchmark.GamesPerOpponent games each.
+        </p>
+        <div class="page-actions cluster">
+            <a class="btn" data-testid="download-markdown" href="@_markdownHref" download="@_markdownName">Download Markdown</a>
+            <a class="btn" data-testid="download-json" href="@_jsonHref" download="@_jsonName">Download JSON</a>
+        </div>
+    </div>
+
+    <div class="stack-lg">
+        @if (running)
+        {
+            <section class="card stack" data-section="progress" aria-labelledby="progress-heading">
+                <div class="card-header">
+                    <h2 id="progress-heading" class="card-title">Progress</h2>
+                    <BenchmarkCancel BenchmarkId="Id" Cancelled="ReloadAsync" />
+                </div>
+                <TournamentProgress Finished="benchmark.GamesFinished" Total="benchmark.GamesTotal" />
+                <p class="muted">The report covers the games decided so far, and it updates as they finish.</p>
+            </section>
+        }
+
+        <section class="card" data-section="summary" aria-labelledby="summary-heading">
+            <h2 id="summary-heading" class="card-title">Summary</h2>
+            <dl class="benchmark-facts" data-testid="benchmark-summary">
+                <div><dt>Games</dt><dd class="num">@summary.Games</dd></div>
+                <div><dt>Score</dt><dd class="num">@BenchmarkFormat.Percent(summary.Score)</dd></div>
+                <div>
+                    <dt>Rating</dt>
+                    <dd class="num">
+                        @BenchmarkFormat.Rating(summary.Rating)
+                        @if (ratingInterval.Length > 0)
+                        {
+                            <small class="benchmark-interval">@ratingInterval</small>
+                        }
+                    </dd>
+                </div>
+                <div><dt>Arena score</dt><dd class="num">@BenchmarkFormat.Fixed(summary.ArenaScore, "0.0")</dd></div>
+                <div>
+                    <dt>Standing</dt>
+                    <dd>
+                        @if (summary.Provisional)
+                        {
+                            <span class="badge badge-warning">provisional</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-success">established</span>
+                        }
+                    </dd>
+                </div>
+                <div><dt>Candidate tokens</dt><dd class="num">@summary.CandidateTokens.ToString("#,##0", System.Globalization.CultureInfo.InvariantCulture)</dd></div>
+                <div><dt>Candidate cost</dt><dd class="num">@TournamentFormat.Usd(summary.CandidateEstimatedUsd)</dd></div>
+                <div><dt>Total cost</dt><dd class="num">@TournamentFormat.Usd(summary.TotalEstimatedUsd)</dd></div>
+            </dl>
+            <p class="muted">
+                The rating and arena score come from the global fit over every rated game (RATING.md), so they move as other games
+                are played. The Elo differences below use this run's games only.
+            </p>
+        </section>
+
+        @if (_bars.Count > 0)
+        {
+            <section class="card" data-section="chart" aria-labelledby="chart-heading">
+                <h2 id="chart-heading" class="card-title">Ranking by opponent</h2>
+                <RankedBarChart Title="Score per opponent"
+                                Description="The candidate's share of the points against each opponent, in percent: 50 is even, 100 is a sweep."
+                                Items="_bars" Min="0" Max="100" ValueFormat="0.0" />
+            </section>
+        }
+
+        <section class="card" data-section="opponents" aria-labelledby="opponents-heading">
+            <h2 id="opponents-heading" class="card-title">Per opponent</h2>
+            @if (report.Opponents.Count == 0)
+            {
+                <p>No games have been decided yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="table-compact benchmark-opponent-table" data-testid="benchmark-opponents">
+                        <thead>
+                            <tr>
+                                <th>Opponent</th>
+                                <th class="num">Games</th>
+                                <th class="num">W</th>
+                                <th class="num">D</th>
+                                <th class="num">L</th>
+                                <th class="num">Forfeits</th>
+                                <th class="num">Score</th>
+                                <th class="num">Elo difference (95 % interval)</th>
+                                <th class="num">RQC (interval)</th>
+                                <th class="num">First-try legal</th>
+                                <th class="num">Est. USD</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in report.Opponents)
+                            {
+                                // A row with no decided game has no score, Elo or legal rate yet: a dash, not a zero.
+                                var played = row.Games > 0;
+                                <tr data-opponent="@row.Opponent">
+                                    <th scope="row">@row.Opponent</th>
+                                    <td class="num">@row.Games</td>
+                                    <td class="num">@row.Wins</td>
+                                    <td class="num">@row.Draws</td>
+                                    <td class="num">@row.Losses</td>
+                                    <td class="num">@row.ForfeitLosses</td>
+                                    <td class="num">@(played ? BenchmarkFormat.Percent(row.Score) : "—")</td>
+                                    <td class="num">@(played ? BenchmarkFormat.Elo(row.EloDiff, row.EloDiffLow, row.EloDiffHigh, row.Score) : "—")</td>
+                                    <td class="num">@(played ? $"{BenchmarkFormat.Fixed(row.Rqc, "0.00")} ({BenchmarkFormat.Fixed(row.RqcLow, "0.00")} to {BenchmarkFormat.Fixed(row.RqcHigh, "0.00")})" : "—")</td>
+                                    <td class="num">@(played ? BenchmarkFormat.Share(row.CandidateFirstAttemptLegalRate) : "—")</td>
+                                    <td class="num">@TournamentFormat.Usd(row.CandidateEstimatedUsd)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="muted">
+                    Elo difference is the candidate's rating above the opponent's from this run's score. A bound of ∞ or −∞ means the
+                    interval is unbounded on that side, as it is when the candidate scored all or none of its games.
+                </p>
+            }
+        </section>
+
+        <section class="card" data-section="fingerprint" aria-labelledby="fingerprint-heading">
+            <h2 id="fingerprint-heading" class="card-title">Fingerprint</h2>
+            <dl class="benchmark-facts" data-testid="benchmark-fingerprint">
+                <div><dt>App version</dt><dd>@report.Fingerprint.AppVersion</dd></div>
+                <div><dt>Rating formula</dt><dd>@report.Fingerprint.FormulaVersion</dd></div>
+                <div><dt>Rated prompt</dt><dd>@report.Fingerprint.PromptVersion</dd></div>
+                <div><dt>Generated</dt><dd>@TournamentFormat.When(report.Fingerprint.GeneratedAt)</dd></div>
+            </dl>
+            <p class="muted">Two reports compare directly when their app version, rating formula and rated prompt match.</p>
+        </section>
+    </div>
+}
+
+@code {
+    /// <summary>The benchmark's id, from the route.</summary>
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private readonly CancellationTokenSource _cts = new();
+
+    private BenchmarkReportDto? _report;
+    private string? _error;
+    private bool _polling;
+
+    private string _markdownHref = "";
+    private string _jsonHref = "";
+    private string _markdownName = "";
+    private string _jsonName = "";
+
+    private string Title => _report?.Benchmark.Name ?? "Benchmark report";
+
+    private bool Live => _error is null && (_report is null || TournamentFormat.IsRunning(_report.Benchmark.Status));
+
+    private IReadOnlyList<RankedBar> _bars = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _report = null;
+        _error = null;
+        await LoadAsync(_cts.Token);
+        if (!_polling && Live)
+        {
+            _polling = true;
+            _ = PollAsync();
+        }
+    }
+
+    private async Task PollAsync()
+    {
+        var ct = _cts.Token;
+        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                // The report changes on a timer thread, outside any UI event: re-render explicitly.
+                await InvokeAsync(async () =>
+                {
+                    await LoadAsync(ct);
+                    StateHasChanged();
+                });
+
+                if (!Live)
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _polling = false;
+        }
+    }
+
+    /// <summary>
+    /// Loads the report and the Markdown that the download links carry. The JSON link carries the same report, serialised
+    /// as the API shapes it, so no third request is needed.
+    /// </summary>
+    private async Task LoadAsync(CancellationToken ct)
+    {
+        try
+        {
+            var report = await Api.GetBenchmarkReportAsync(Id, ct);
+            var markdown = await Api.GetBenchmarkReportMarkdownAsync(Id, ct);
+            _report = report;
+            _markdownHref = BenchmarkFormat.DataUrl(BenchmarkFormat.MarkdownMediaType, markdown);
+            _jsonHref = BenchmarkFormat.DataUrl(BenchmarkFormat.JsonMediaType, BenchmarkFormat.Json(report));
+            _markdownName = BenchmarkFormat.FileName(report.Benchmark.Name, "md");
+            _jsonName = BenchmarkFormat.FileName(report.Benchmark.Name, "json");
+            _bars = report.Opponents
+                .Where(row => row.Games > 0)
+                .Select(row => new RankedBar(row.Opponent, row.Score * 100))
+                .ToArray();
+            _error = null;
+        }
+        catch (HttpRequestException ex)
+        {
+            _report = null;
+            _error = ex.StatusCode == System.Net.HttpStatusCode.NotFound
+                ? "No benchmark has this id."
+                : $"Could not load the report: {ex.Message}";
+        }
+    }
+
+    private Task ReloadAsync() => LoadAsync(_cts.Token);
+
+    public void Dispose() => _cts.Cancel();
+}
