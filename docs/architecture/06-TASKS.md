@@ -921,6 +921,7 @@ wording where it is now wrong; a lessons-learned entry for the multiplier. Every
 | S2 | Static export: one page per game with boards, move table, engine log, usage, PGN | S1, G3, G4 | todo |
 | S3 | Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README | — | todo |
 | P1 | Viewer pace on the live page | G3 | todo |
+| R1 | Conservative ranking order (lower bound of the arena score) | — | todo |
 
 ### S1 — Static export: results, head-to-head, games list, tournaments, about, JSON
 
@@ -964,3 +965,26 @@ reported, never thrown; auto-publish runs only when a game finished since the la
 **Done when:** unit tests: moves are released no faster than the pause; "Live" releases at once; attempts and log entries of a
 ply come with or before its move; "behind" count and "Catch up"; a page opened mid-game shows the current position at once.
 bUnit for the selector; the E2E live journey still passes (it may select "Live").
+
+### R1 — Conservative ranking order (lower bound of the arena score)
+
+**Why:** the owner asked that the number of games played weigh in the ranking. The fit already shrinks ratings of models
+with few games (prior), marks them provisional and refuses significance below 20 games each (RATING.md §3, §6), but the order
+among established models is by the point arena score. The owner chose (2026-10-25) to add a conservative order as an option.
+**Owns:** `src/Chess.Rating/**`, `tests/Chess.Rating.Tests/**`, `docs/RATING.md` (§6 and §7), `src/Chess.Api/Ratings/**`,
+`tests/Chess.Api.Tests/Ratings/**`, `src/Chess.Web/Components/Pages/Results/**`, `src/Chess.Web/Components/Charts/RankedBarChart.razor`,
+`tests/Chess.Web.Tests/Results/**`, `tests/Chess.Web.Tests/Charts/RankedBarChart*`; and, authorised for R1 only, two additive
+fields on `ModelRating` (03 §3.4) and its web copy: `double? ArenaScoreLow = null, double? ArenaScoreHigh = null`, with the
+round-trip test.
+**Do:** in the bootstrap, compute the arena score of every model on every sample and report its 2.5 / 97.5 percentiles as
+`ArenaScoreLow` / `ArenaScoreHigh` (RATING.md §6). Add a pure ordering option: `score` (today's order, the default) and
+`conservative` (non-provisional first, then by `ArenaScoreLow` descending, then arena score, then rating, then name).
+`GET /api/ratings?order=score|conservative` (anything else → 400 problem). The Results page gets an "Order" control (Arena
+score / Conservative) next to the tournament filter; the Big Picture headline and the chart follow the chosen order and the
+headline says which order is used. The ranked bar chart's whiskers use the real `ArenaScoreLow`/`High` when present (they
+approximate it from the pairwise intervals today). RATING.md §6 documents the conservative order and why (fewer games →
+wider interval → lower bound); §7 gets test vectors.
+**Done when:** Rating tests: the interval contains the point score; a model with fewer games has a wider interval; with
+equal point scores the model with more games ranks first in the conservative order; same seed → identical intervals (V6
+style); `score` order unchanged from today (existing vectors pass untouched). API test for the parameter and the 400. bUnit:
+the control switches the order and the headline names it. E2E `ResultsJourney` still passes.
