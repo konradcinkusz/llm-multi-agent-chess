@@ -29,6 +29,8 @@ It runs on `localhost` only. Nothing is deployed. Every game, move, LLM attempt 
 | Needed for | What |
 |---|---|
 | Everything | **.NET 10 SDK.** `global.json` pins the 10.0 feature band. Install: `sudo apt-get update && sudo apt-get install -y dotnet-sdk-10.0` on Ubuntu, or the [Microsoft installer](https://dotnet.microsoft.com/download). |
+| Every build | **The Copilot CLI bundle.** The first `dotnet build` downloads it: about 89 MB from the [github/copilot-cli releases](https://github.com/github/copilot-cli/releases) page on github.com, and its SHA-256 is checked against `SHA256SUMS.txt` from the same host. The first build therefore needs internet access. The bundle is then cached under `src/Chess.Llm/obj`. |
+| The browser journeys (`tests/Chess.E2E`) | **A Chromium.** Point `E2E_CHROMIUM_PATH` at one, or run `pwsh tests/Chess.E2E/bin/Debug/net10.0/playwright.ps1 install chromium` once. See [Tests and CI](#tests-and-ci). |
 | The default profile | **Docker**, running. The AppHost starts PostgreSQL in a container. |
 | LLM players | **GitHub Copilot CLI** (`copilot`) installed and logged in on this machine. The app uses that login, or the `copilot-github-token` AppHost secret parameter when you set one. The `fake` profile and `random` players do not need it. |
 | Move-quality analysis (optional) | **Stockfish** on `PATH`, or the path in `Analysis:StockfishPath` in `src/Chess.Api/appsettings.json`. Without it the arena still works; move quality is disabled and the ranking uses legality only. |
@@ -106,7 +108,7 @@ The full runbook is [docs/BROADCAST.md](docs/BROADCAST.md): planning, OBS setup,
 **Each LLM move is one Copilot request, and each rejected attempt is another.** Premium models cost more: each model has a premium multiplier, shown on the planner and tournament forms, and the estimate is shown before you save or confirm anything. Retries are not in the estimate, so a real bill can be higher.
 
 - `random` players and the `fake` profile cost nothing.
-- `Arena:MaxConcurrentGames` (default 2) caps how many games run at once.
+- `Arena:MaxConcurrentGames` (default 2) caps how many games run at once when they come from `POST /api/games` or a tournament. A broadcast plays one game at a time **outside** that cap, by decision (ADR-011). So a tournament running during a broadcast adds LLM requests on top of the broadcast's. Do not run both at once, or lower the tournament's concurrency.
 - A game that reaches the 200-ply cap costs more than the estimate, because the estimate assumes a normal game length. The planning guide has the numbers: [docs/BROADCAST.md §2](docs/BROADCAST.md#2-cost).
 
 Check the multipliers on the planner before you run a day.
@@ -143,6 +145,8 @@ curl -s http://127.0.0.1:5080/health
 
 The Copilot check is never Unhealthy, and `/health` answers HTTP 200 even when a check is Degraded. Tell the states apart by the `status` field of each check, not by the HTTP code.
 
+**403 `Cross-origin request rejected`.** The API and the web app refuse any request whose `Origin` header names another site, or whose `Sec-Fetch-Site` is `cross-site` (ADR-006, amended). A browser sends those headers when a page on another site makes the call. A 403 therefore means a foreign page reached the app through your browser, not that the app is broken. Open the arena at <http://localhost:5070> or <http://127.0.0.1:5070>. To allow another origin of your own, add it to `Arena:AllowedOrigins` in the API's configuration. Requests with no `Origin` header, such as `curl`, are allowed.
+
 ## Project layout
 
 ```
@@ -157,7 +161,7 @@ src/
   Chess.Web/              Blazor Web App (interactive server rendering): the UI, talks to the API over HTTP only
 tests/
   Chess.Engine.Tests/  Chess.Rating.Tests/  Chess.Llm.Tests/  Chess.Api.Tests/  Chess.Web.Tests/
-  Chess.E2E/              Playwright harness (see Tests and CI)
+  Chess.E2E/              Playwright journeys on the fake profile (see Tests and CI)
 docs/
   RATING.md  BROADCAST.md  EVALS.md  architecture/
 scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh, broadcast-smoke.sh
@@ -172,9 +176,32 @@ dotnet build Chess.sln -warnaserror
 dotnet test Chess.sln
 ```
 
-`dotnet test Chess.sln` runs 868 tests: 865 pass and 3 are skipped. The three skipped tests are the Stockfish integration tests; they run only when `STOCKFISH_PATH` names a Stockfish binary.
+`dotnet test Chess.sln` runs every test project, the browser journeys included. It needs a Chromium for the journeys (below). With one available, the run gives 903 tests: 900 pass and 3 are skipped.
 
-The offline AI evals (30 scripted positions) are part of that run. To run only them:
+| Project | Passed | Skipped |
+|---|---|---|
+| `Chess.Engine.Tests` | 136 | 0 |
+| `Chess.Rating.Tests` | 22 | 0 |
+| `Chess.Llm.Tests` | 21 | 0 |
+| `Chess.Api.Tests` | 378 | 3 |
+| `Chess.Web.Tests` | 339 | 0 |
+| `Chess.E2E` | 4 | 0 |
+
+The three skipped tests are the Stockfish integration tests; they run only when `STOCKFISH_PATH` names a Stockfish binary.
+
+The unit tests and the browser journeys run separately:
+
+```bash
+# Unit tests only: no browser. This is what the CI "build and test" job runs (896 pass, 3 skipped).
+dotnet test Chess.sln --no-build --filter "FullyQualifiedName!~Chess.E2E"
+
+# The browser journeys only, with a Chromium you already have.
+E2E_CHROMIUM_PATH=/path/to/chromium dotnet test tests/Chess.E2E
+```
+
+The four journeys in `tests/Chess.E2E` (live game, replay, the Results Big picture, a round-robin tournament) start the AppHost on the fake gateway and drive a real Chromium. They never download a browser. `ArenaFixture` uses `E2E_CHROMIUM_PATH` when it is set, then the Playwright cache. When neither holds a browser, the run fails and names the command to run.
+
+The offline AI evals (30 scripted positions) are part of the unit run. To run only them:
 
 ```bash
 dotnet test tests/Chess.Api.Tests --filter "FullyQualifiedName~Chess.Api.Tests.Evals"
@@ -184,13 +211,12 @@ Tests need no network and no Copilot login. They use the `FakeLlmGateway`, the i
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main`:
 
-- **build and test**: `dotnet build Chess.sln -warnaserror`, then `dotnet test Chess.sln`, with the results uploaded.
+- **build and test**: `dotnet build Chess.sln -warnaserror`, then the unit tests (the `Chess.E2E` filter above), with the results uploaded. It needs no browser.
+- **end-to-end journeys**: builds `tests/Chess.E2E`, installs Chromium with its system dependencies, and runs the four journeys.
 - **secret scan**: gitleaks over the full history.
 - **kernel size guard**: `Chess.ServiceDefaults` stays at or below 400 lines of C#.
-- **Copilot SDK only in Chess.Llm**: no other project may reference `GitHub.Copilot.SDK`.
+- **Copilot SDK only in Chess.Llm**: no other project may reference `GitHub.Copilot.SDK`, and no code outside `Chess.Llm` may use a `GitHub.Copilot` namespace.
 - **solution and AppHost**: every project is in `Chess.sln`, and every web project is registered in the AppHost.
-
-`tests/Chess.E2E` currently holds a Playwright harness test only. The browser journeys against the running AppHost are not written yet, so no CI job runs them.
 
 The live Copilot check is a script for the owner, not a CI job, because every move costs a premium request: [`scripts/smoke-copilot.sh`](scripts/smoke-copilot.sh) plays one game against a model and refuses to run under CI.
 

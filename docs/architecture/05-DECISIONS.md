@@ -188,3 +188,5 @@ requests × the model multiplier; the planner shows the estimate before saving, 
 should be chosen knowingly. Reliability: backoff + skip policy so one failure never ends the stream.
 Restart: a running schedule resumes; the interrupted game is excluded from ratings. Copilot rate
 limits are the dominant operational risk and are handled by the failure policy, not by retries inside a move.
+
+**Amended 2026-10-24: broadcast games are outside `Arena:MaxConcurrentGames` by decision; the cap is per source; operational rule: do not run a tournament during a broadcast.**

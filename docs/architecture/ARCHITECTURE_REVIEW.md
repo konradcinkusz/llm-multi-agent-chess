@@ -268,3 +268,31 @@ Each limitation was checked before it was listed. Corrections are marked.
 ## Blocked
 
 None. Both standards documents were fetched. The two NuGet search hosts refused by the agent proxy during the AppHost run did not block any step.
+
+## Resolution status (2026-10-24)
+
+Status after the fix tasks on `main`. "Fixed" cites the pull request that changed the code; "documented" means the docs now match the code and the cited pull request is the one that made the change; "open" and "owner" are stated as they stand.
+
+| Finding | Status | Where |
+|---|---|---|
+| H-1 cross-origin requests (F1 / A-1) | **Fixed** | #65: `OriginGuard` answers 403 on `/api` and `/_blazor` (ADR-006, amended); tests `OriginGuardTests` in Api and Web |
+| M-1 `dotnet test Chess.sln` needs a browser (A-2) | **Fixed** | #64: the `build and test` job excludes `Chess.E2E`; `ArenaFixture` fails fast with the instruction; README documents the commands |
+| M-2 documents contradict the code (A-3) | **Documented** | This pull request: README test counts and E2E status, CLAUDE.md layout and invariants |
+| M-3 broadcast outside the Copilot cap (A-4) | **Documented** (owner decision: per-source cap) | ADR-011 amended; README cost section; CLAUDE.md lessons. The owner chose to document rather than to share a gate |
+| M-4 kernel has no architecture test (A-5) | **Fixed** | #64: `tests/Chess.Api.Tests/KernelArchitectureTests.cs` |
+| L-1 `web` has no health check (A-6) | **Fixed** | #64: `WithHttpHealthCheck("/health")` on `web` in `src/Chess.AppHost/AppHost.cs` |
+| L-2 `GameSlot` never disposes its CTS (A-7) | **Fixed** | #64: `GameSlot` is `IDisposable` (`src/Chess.Api/Games/GameRunner.cs`) |
+| L-3 SSE comment disagrees with the defaults (A-8) | **Fixed** | #65: the comment in `src/Chess.Web/Program.cs` now states the handler and the infinite `Timeout` |
+| L-4 Copilot SDK check reads only project files (A-9) | **Fixed** | #64: CI step over `*.cs` outside `Chess.Llm` (`.github/workflows/ci.yml`) |
+| L-5 template `launchSettings.json` (A-10) | **Fixed** | #64: the file is deleted |
+| L-6 `.claude/settings.json` lacks the architecture-standards declaration (A-11) | **Open** | Not changed in this pull request: the edit to `.claude/settings.json` was refused by the session's permission check. The declaration in REPO-BASELINE §7 still needs to be added |
+| L-7 Copilot CLI download undocumented (A-12) | **Documented** | This pull request: README prerequisites (download source, SHA-256 check, internet needed once). The hash is not pinned in the repository |
+| L-8 characterisation after the engine move | **Accepted** | Deviation D-11 in section 5; the 136 engine tests cover it now |
+| L-9 package budget drift (A-13) | **Open (partly)** | `Microsoft.EntityFrameworkCore.Design` is recorded as build tooling in CLAUDE.md. The `Relational` pin stays: `Directory.Packages.props:5` says Npgsql needs it, which this review did not check |
+| L-10 `deploy-pages` red (A-15) | **Owner** | Settings → Pages → Source: GitHub Actions. Not verified from this session |
+| A-14 repository description | **Owner** | Not verified from this session |
+| A-16, A-17 live Copilot smoke, Docker/PostgreSQL path, Stockfish tests | **Owner** | Unchanged. Their known limitations are listed in section 7 |
+| D-12 broadcast outside the cap | **Documented** | ADR-011 amendment (M-3) |
+| D-13 E2E inside the unit job | **Fixed** | #64 (M-1) |
+
+**Verified for this section** (this task's sandbox run, 2026-10-25): `dotnet build Chess.sln -warnaserror` succeeded with 0 warnings. `dotnet test Chess.sln` with `E2E_CHROMIUM_PATH` set gave 900 passed and 3 skipped. The unit-only filter gave 896 passed and 3 skipped. Without a browser the four journeys fail with the fixture's message.
