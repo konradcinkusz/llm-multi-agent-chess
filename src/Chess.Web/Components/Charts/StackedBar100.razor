@@ -7,7 +7,14 @@
     }
     else
     {
-        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+        <svg class="chart-svg" width="@Num(Width)" viewBox="@_viewBox" role="img" aria-label="@Title">
+            <defs>
+                <pattern id="@_hatchId" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <rect width="6" height="6" style="fill: @ChartPalette.Series(LossSlot); opacity: 0.25" />
+                    <line x1="0" y1="0" x2="0" y2="6" stroke-width="2" style="stroke: @ChartPalette.Series(LossSlot)" />
+                </pattern>
+            </defs>
+
             @foreach (var share in new[] { 0.0, 0.5, 1.0 })
             {
                 <line class="chart-grid" x1="@Num(PlotLeft + share * PlotWidth)" y1="@Num(PlotTop)" x2="@Num(PlotLeft + share * PlotWidth)" y2="@Num(PlotBottom)" />
@@ -53,6 +60,15 @@
     private const double RowHeight = 34;
     private const double BarHeight = 22;
 
+    /// <summary>Outcome names of the results breakdown (07 §2): draws are neutral, forfeit losses are hatched.</summary>
+    private const string DrawsName = "Draws";
+    private const string ForfeitsName = "Forfeit losses";
+
+    /// <summary>Categorical slot of the loss colour (07 §2: --chart-series-7). Forfeit losses are hatched in it.</summary>
+    private const int LossSlot = 7;
+
+    private readonly string _hatchId = "sb" + Guid.NewGuid().ToString("N")[..8] + "-forfeit";
+
     private double PlotBottom => PlotTop + _rows.Count * RowHeight;
 
     private List<StackRow> _rows = [];
@@ -64,6 +80,19 @@
 
     /// <summary>One drawn segment. The interior edges are inset by 1 px each, so adjacent segments sit 2 px apart.</summary>
     private sealed record Piece(double X, double Y, double Width, string Fill, bool RoundEnd, string Title);
+
+    /// <summary>Fill of a segment in the bars. Only the outcome names change the colour; every other segment takes its slot.</summary>
+    private string PathFill(StackSegment segment) => segment.Name switch
+    {
+        DrawsName => ChartPalette.Neutral,
+        ForfeitsName => $"url(#{_hatchId})",
+        _ => ChartPalette.Series(segment.Slot),
+    };
+
+    /// <summary>CSS background of a legend swatch. A hatch cannot be an SVG pattern in HTML, so it is drawn with a gradient.</summary>
+    private string LegendColour(StackSegment segment) => segment.Name == ForfeitsName
+        ? $"repeating-linear-gradient(45deg, {ChartPalette.Series(LossSlot)} 0 2px, transparent 2px 6px)"
+        : PathFill(segment);
 
     protected override void OnParametersSet()
     {
@@ -86,16 +115,16 @@
                 var x = start + (k > 0 ? 1 : 0);
                 var right = end - (k < segments.Count - 1 ? 1 : 0);
                 var percent = Fixed(segment.Value / total * 100, "0.#");
-                _pieces.Add(new Piece(x, y, right - x, ChartPalette.Series(segment.Slot), k == segments.Count - 1,
+                _pieces.Add(new Piece(x, y, right - x, PathFill(segment), k == segments.Count - 1,
                     $"{_rows[r].Label} · {segment.Name}: {percent}%"));
             }
         }
 
+        // GroupBy yields names in order of first appearance, which is the stacking order: the legend reads like the bars.
         _legend = Rows.SelectMany(r => r.Segments)
             .GroupBy(s => s.Name)
             .Select(g => g.First())
-            .OrderBy(s => s.Slot)
-            .Select(s => new ChartLegendItem(s.Name, ChartPalette.Series(s.Slot)))
+            .Select(s => new ChartLegendItem(s.Name, LegendColour(s)))
             .ToList();
 
         var names = _legend.Select(l => l.Name).ToList();

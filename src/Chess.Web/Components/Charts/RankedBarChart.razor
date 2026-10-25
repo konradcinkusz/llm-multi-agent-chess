@@ -7,7 +7,7 @@
     }
     else
     {
-        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+        <svg class="chart-svg" width="@Num(Width)" viewBox="@_viewBox" role="img" aria-label="@Title">
             <defs>
                 <pattern id="@HatchNeutral" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                     <line x1="0" y1="0" x2="0" y2="6" stroke-width="2" style="stroke: @ChartPalette.Neutral" />
@@ -80,7 +80,7 @@
     private const double PlotRight = Width - 60;
     private const double PlotTop = 8;
     private const double RowHeight = 30;
-    private const double BarHeight = 18;
+    private const double BarHeight = 18; // ≤ MaxBarThickness (07 §6)
 
     private readonly string _id = "rb" + Guid.NewGuid().ToString("N")[..8];
     private string HatchNeutral => _id + "-neutral";

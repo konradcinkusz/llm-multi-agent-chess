@@ -7,7 +7,7 @@
     }
     else
     {
-        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+        <svg class="chart-svg" width="@Num(_width)" viewBox="@_viewBox" role="img" aria-label="@Title">
             @for (var i = 0; i < Labels.Count; i++)
             {
                 var label = Labels[i];
@@ -78,18 +78,21 @@
 
     private const double LabelWidth = 170;
     private const double TopBand = 130;
+
+    /// <summary>Pitch of one cell in pixels. Capped at 72 (07 §6); the drawn square is 2 px smaller.</summary>
     private const double CellSize = 56;
 
     private Dictionary<(string Row, string Column), HeatCell> _cells = [];
     private string _viewBox = "";
+    private double _width;
     private IReadOnlyList<string> _tableHeaders = [];
     private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
 
     protected override void OnParametersSet()
     {
         _cells = Cells.ToDictionary(c => (c.Row, c.Column));
-        var size = LabelWidth + Labels.Count * CellSize + 8;
-        _viewBox = $"0 0 {Num(size)} {Num(TopBand + Labels.Count * CellSize + 8)}";
+        _width = LabelWidth + Labels.Count * CellSize + 8;
+        _viewBox = $"0 0 {Num(_width)} {Num(TopBand + Labels.Count * CellSize + 8)}";
 
         _tableHeaders = new[] { "" }.Concat(Labels).ToList();
         _tableRows = Labels.Select(row => (IReadOnlyList<string>)new[] { row }

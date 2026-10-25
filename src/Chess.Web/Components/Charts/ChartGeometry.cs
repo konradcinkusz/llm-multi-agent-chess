@@ -20,6 +20,9 @@ internal static class ChartGeometry
     /// <summary>Radius of the rounded data end in pixels (03 §6.1: 4 px).</summary>
     public const double CornerRadius = 4;
 
+    /// <summary>Thickest bar a bar chart draws, in pixels (07 §6: bar thickness ≤ 48 px).</summary>
+    public const double MaxBarThickness = 48;
+
     public static string Num(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
     public static string Fixed(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
@@ -33,6 +36,18 @@ internal static class ChartGeometry
         var last = (int)Math.Ceiling(max / step);
         var ticks = Enumerable.Range(first, last - first + 1).Select(k => Math.Round(k * step, 10)).ToList();
         return (ticks[0], ticks[^1], ticks);
+    }
+
+    /// <summary>
+    /// Axis for values plotted as points. When the values are equal, or differ only below the printed precision
+    /// (the fake gateway's near-zero latency), the domain is widened around that value and the axis shows one tick,
+    /// not a row of identical labels.
+    /// </summary>
+    public static (double Min, double Max, IReadOnlyList<double> Ticks) PointAxis(double min, double max, int count = 5)
+    {
+        if (max > min && Num(min) != Num(max))
+            return NiceAxis(min, max, count);
+        return (min - 1, min + 1, [min]);
     }
 
     private static double NiceStep(double raw)

@@ -7,7 +7,7 @@
     }
     else
     {
-        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+        <svg class="chart-svg" width="@Num(Width)" viewBox="@_viewBox" role="img" aria-label="@Title">
             @foreach (var tick in _yTicks)
             {
                 <line class="chart-grid" x1="@Num(PlotLeft)" y1="@Num(_y.Map(tick))" x2="@Num(PlotRight)" y2="@Num(_y.Map(tick))" />
@@ -20,7 +20,7 @@
 
             <line class="chart-baseline" x1="@Num(PlotLeft)" y1="@Num(PlotBottom)" x2="@Num(PlotRight)" y2="@Num(PlotBottom)" />
             <ChartText class="chart-axis-title" x="@Num((PlotLeft + PlotRight) / 2)" y="@Num(PlotBottom + 36)" text-anchor="middle">@XTitle</ChartText>
-            <ChartText class="chart-axis-title" x="@Num(PlotLeft - 8)" y="@Num(PlotTop - 4)" text-anchor="end">@YTitle</ChartText>
+            <ChartText class="chart-axis-title" x="@Num(PlotLeft - 8)" y="@Num(PlotTop - 16)" text-anchor="end">@YTitle</ChartText>
 
             @for (var s = 0; s < _series.Count; s++)
             {
@@ -70,8 +70,8 @@
     private const double Width = 720;
     private const double Height = 320;
     private const double PlotLeft = 56;
-    private const double PlotRight = 580;
-    private const double PlotTop = 24;
+    private const double PlotRight = 540; // the rest of the width holds the end labels
+    private const double PlotTop = 40;
     private const double PlotBottom = 280;
     private const double LabelGap = 14;
 
@@ -103,8 +103,8 @@
             return;
 
         var points = _series.SelectMany(s => s.Points).ToList();
-        var (xLow, xHigh, xTicks) = NiceAxis(points.Min(p => p.X), points.Max(p => p.X));
-        var (yLow, yHigh, yTicks) = NiceAxis(points.Min(p => p.Y), points.Max(p => p.Y));
+        var (xLow, xHigh, xTicks) = PointAxis(points.Min(p => p.X), points.Max(p => p.X));
+        var (yLow, yHigh, yTicks) = PointAxis(points.Min(p => p.Y), points.Max(p => p.Y));
         _x = new LinearScale(xLow, xHigh, PlotLeft, PlotRight);
         _y = new LinearScale(yLow, yHigh, PlotBottom, PlotTop);
         _xTicks = xTicks;
