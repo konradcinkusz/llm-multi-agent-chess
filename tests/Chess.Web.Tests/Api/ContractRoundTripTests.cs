@@ -96,6 +96,8 @@ public class ContractRoundTripTests
             new ApiDto.ModelDto("claude-sonnet", "Claude Sonnet", null, true, new ApiDto.ModelPricingDto(3.0, 15.0, 0.3)));
         AssertRoundTrip<ApiDto.ModelDto, WebDto.ModelDto>(
             new ApiDto.ModelDto("mystery", "Mystery", null, true, new ApiDto.ModelPricingDto(null, null, null)));
+        AssertRoundTrip<ApiDto.PromptStyleDto, WebDto.PromptStyleDto>(
+            new ApiDto.PromptStyleDto("think", "Think, then move", "An analysis, a plan and one move.", true, "sha256:0123456789ab"));
         AssertRoundTrip<ApiDto.AttemptDto, WebDto.AttemptDto>(
             new ApiDto.AttemptDto(Id, 14, 1, "claude-sonnet", "Legal moves: ...", "The main line is 7...h6. h6", null, false,
                 41000, "Unparseable: the reply is not one move.", At, "Keres Attack: h6 stops g5.", 1200, 310, 240, 0.0057,

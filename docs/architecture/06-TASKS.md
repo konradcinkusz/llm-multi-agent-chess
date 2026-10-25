@@ -1060,3 +1060,83 @@ section order now has `model-map` second).
 names follow each axis's better direction, a degenerate axis (all equal) still plots, labels never leave the plot; API test
 for the two new fields; bUnit: the axis pickers re-render the map, section order with `model-map` second; E2E
 `ResultsJourney` updated and passing; screenshots light, dark and phone.
+
+## Prompt styles (owner request 2026-10-25, 03 §14, ADR-015)
+
+The supervisor PR froze 03 §14, ADR-015, RATING.md §1, `PromptStyleDto` (API and web copy, round-trip test) and the web
+helper `Chess.Web/Api/PlayerId.cs` (parse and compose `model[@effort][~style]`, with tests). Q1, Q2 and Q3 run in parallel
+against that contract. Q2 and Q3 test with canned API answers.
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| Q1 | API: prompt styles (`classic`, `board`, `think`), `~style` ids, per-move conversations, `GET /api/prompt-styles` | contract | todo |
+| Q2 | UI: style pickers on Play, Tournaments (models × styles), Benchmark (candidate and opponents), Broadcast planner | contract | todo |
+| Q3 | Results: style filter, "Prompt styles compared" section, the same section on the static site | contract | todo |
+| Q4 | Docs: README, BENCHMARK.md, RATING.md example, a recorded fake run of a style comparison | Q1, Q2, Q3 | todo |
+
+### Q1 — API: prompt styles
+
+**Owns:** `src/Chess.Api/Players/**` (new `Prompts/` folder: `IPromptStyle`, `ClassicPromptStyle` with today's
+`RatedPromptBuilder` texts byte-identical, `BoardPromptStyle`, `ThinkPromptStyle`, the registry, the ASCII board and the
+piece-list and material helpers), `src/Chess.Api/Catalog/**` (`ModelVariant` reads `~style`; `GET /api/prompt-styles`),
+`src/Chess.Api/Benchmarks/BenchmarkFingerprint.cs` and `BenchmarkRules.cs` (the candidate's style version),
+`src/Chess.Api/Usage/**` (the token history of the full player id, falling back to the model's),
+`src/Chess.Api/Tournaments/TournamentRules.cs` and `src/Chess.Api/Broadcast/BroadcastPlanner.cs` (only if their id checks
+need the new grammar), `src/Chess.Api/Contracts/ApiContracts.cs` (no change beyond the frozen DTO),
+`src/Chess.Llm/FakeLlmGateway.cs` (the `think` reply format), `src/Chess.Llm/ArenaOptions.cs` (no `~` in model ids), and
+their tests under `tests/Chess.Api.Tests/**` and `tests/Chess.Llm.Tests/**`.
+**Do:** 03 §14.1–§14.3. `LlmChessPlayer` takes the style. `classic` keeps one conversation per game. `board` and `think`
+start one conversation per move from the gateway and dispose of it after the move, retries included. `think` reads the
+move from the last `Move:` line (else the whole reply) and carries the last `Plan:` line (≤ 300 characters) into the next
+prompt. Keep the `Legal moves:` line in every style. The stored raw reply is the whole text.
+**Done when:** unit tests:
+- the classic texts and `BenchmarkFingerprint.PromptVersion()` for classic are unchanged (pin the current hash);
+- the board prompt for a known FEN, with its ASCII board, piece lists, material, full PGN and sorted legal moves (golden text);
+- think reply parsing: `Move:` last line, several `Move:` lines (the last wins), a bare SAN, prose with no move (unparseable), the plan carried and capped;
+- `board` and `think` open one conversation per move and `classic` one per game (counted on a fake gateway);
+- ids: `gpt~think`, `gpt@high~board`, `gpt~classic` → 400, `gpt~nope` → 400, `@` after `~` → 400; `~` in a model id fails startup;
+- `GET /api/prompt-styles` order and versions; a fake game `fake-a~think` vs `fake-b~board` finishes, and its attempts hold the `think` text;
+- the cost history uses the full id, then the model's.
+
+### Q2 — UI: style pickers
+
+**Owns:** `src/Chess.Web/Components/Pages/Play/**`, `src/Chess.Web/Components/Pages/Tournaments/**`,
+`src/Chess.Web/Components/Pages/Benchmark/**`, `src/Chess.Web/Components/Pages/Broadcast/**` (planner only),
+`src/Chess.Web/Api/ArenaApiClient.cs` (`GetPromptStylesAsync`), their tests under `tests/Chess.Web.Tests/**`, and
+`tests/Chess.E2E/TournamentJourney.cs` (one assertion: a tournament with two styles has four participants).
+**Do:** 03 §14.4, styled by 07-UI-STYLE. Use `PlayerId.Compose` for every id. A style select (Play, Benchmark) shows each
+style's display name with its description as the hint. The style chips (Tournaments, Broadcast) show the participant count
+and the cost estimate for every model × style. When `GET /api/prompt-styles` fails, offer `classic` only and say so.
+**Done when:** bUnit:
+- Play sends `fake-a~think` for a chosen style and the plain id for classic;
+- Tournaments with 2 models × 2 styles posts 4 participants and the estimate has 4 rows;
+- Benchmark posts `candidate@effort~style` and opponents with their style;
+- the planner sends the styled ids;
+- the API failure falls back to classic.
+
+The E2E tournament journey passes. Take screenshots (light, dark, phone) and record the phone-width scroll check.
+
+### Q3 — Results: style filter and comparison
+
+**Owns:** `src/Chess.Web/Components/Pages/Results/**`, `src/Chess.Web/Components/Pages/HeadToHead/**` (the filter on the
+matrix only), `src/Chess.Web/Components/Charts/ModelMap*` (accept a filtered row set, no geometry change),
+`src/Chess.Web/Components/Site/SiteResultsPage.razor`, `src/Chess.Web/Site/**` (only if the export needs the new section's
+data), their tests under `tests/Chess.Web.Tests/**`, and `tests/Chess.E2E/ResultsJourney.cs` (section order: the new
+section is last and appears only when there are styled players).
+**Do:** 03 §14.5 and §6.1 item 8. Group with `PlayerId.WithoutStyle`. The filter hides rows and never refits.
+Significance uses `Significance.cs` only. The site renders the section with no script.
+**Done when:** bUnit:
+- the filter chips show only the styles present, and choosing one filters the table, the map and the matrix;
+- the comparison table lists `gpt@high` with its classic and think rows and their intervals, and stays hidden with only classic players;
+- the significance wording follows the one rule.
+
+A site export test shows the section and still finds no `<script>`. The E2E results journey passes. Take screenshots.
+
+### Q4 — Docs
+
+**Owns:** `README.md`, `docs/BENCHMARK.md`, `docs/RATING.md` (examples only; §1 is frozen), `src/Chess.Api/Players/README.md`
+if one exists, `scripts/benchmark.sh` and `scripts/benchmark.ps1` (help text only).
+**Do:** Document the player id grammar and the three styles: what each sends, what it costs, and when to use it. Show how
+to compare styles: a tournament with two styles, then a benchmark of `model@medium~think` against the field. Add one
+recorded fake run.
+**Done when:** every command in the new text was run against the fake profile and its output is in the PR.

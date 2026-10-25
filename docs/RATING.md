@@ -15,9 +15,12 @@ The design follows three rules taken from `architecture-standards` (METRIC-ETHIC
 
 ## 1. What counts as a game
 
-A game is **rated** when it was created with `rated = true`, both sides used the fixed rated
-prompt template, and it finished with a result other than `*` (aborted / interrupted games are
-excluded). Each side is identified by its **model id** (`random` for the random player).
+A game is **rated** when it was created with `rated = true`, each side used the rated prompt
+template of its prompt style, and it finished with a result other than `*` (aborted / interrupted games are
+excluded). Each side is identified by its **player id** (`random` for the random player):
+the model id plus its reasoning effort and prompt style when it names them, `model[@effort][~style]`
+(ADR-014, ADR-015). Each player id is ranked as its own player in the one fit. A plain model id means
+the model's default effort and the `classic` prompt style.
 
 ## 2. Outcome of a game
 

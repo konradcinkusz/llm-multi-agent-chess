@@ -24,6 +24,7 @@ public sealed record ModelDto(string Id, string DisplayName, double? PremiumMult
     IReadOnlyList<string>? ReasoningEfforts = null, string? DefaultReasoningEffort = null, bool Custom = false);   // 03 §12.1
 public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
     double? CachedInputUsdPerMillionTokens);
+public sealed record PromptStyleDto(string Id, string DisplayName, string Description, bool PerMoveConversation, string Version);  // 03 §14.3
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);
 
 // Local copies of Chess.Rating.ModelRating and PairwiseCoefficient (03 §3.4).

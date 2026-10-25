@@ -16,6 +16,7 @@ public sealed record ModelDto(string Id, string DisplayName, double? PremiumMult
     IReadOnlyList<string>? ReasoningEfforts = null, string? DefaultReasoningEffort = null, bool Custom = false);   // 03 §12.1
 public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
     double? CachedInputUsdPerMillionTokens);                                        // 03 §10: from the model's AI-credit token prices
+public sealed record PromptStyleDto(string Id, string DisplayName, string Description, bool PerMoveConversation, string Version);  // 03 §14.3
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);
 public sealed record LeaderboardDto(IReadOnlyList<Chess.Rating.ModelRating> Models, double WhiteAdvantage, int Games, bool MoveQualityAvailable);
 public sealed record MatrixDto(IReadOnlyList<string> Models, IReadOnlyList<Chess.Rating.PairwiseCoefficient> Cells);
