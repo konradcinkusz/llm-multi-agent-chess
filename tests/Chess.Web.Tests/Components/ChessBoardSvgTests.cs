@@ -52,6 +52,17 @@ public class ChessBoardSvgTests
     }
 
     [Fact]
+    public void TheKingInCheckIsHighlightedAndNothingElseIs()
+    {
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<ChessBoardSvg>(p => p.Add(b => b.Fen, StartFen).Add(b => b.CheckSquare, "e1"));
+
+        Assert.Equal("e1", Assert.Single(cut.FindAll("[data-check]")).GetAttribute("data-check"));
+        Assert.Empty(cut.FindAll("[data-highlight]"));
+    }
+
+    [Fact]
     public void NoHighlightWithoutALastMove()
     {
         using var ctx = new BunitContext();

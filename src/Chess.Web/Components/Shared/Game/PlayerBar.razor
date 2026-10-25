@@ -1,0 +1,80 @@
+@using Chess.Web.Components.Shared
+
+<div class="player-bar @(ToMove ? "player-bar-active" : null)" data-testid="player-@Color.ToLowerInvariant()"
+     data-color="@Color" data-to-move="@(ToMove ? "true" : "false")">
+    <span class="player-chip @(Color == "White" ? "player-chip-white" : "player-chip-black")" aria-hidden="true">@(Color == "White" ? "♔" : "♚")</span>
+
+    <div class="player-main">
+        <div class="player-name">
+            <strong data-testid="player-name">@Name</strong>
+            <span class="muted">@Color</span>
+            @if (ToMove)
+            {
+                <span class="badge badge-accent" data-testid="to-move">To move</span>
+            }
+        </div>
+
+        @if (Attempt is { } attempt)
+        {
+            <div class="player-thinking" data-testid="player-thinking">
+                <span class="dot dot-accent" aria-hidden="true"></span>
+                Thinking for @Seconds s · attempt @Math.Min(attempt, EngineEntry.MaxAttempts) of @EngineEntry.MaxAttempts
+            </div>
+        }
+
+        <div class="player-captured muted" data-testid="player-captured">
+            <span aria-label="Captured by @Color">@CapturedHere</span>
+            @if (Lead > 0)
+            {
+                <span class="num" data-testid="player-lead">+@Lead</span>
+            }
+        </div>
+    </div>
+
+    <div class="player-usage num" data-testid="player-usage">
+        @if (Totals.Requests == 0)
+        {
+            <span class="muted">No model requests yet</span>
+        }
+        else
+        {
+            <span>@GameFigures.Tokens(Totals.InputTokens) in · @GameFigures.Tokens(Totals.OutputTokens) out</span>
+            <span class="muted">≈ @GameFigures.Usd(Totals.AiCredits is { } credits ? credits * UsdPerAiCredit : null) est.</span>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>"White" or "Black".</summary>
+    [Parameter, EditorRequired]
+    public string Color { get; set; } = "White";
+
+    /// <summary>The model's display name, or "Random".</summary>
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "";
+
+    [Parameter]
+    public bool ToMove { get; set; }
+
+    /// <summary>The attempt this side is on while its model is thinking; null when it is not thinking.</summary>
+    [Parameter]
+    public int? Attempt { get; set; }
+
+    /// <summary>Whole seconds since the move started, shown while thinking.</summary>
+    [Parameter]
+    public int Seconds { get; set; }
+
+    /// <summary>The pieces this side has captured, as glyphs.</summary>
+    [Parameter]
+    public string CapturedHere { get; set; } = "";
+
+    /// <summary>The material lead in points, shown on the side that has it. Zero shows nothing.</summary>
+    [Parameter]
+    public int Lead { get; set; }
+
+    [Parameter]
+    public SideTotals Totals { get; set; } = new(0, 0, 0, null);
+
+    [Parameter]
+    public double UsdPerAiCredit { get; set; } = GameFigures.DefaultUsdPerAiCredit;
+}

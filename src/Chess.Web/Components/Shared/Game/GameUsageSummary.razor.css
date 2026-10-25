@@ -1,0 +1,26 @@
+/* The per-side usage table of a finished game. It scrolls inside its .table-wrap on a phone, never the page. */
+
+.usage-table th[scope="row"] {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.usage-table tfoot th,
+.usage-table tfoot td {
+    border-top: 2px solid var(--border-strong);
+    font-weight: 600;
+}
+
+.usage-table .badge {
+    white-space: nowrap;
+}
+
+/* A caption that only screen readers announce (the app has no shared utility for it). */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}

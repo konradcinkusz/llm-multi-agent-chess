@@ -102,8 +102,8 @@ internal static class PlayFixtures
 
     public const string Models = """
         [
-          {"id":"gpt","displayName":"GPT","premiumMultiplier":1,"enabled":true},
-          {"id":"claude","displayName":"Claude","premiumMultiplier":1.5,"enabled":true},
+          {"id":"gpt","displayName":"GPT","premiumMultiplier":null,"enabled":true,"pricing":{"inputUsdPerMillionTokens":3,"outputUsdPerMillionTokens":15,"cachedInputUsdPerMillionTokens":0.3}},
+          {"id":"claude","displayName":"Claude","premiumMultiplier":null,"enabled":true,"pricing":null},
           {"id":"random","displayName":"Random","premiumMultiplier":null,"enabled":true},
           {"id":"retired","displayName":"Retired","premiumMultiplier":1,"enabled":false}
         ]
@@ -129,6 +129,11 @@ internal static class PlayFixtures
 
     public static string MovePlayed(int ply, string color, string san, string fen) =>
         $$"""{"gameId":"{{PlayServer.GameId}}","at":"2026-10-24T10:00:02Z","ply":{{ply}},"color":"{{color}}","san":"{{san}}","fen":"{{fen}}","attempts":1,"latencyMs":1200}""";
+
+    /// <summary>An attempt the engine stored (03 §10.1). A legal attempt has no rejection kind.</summary>
+    public static string AttemptRecorded(int ply, int attempt, string color, string modelId, string san, bool legal,
+        string? rejectionKind, string rawReply, string? reasoning = null, double? aiCredits = null) =>
+        $$"""{"gameId":"{{PlayServer.GameId}}","at":"2026-10-24T10:00:01Z","ply":{{ply}},"attempt":{{attempt}},"color":"{{color}}","modelId":"{{modelId}}","prompt":"Play {{san}}","rawReply":"{{rawReply}}","reasoning":{{(reasoning is null ? "null" : $"\"{reasoning}\"")}},"parsedSan":{{(legal ? $"\"{san}\"" : "null")}},"legal":{{(legal ? "true" : "false")}},"latencyMs":900,"inputTokens":120,"outputTokens":30,"reasoningTokens":8,"aiCredits":{{(aiCredits is null ? "null" : aiCredits.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))}},"rejectionKind":{{(rejectionKind is null ? "null" : $"\"{rejectionKind}\"")}}}""";
 
     public static string GameFinished(string result, string termination) =>
         $$"""{"gameId":"{{PlayServer.GameId}}","at":"2026-10-24T10:05:00Z","result":"{{result}}","termination":"{{termination}}"}""";

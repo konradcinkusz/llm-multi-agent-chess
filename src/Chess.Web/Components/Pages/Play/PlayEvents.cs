@@ -11,3 +11,8 @@ internal sealed record MovePlayedEvent(Guid GameId, DateTimeOffset At, int Ply, 
     int Attempts, long LatencyMs);
 
 internal sealed record GameFinishedEvent(Guid GameId, DateTimeOffset At, string Result, string Termination);
+
+// 03 §10.1: published after each attempt is stored, before MovePlayed or AttemptRejected.
+internal sealed record AttemptRecordedEvent(Guid GameId, DateTimeOffset At, int Ply, int Attempt, string Color, string ModelId,
+    string Prompt, string? RawReply, string? Reasoning, string? ParsedSan, bool Legal, long LatencyMs,
+    int? InputTokens, int? OutputTokens, int? ReasoningTokens, double? AiCredits, string? RejectionKind);
