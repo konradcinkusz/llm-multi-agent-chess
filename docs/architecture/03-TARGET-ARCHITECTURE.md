@@ -354,6 +354,8 @@ is section 2, between the Big Picture and Rating over time):
 6. **Strength vs cost** — scatter of rating (y) against average latency per move (x), one
    neutral colour, every point direct-labelled with the model name.
 7. **Full table** — the leaderboard as a table (accessible view of the same data).
+8. **Prompt styles compared** — one model@effort under each prompt style it played, side by side (§14.5). Shown only
+   when some model has played two or more styles.
 
 Chart rules (from the dataviz guidance): one axis per chart; colour follows the model, never
 its rank (slot assigned by the model id's position in the alphabetically sorted list of all
@@ -734,3 +736,78 @@ becomes **section 2 of the Results page** (after the Big Picture, before Rating 
 
 Data: `ModelResultsDto` gains `double? AvgEstimatedUsdPerGame = null` and `double? ForfeitRate = null` (additive, API and
 web copy), computed from the stored attempts with the cost calculator of 03 §10.2.
+
+## 14. Prompt styles: the prompt is part of the player (owner request 2026-10-25, ADR-015)
+
+The owner saw that models trade off every piece and end in king-and-pawn endings with no plan. Some of the cause is the
+rated prompt. It forbids any thinking ("a single move in SAN and nothing else"). It names no goal. It shows the position
+only as a FEN plus the last ten plies. It keeps nothing from one move to the next but the bare SAN. The owner asked for
+better prompts as a **run configuration**, with each configuration ranked on its own.
+
+### 14.1 Identity
+
+A player id is `<model>[@<effort>][~<style>]`, in that order (e.g. `claude-sonnet-5.5@medium~think`). The style is part of
+the player's identity everywhere (games, ratings, results, benchmarks), exactly like the effort (§12.1). Each
+model × effort × style is therefore its own row in the one global ranking, and games between styles link them, so they
+are compared on one scale. A plain id (no `~`) means `classic`, today's prompt. Every game played so far keeps its player
+and its rating. Writing `~classic` is rejected (400: "write the plain id"), so one configuration has one id. Model ids
+may not contain `~` (startup validation, like `@`). An unknown style → 400.
+
+### 14.2 The styles
+
+The texts are fixed in `Chess.Api/Players/Prompts/` (one class per style, pure). A style's **version** is the
+`sha256:` 12-hex prefix of its system prompt, one move prompt and one corrective for a sample position, computed as
+`BenchmarkFingerprint.PromptVersion` does today. The `classic` texts stay byte-identical, so the version the existing
+fingerprints carry does not change (a test pins it).
+
+| Style | What the model gets | What it answers | Conversation |
+|---|---|---|---|
+| `classic` | today's text: FEN, last 10 plies, legal moves in generation order | one SAN | one per game (today) |
+| `board` | the goal and draw rules in the system prompt; an ASCII board (rank 8 on top, White upper case), each side's piece list, the material balance, the **full** game in PGN, the FEN, the legal moves sorted alphabetically | one SAN | **one per move** |
+| `think` | as `board`, plus "Your plan from your last move: …" when there is one | a short analysis (threats, plan, 2–3 candidates), then the lines `Plan: <one sentence>` and `Move: <SAN>` | **one per move** |
+
+- **System prompt of `board` and `think`** (the goal, the same for every model): play to win, and checkmate ends the
+  game. Trade only when the trade gains something. A draw by the fifty-move rule, threefold repetition or insufficient
+  material is half a point. In the endgame, activate the king and make a passed pawn. `think` adds the answer format.
+- **One conversation per move** for `board` and `think`. Every prompt already carries the whole game, so the history
+  adds nothing, and a per-game session would grow the input by every earlier prompt (an 80-move game would end near
+  50 000 input tokens a move). Retries of the same move stay in that move's conversation. The `think` plan is the one
+  thing carried over, by the player, capped at 300 characters.
+- **Reading a `think` reply.** The move is the text after the last line that starts with `Move:` (case-insensitive). With
+  no such line, the whole reply is read, so a bare SAN still counts. That text goes to `MoveNotation.TryResolve` and the
+  rejection classifier as today. The plan is the last `Plan:` line. The stored raw reply is the whole text, so the engine
+  log shows the analysis. The corrective names the rejected move and asks again for the two lines.
+- **No engine help.** No style tells the model what is attacked, hanging or best. The ranking measures the model, not
+  Stockfish.
+- `FakeLlmGateway` answers in the `think` format when the system prompt asks for a `Move:` line, so the whole path runs
+  offline. It keeps finding the moves on the `Legal moves:` line, which every style keeps on its own line.
+
+### 14.3 Contract (frozen 2026-10-25, additive)
+
+```csharp
+// Chess.Api/Contracts/ApiContracts.cs and the web copy
+public sealed record PromptStyleDto(string Id, string DisplayName, string Description, bool PerMoveConversation, string Version);
+```
+
+`GET /api/prompt-styles` → `classic` first, then `board`, `think`. The benchmark fingerprint's `PromptVersion` becomes the
+candidate's style version.
+
+### 14.4 Choosing a style (run configuration)
+
+- **Play** (`/`): a style select per LLM side, `classic` by default.
+- **Tournaments**: a multi-select of styles, `classic` by default. The participants are every chosen model × every chosen
+  style, so one tournament compares the styles (e.g. 2 models × `classic` + `think` = 4 players, round robin).
+- **Benchmark**: a style for the candidate and one for the opponents (both `classic` by default). The headless scripts
+  take the full id (`--candidate model@medium~think`).
+- **Broadcast planner**: the same multi-select as tournaments.
+- The cost estimate uses the token history of the full player id when it exists. For a new `board` or `think` player it
+  falls back to the model's history, and the basis says so.
+
+### 14.5 Results
+
+- A **style filter** (chips: All, classic, board, think) above the leaderboard, the model map and the head-to-head matrix
+  shows only the players of that style. It filters rows. The ratings stay those of the one global fit.
+- A new section, **Prompt styles compared**, sits after the full table (03 §6.1, item 8). For each model@effort played
+  under two or more styles, it gives the rating with its 95 % interval per style, the first-attempt legality, the move
+  quality when Stockfish data exists, and the average cost per game. Significance uses the one rule in `Significance.cs`.
+  The static site renders the same section.

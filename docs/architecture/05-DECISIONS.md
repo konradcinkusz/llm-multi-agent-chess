@@ -236,3 +236,21 @@ version, prompt version) so two reports can be compared honestly.
 moves and as many opponent moves); the estimate is shown before start and the docs recommend a reference panel. A custom
 model's API key is a secret parameter. Early stopping (SPRT, as chess-engine testing uses) is a possible follow-up, not part
 of this decision.
+
+## ADR-015 — The prompt style is part of the player
+
+**Status:** Accepted (2026-10-25).
+
+**Context.** Games often end with every piece traded and kings and pawns left, with no sign of a plan. The rated prompt
+forbids any thinking, names no goal, shows the position as a FEN only, and carries nothing between moves. The owner asked
+for better prompts as a run configuration, each ranked on its own.
+**Decision.** (1) A player id may carry a prompt style, `model[@effort][~style]`. The style is part of the player's
+identity, like the effort (ADR-014), so each configuration is its own player in the one global ranking. (2) There are
+three styles: `classic` (today's text, byte-identical, the default and the plain id), `board` (goal, ASCII board, piece
+lists, material, full PGN, sorted legal moves) and `think` (as `board`, plus an analysis, a `Plan:` line carried to the
+next move, and a `Move:` line). (3) `board` and `think` open one conversation per move, because the prompt carries the
+whole game. (4) No style gets engine help. (5) RATING.md §1 reads "the rated prompt template of the player's style".
+**Consequences.** Existing games and ratings keep their meaning, because they are `classic`. A `think` move costs more
+output tokens; the estimate uses the player's own history once it exists. One conversation per move means one session
+start per move; if that is slow on Copilot, it shows in the latency columns and the smoke run. Whether a style helps is
+measured, not assumed: the "Prompt styles compared" section and a benchmark of the same model under two styles.
