@@ -6,7 +6,7 @@
     {
         <span class="status-item" data-service="copilot" title="@status.CopilotDetail"><span class="dot dot-@CopilotTone(status.Copilot)" aria-hidden="true"></span>Copilot: <strong>@status.Copilot</strong> <span class="status-detail">(@status.CopilotDetail)</span></span>
         <span class="status-item" data-service="database"><span class="dot dot-@ServiceTone(status.Database)" aria-hidden="true"></span>Database: <strong>@status.Database</strong></span>
-        <span class="status-item" data-service="stockfish"><span class="dot dot-@ServiceTone(status.Stockfish)" aria-hidden="true"></span>Stockfish: <strong>@status.Stockfish</strong></span>
+        <span class="status-item" data-service="stockfish" title="@StockfishTitle(status.Stockfish)"><span class="dot dot-@ServiceTone(status.Stockfish)" aria-hidden="true"></span>Stockfish: <strong>@status.Stockfish</strong></span>
     }
     else if (unavailable)
     {
@@ -33,14 +33,17 @@
         _ => "neutral",
     };
 
-    // Database and Stockfish report a health status. An absent Stockfish is neutral: it is optional, not broken.
+    // Database reports a health status; Stockfish reports available | absent (03 §8). An absent Stockfish is
+    // neutral: it is optional, not broken.
     internal static string ServiceTone(string status) => status switch
     {
-        "healthy" => "success",
+        "healthy" or "available" => "success",
         "degraded" => "warning",
         "unhealthy" => "danger",
         _ => "neutral",
     };
+
+    internal static string? StockfishTitle(string status) => status == "absent" ? "move quality disabled" : null;
 
     protected override async Task OnInitializedAsync()
     {
