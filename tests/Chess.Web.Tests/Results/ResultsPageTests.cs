@@ -13,7 +13,7 @@ public class ResultsPageTests
     private static readonly string TournamentId = "11111111-2222-3333-4444-555555555555";
 
     private static readonly string[] SectionOrder =
-        ["big-picture", "rating-history", "head-to-head", "breakdown", "move-quality", "strength-cost", "table"];
+        ["big-picture", "model-map", "rating-history", "head-to-head", "breakdown", "move-quality", "strength-cost", "table"];
 
     private const string TwoModels =
         """
@@ -40,6 +40,21 @@ public class ResultsPageTests
 
     private static string Pair(double low, double high) =>
         $$"""{"a":"alpha","b":"beta","expectedScore":0.6,"qualityShare":0.5,"rqc":0.6,"rqcLow":{{low}},"rqcHigh":{{high}},"eloEquivalent":70,"headToHeadGames":5,"headToHeadScore":0.6}""";
+
+    [Fact]
+    public void TheModelMapPlacesEveryModelWhoseCostAndForfeitsTheBreakdownHas()
+    {
+        const string priced =
+            """
+            [{"model":"alpha","games":30,"wins":20,"draws":2,"losses":8,"forfeitLosses":1,"moves":400,"firstAttemptLegalRate":0.98,"avgLatencyMs":1500,"avgInputTokens":900,"avgOutputTokens":100,"averageCentipawnLoss":null,"avgEstimatedUsdPerGame":0.02,"forfeitRate":0.033},
+              {"model":"beta","games":30,"wins":8,"draws":2,"losses":20,"forfeitLosses":0,"moves":400,"firstAttemptLegalRate":0.9,"avgLatencyMs":800,"avgInputTokens":null,"avgOutputTokens":null,"averageCentipawnLoss":null,"avgEstimatedUsdPerGame":0.005,"forfeitRate":0}]
+            """;
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: TwoModels, pair: Pair(0.52, 0.68), breakdown: priced));
+
+        cut.WaitForAssertion(() => Assert.Equal(["alpha", "beta"],
+            cut.FindAll("section[data-section='model-map'] g.model-map-mark").Select(g => g.GetAttribute("data-point"))));
+    }
 
     [Fact]
     public void SectionsAppearInTheOrderOfSection6_1()
@@ -204,7 +219,7 @@ public class ResultsPageTests
         cut.WaitForAssertion(() => Assert.Contains("Results unavailable", cut.Find(".results-error").TextContent));
     }
 
-    private static FakeHandler Respond(string board, string pair, string tournaments = "[]")
+    private static FakeHandler Respond(string board, string pair, string tournaments = "[]", string? breakdown = null)
     {
         var bodies = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -213,7 +228,7 @@ public class ResultsPageTests
             ["/api/ratings/matrix"] = Matrix,
             ["/api/ratings/pairwise"] = pair,
             ["/api/ratings/history"] = "[]",
-            ["/api/results/breakdown"] = Breakdown,
+            ["/api/results/breakdown"] = breakdown ?? Breakdown,
         };
         return new FakeHandler(request =>
         {
