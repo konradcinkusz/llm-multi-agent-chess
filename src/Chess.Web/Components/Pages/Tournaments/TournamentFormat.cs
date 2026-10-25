@@ -18,6 +18,14 @@ public static class TournamentFormat
         _ => status,
     };
 
+    /// <summary>The badge variant (07 §4) for a status: a running tournament is accented, a finished one is a success.</summary>
+    public static string StatusBadge(string status) => status switch
+    {
+        "running" => "badge-accent",
+        "finished" => "badge-success",
+        _ => "badge-neutral",
+    };
+
     /// <summary>A premium-request figure; "unknown" when the model's multiplier is not known, as the API reports it.</summary>
     public static string Requests(double? value) =>
         value is { } requests ? requests.ToString("#,##0.#", CultureInfo.InvariantCulture) : "unknown";

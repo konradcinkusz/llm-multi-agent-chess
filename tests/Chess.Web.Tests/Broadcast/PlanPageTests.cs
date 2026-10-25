@@ -234,4 +234,42 @@ public class PlanPageTests
         Assert.NotEmpty(elements);
         return elements.All(element => element.HasAttribute("disabled"));
     }
+
+    [Fact]
+    public void ModelPickersAreChipsAndTheTablesScrollInsideTableWraps()
+    {
+        var fake = new FakeBroadcast();
+        using var ctx = new BunitContext();
+        PlanWire.Api(ctx, fake);
+        var cut = Render(ctx);
+
+        cut.WaitForAssertion(() => Assert.DoesNotContain("Loading models", cut.Markup));
+        var pickers = cut.FindAll("[data-testid='plan-models'] input[type='checkbox']");
+        Assert.NotEmpty(pickers);
+        Assert.All(pickers, picker => Assert.NotNull(picker.Closest(".chip")));
+        Assert.Contains("btn-primary", cut.Find("[data-testid='plan-generate']").ClassName);
+
+        SelectModels(cut, "gpt", "claude");
+        SetWindow(cut, hours: "2");
+        cut.Find("[data-testid='plan-generate']").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid='plan-preview'] .plan-game").Count));
+        Assert.Contains("callout-info", cut.Find("[data-testid='plan-estimate']").ClassName);
+        Assert.NotEmpty(cut.FindAll("table"));
+        Assert.All(cut.FindAll("table"), table => Assert.NotNull(table.Closest(".table-wrap")));
+    }
+
+    [Fact]
+    public void StopIsADangerButtonAndTheScheduleTableScrollsInsideATableWrap()
+    {
+        var fake = new FakeBroadcast();
+        fake.SeedSchedule("running");
+        using var ctx = new BunitContext();
+        PlanWire.Api(ctx, fake);
+        var cut = Render(ctx);
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid='schedule-row']")));
+        Assert.Contains("btn-danger", cut.Find("[data-testid='schedule-stop']").ClassName);
+        Assert.NotNull(cut.Find(".plan-schedules").Closest(".table-wrap"));
+    }
 }

@@ -6,81 +6,85 @@
 <PageTitle>Attempts · LLM Chess Arena</PageTitle>
 
 <div class="admin-page">
-    <header class="admin-header">
+    <div class="page-header">
         <h1>Attempts</h1>
-        <p class="subtitle">Every prompt sent to a model and the reply it gave, newest first</p>
-    </header>
+        <p class="page-lede">Every prompt sent to a model and the reply it gave, newest first</p>
+    </div>
 
-    <form class="filter-bar" @onsubmit="ApplyFilters" @onsubmit:preventDefault="true">
-        <div class="filter-group">
-            <label for="attempts-game">Game ID:</label>
-            <input id="attempts-game" type="text" class="game-id-input" @bind="_gameIdInput"
-                   placeholder="paste game GUID…" aria-describedby="attempts-game-error" />
+    <form class="card stack" @onsubmit="ApplyFilters" @onsubmit:preventDefault="true">
+        <div class="field-row">
+            <div class="field">
+                <label for="attempts-game">Game ID</label>
+                <input id="attempts-game" type="text" class="game-id-input" @bind="_gameIdInput"
+                       placeholder="paste game GUID…" aria-describedby="attempts-game-error" />
+            </div>
+
+            <div class="field">
+                <label for="attempts-model">Model</label>
+                <select id="attempts-model" @bind="_modelInput">
+                    <option value="">All models</option>
+                    @foreach (var model in _models)
+                    {
+                        <option value="@model.Id">@model.DisplayName</option>
+                    }
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="attempts-legal">Reply</label>
+                <select id="attempts-legal" @bind="_legalInput">
+                    <option value="all">All replies</option>
+                    <option value="legal">Legal only</option>
+                    <option value="illegal">Illegal only</option>
+                </select>
+            </div>
         </div>
 
-        <div class="filter-group">
-            <label for="attempts-model">Model:</label>
-            <select id="attempts-model" @bind="_modelInput">
-                <option value="">All models</option>
-                @foreach (var model in _models)
-                {
-                    <option value="@model.Id">@model.DisplayName</option>
-                }
-            </select>
-        </div>
+        @if (_gameError is not null)
+        {
+            <p id="attempts-game-error" class="field-error error-text" role="alert">@_gameError</p>
+        }
 
-        <div class="filter-group">
-            <label for="attempts-legal">Reply:</label>
-            <select id="attempts-legal" @bind="_legalInput">
-                <option value="all">All replies</option>
-                <option value="legal">Legal only</option>
-                <option value="illegal">Illegal only</option>
-            </select>
+        <div class="cluster">
+            <button type="submit" class="btn-primary">Apply</button>
+            <button type="button" class="btn" @onclick="ClearFilters">Clear</button>
         </div>
-
-        <button type="submit" class="btn">Apply</button>
-        <button type="button" class="btn btn-clear" @onclick="ClearFilters">Clear</button>
     </form>
-
-    @if (_gameError is not null)
-    {
-        <p id="attempts-game-error" class="field-error" role="alert">@_gameError</p>
-    }
 
     @if (_error is not null)
     {
-        <p class="error-msg" role="alert">@_error</p>
+        <p class="error-msg callout callout-danger" role="alert">@_error</p>
     }
     else if (_loading)
     {
-        <p class="loading-msg" role="status">Loading attempts...</p>
+        <p class="loading-msg muted" role="status">Loading attempts...</p>
     }
     else if (_result is not null)
     {
         @if (_result.Items.Count == 0)
         {
-            <p class="empty-msg">No attempts match these filters. Attempts are recorded when a player makes a move.</p>
+            <p class="empty-state empty-msg">No attempts match these filters. Attempts are recorded when a player makes a move.</p>
         }
         else if (Visible.Count == 0)
         {
-            <p class="empty-msg">No attempts on this page match the reply filter.</p>
+            <p class="empty-state empty-msg">No attempts on this page match the reply filter.</p>
         }
         else
         {
-            <ol class="attempt-list">
+            <ol class="attempt-list stack">
                 @foreach (var attempt in Visible)
                 {
                     <li class="attempt @(attempt.Legal ? "" : "failed-attempt")">
                         <details>
                             <summary class="attempt-header">
-                                <span class="ply-badge">Ply @attempt.Ply</span>
-                                <span class="color-badge @(IsWhite(attempt.Ply) ? "white-badge" : "black-badge")">@ColorOf(attempt.Ply)</span>
-                                <span class="model-tag">@attempt.ModelId</span>
+                                <span class="badge badge-accent ply-badge">Ply @attempt.Ply</span>
+                                <span class="badge color-badge @(IsWhite(attempt.Ply) ? "white-badge" : "black-badge")">@ColorOf(attempt.Ply)</span>
+                                <span class="badge badge-neutral model-tag">@attempt.ModelId</span>
                                 <span class="san">@(attempt.ParsedSan ?? "no move")</span>
                                 <span class="attempt-number">Attempt @attempt.Number</span>
                                 @if (!attempt.Legal)
                                 {
-                                    <span class="fail-tag">ILLEGAL</span>
+                                    <span class="badge badge-danger fail-tag">ILLEGAL</span>
                                 }
                                 <span class="latency">@attempt.LatencyMs ms</span>
                             </summary>
@@ -105,7 +109,7 @@
                                 }
                                 else
                                 {
-                                    <p class="no-reply">No reply was recorded.</p>
+                                    <p class="no-reply muted">No reply was recorded.</p>
                                 }
                                 @if (attempt.Error is not null)
                                 {
@@ -119,14 +123,14 @@
 
             @if (_applied.Legal != "all")
             {
-                <p class="note">The reply filter applies to the attempts on this page only.</p>
+                <p class="note muted">The reply filter applies to the attempts on this page only.</p>
             }
         }
 
         <nav class="pagination" aria-label="Attempts pages">
-            <button type="button" @onclick="PrevPage" disabled="@(_page <= 1)">&#x2190; Prev</button>
+            <button type="button" class="btn" @onclick="PrevPage" disabled="@(_page <= 1)">&#x2190; Prev</button>
             <span>Page @_page of @PageCount</span>
-            <button type="button" @onclick="NextPage" disabled="@(_page >= PageCount)">Next &#x2192;</button>
+            <button type="button" class="btn" @onclick="NextPage" disabled="@(_page >= PageCount)">Next &#x2192;</button>
         </nav>
     }
 </div>

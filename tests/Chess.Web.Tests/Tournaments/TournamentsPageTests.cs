@@ -30,8 +30,11 @@ public class TournamentsPageTests
         var rows = cut.FindAll("table.tournament-table tbody tr");
         Assert.Equal(2, rows.Count);
         Assert.Contains("1 of 2 games", rows[0].TextContent);
-        Assert.Equal("1", rows[0].QuerySelector("progress")!.GetAttribute("value"));
-        Assert.Equal("2", rows[0].QuerySelector("progress")!.GetAttribute("max"));
+        var progress = rows[0].QuerySelector("[role='progressbar']")!;
+        Assert.Equal("1", progress.GetAttribute("aria-valuenow"));
+        Assert.Equal("2", progress.GetAttribute("aria-valuemax"));
+        Assert.Contains("width: 50%", rows[0].QuerySelector(".progress-bar")!.GetAttribute("style"));
+        Assert.NotNull(cut.Find("table.tournament-table").Closest(".table-wrap"));
         Assert.Equal("Running", rows[0].Children[3].TextContent);
         Assert.Single(cut.FindAll("button"), button => button.TextContent.Trim() == "Cancel tournament");
     }
@@ -198,9 +201,11 @@ public class TournamentsPageTests
         Wire.Api(ctx, handler);
         var cut = ctx.Render<TournamentsPage>();
         cut.WaitForAssertion(() => Assert.Contains("Cancel tournament", cut.Markup));
+        Assert.Contains("btn-danger", Button(cut, "Cancel tournament").ClassName);
 
         Button(cut, "Cancel tournament").Click();
         Assert.Contains("Abort its queued and running games?", cut.Markup);
+        Assert.Contains("btn-danger", Button(cut, "Yes, cancel").ClassName);
         Assert.DoesNotContain(handler.Requests, request => request.Method == "DELETE");
 
         Button(cut, "Keep running").Click();
@@ -216,4 +221,47 @@ public class TournamentsPageTests
 
     private static AngleSharp.Dom.IElement Button(IRenderedComponent<TournamentsPage> cut, string text) =>
         cut.FindAll("button").Single(button => button.TextContent.Trim() == text);
+
+    [Fact]
+    public void ModelPickersAreChipsInsideTheFormAndTheStartButtonIsPrimary()
+    {
+        var handler = Serve.Routes(new Dictionary<string, Reply>
+        {
+            ["GET /api/models"] = Serve.Ok(Fixtures.Models),
+            ["GET /api/tournaments"] = Serve.Ok(Fixtures.Tournaments()),
+        });
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, handler);
+
+        var cut = ctx.Render<TournamentsPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains("No tournaments yet", cut.Markup));
+        var pickers = cut.FindAll(".chips input[type='checkbox']");
+        Assert.NotEmpty(pickers);
+        Assert.All(pickers, picker => Assert.NotNull(picker.Closest(".chip")));
+        Assert.NotNull(cut.Find("#tournament-name").Closest(".card"));
+        Assert.Contains("btn-primary", cut.Find("#start-tournament").ClassName);
+    }
+
+    [Fact]
+    public void TheEstimateIsAnInfoCalloutAndItsTableScrollsInsideATableWrap()
+    {
+        var handler = Serve.Routes(new Dictionary<string, Reply>
+        {
+            ["GET /api/models"] = Serve.Ok(Fixtures.Models),
+            ["GET /api/tournaments"] = Serve.Ok(Fixtures.Tournaments()),
+        });
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, handler);
+        var cut = ctx.Render<TournamentsPage>();
+        cut.WaitForAssertion(() => Assert.Contains("No tournaments yet", cut.Markup));
+
+        cut.Find("#model-gpt").Change(true);
+        cut.Find("#model-claude").Change(true);
+
+        cut.WaitForAssertion(() => Assert.Contains("Known total: 400", cut.Markup));
+        var estimate = cut.Find(".tournament-estimate");
+        Assert.Contains("callout-info", estimate.ClassName);
+        Assert.NotNull(estimate.QuerySelector("table")!.Closest(".table-wrap"));
+    }
 }

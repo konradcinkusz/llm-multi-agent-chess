@@ -28,31 +28,35 @@ else if (_tournament is null)
 }
 else
 {
-    <h1>@_tournament.Name</h1>
-
-    <dl class="tournament-facts">
-        <dt>Status</dt>
-        <dd>@TournamentFormat.Status(_tournament.Status)</dd>
-        <dt>Models</dt>
-        <dd>@string.Join(", ", _tournament.Models)</dd>
-        <dt>Games per pair</dt>
-        <dd>@_tournament.GamesPerPair</dd>
-        <dt>Created</dt>
-        <dd>@TournamentFormat.When(_tournament.CreatedAt)</dd>
-        @if (_tournament.FinishedAt is { } finished)
-        {
-            <dt>Finished</dt>
-            <dd>@TournamentFormat.When(finished)</dd>
-        }
-    </dl>
-
-    <div class="tournament-actions">
-        <TournamentProgress Finished="_tournament.GamesFinished" Total="_tournament.GamesTotal" />
-        @if (TournamentFormat.IsRunning(_tournament.Status))
-        {
-            <CancelTournament TournamentId="Id" Cancelled="ReloadAsync" />
-        }
+    <div class="page-header">
+        <h1>@_tournament.Name</h1>
     </div>
+
+    <section class="card tournament-summary" aria-label="Tournament details">
+        <dl class="tournament-facts">
+            <dt>Status</dt>
+            <dd><span class="badge @TournamentFormat.StatusBadge(_tournament.Status)">@TournamentFormat.Status(_tournament.Status)</span></dd>
+            <dt>Models</dt>
+            <dd>@string.Join(", ", _tournament.Models)</dd>
+            <dt>Games per pair</dt>
+            <dd>@_tournament.GamesPerPair</dd>
+            <dt>Created</dt>
+            <dd>@TournamentFormat.When(_tournament.CreatedAt)</dd>
+            @if (_tournament.FinishedAt is { } finished)
+            {
+                <dt>Finished</dt>
+                <dd>@TournamentFormat.When(finished)</dd>
+            }
+        </dl>
+
+        <div class="tournament-actions">
+            <TournamentProgress Finished="_tournament.GamesFinished" Total="_tournament.GamesTotal" />
+            @if (TournamentFormat.IsRunning(_tournament.Status))
+            {
+                <CancelTournament TournamentId="Id" Cancelled="ReloadAsync" />
+            }
+        </div>
+    </section>
 
     <section class="tournament-section" aria-labelledby="leaderboard-heading">
         <h2 id="leaderboard-heading">Leaderboard</h2>
@@ -72,18 +76,18 @@ else
         }
         else
         {
-            <div class="table-scroll">
+            <div class="table-wrap">
                 <table id="tournament-leaderboard">
                     <thead>
                         <tr>
-                            <th>Rank</th>
+                            <th class="num">Rank</th>
                             <th>Model</th>
-                            <th>Arena score</th>
-                            <th>Rating</th>
-                            <th>95 % interval</th>
-                            <th>Games</th>
-                            <th>Legal first try</th>
-                            <th>Quality</th>
+                            <th class="num">Arena score</th>
+                            <th class="num">Rating</th>
+                            <th class="num">95 % interval</th>
+                            <th class="num">Games</th>
+                            <th class="num">Legal first try</th>
+                            <th class="num">Quality</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -93,15 +97,18 @@ else
                         {
                             rank++;
                             <tr>
-                                <td>@rank</td>
+                                <td class="num">@rank</td>
                                 <td>@model.Model</td>
-                                <td>@TournamentFormat.Fixed(model.ArenaScore, "0.00")</td>
-                                <td>@TournamentFormat.Fixed(model.Rating, "0")</td>
-                                <td>@TournamentFormat.Fixed(model.CiLow, "0") – @TournamentFormat.Fixed(model.CiHigh, "0")</td>
-                                <td>@model.Games</td>
-                                <td>@TournamentFormat.Percent(model.Legality)</td>
-                                <td>@TournamentFormat.Fixed(model.Quality, "0.00")</td>
-                                <td>@(model.Provisional ? "provisional" : "")</td>
+                                <td class="num">@TournamentFormat.Fixed(model.ArenaScore, "0.00")</td>
+                                <td class="num">@TournamentFormat.Fixed(model.Rating, "0")</td>
+                                <td class="num">@TournamentFormat.Fixed(model.CiLow, "0") – @TournamentFormat.Fixed(model.CiHigh, "0")</td>
+                                <td class="num">@model.Games</td>
+                                <td class="num">@TournamentFormat.Percent(model.Legality)</td>
+                                <td class="num">@TournamentFormat.Fixed(model.Quality, "0.00")</td>
+                                <td>@if (model.Provisional)
+                                    {
+                                        <span class="badge badge-warning">provisional</span>
+                                    }</td>
                             </tr>
                         }
                     </tbody>
@@ -127,7 +134,7 @@ else
         }
         else
         {
-            <div class="table-scroll">
+            <div class="table-wrap">
                 <table id="tournament-games">
                     <thead>
                         <tr>
@@ -137,7 +144,7 @@ else
                             <th>State</th>
                             <th>Result</th>
                             <th>Termination</th>
-                            <th>Plies</th>
+                            <th class="num">Plies</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -152,7 +159,7 @@ else
                                 <td>@game.State</td>
                                 <td>@game.Result</td>
                                 <td>@(game.Termination ?? "–")</td>
-                                <td>@game.PlyCount</td>
+                                <td class="num">@game.PlyCount</td>
                                 <td><a href="/games/@game.Id">Open</a></td>
                             </tr>
                         }

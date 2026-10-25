@@ -5,8 +5,12 @@
 
 <PageTitle>Tournaments · LLM Chess Arena</PageTitle>
 
-<h1>Tournaments</h1>
+<div class="page-header">
+    <h1>Tournaments</h1>
+    <p class="page-lede">Every selected model plays every other one, the number of games per pair you choose.</p>
+</div>
 
+<div class="stack-lg">
 <section class="tournament-section" aria-labelledby="new-tournament-heading">
     <h2 id="new-tournament-heading">New round robin</h2>
 
@@ -20,117 +24,123 @@
     }
     else
     {
-        <div class="tournament-form">
-            <label>
-                Name
-                <input id="tournament-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" />
-            </label>
+        <div class="card stack">
+            <div class="field-row">
+                <label class="field">
+                    Name
+                    <input id="tournament-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" />
+                </label>
+
+                <label class="field">
+                    Games per pair
+                    <select id="games-per-pair" @bind="_gamesPerPair">
+                        @foreach (var games in GamesPerPairChoices)
+                        {
+                            <option value="@games">@games</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="field">
+                    Max concurrency
+                    <select id="max-concurrency" @bind="_maxConcurrency">
+                        @for (var limit = 1; limit <= TournamentFormRules.MaxConcurrencyLimit; limit++)
+                        {
+                            <option value="@limit">@limit</option>
+                        }
+                    </select>
+                </label>
+            </div>
 
             <fieldset class="tournament-models">
                 <legend>Models</legend>
-                @foreach (var model in _choices)
-                {
-                    <label class="tournament-model">
-                        <input id="model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
-                               @onchange="e => Toggle(model.Id, e.Value)" />
-                        @model.DisplayName
-                        <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
-                    </label>
-                }
+                <div class="chips">
+                    @foreach (var model in _choices)
+                    {
+                        <label class="chip">
+                            <input id="model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
+                                   @onchange="e => Toggle(model.Id, e.Value)" />
+                            @model.DisplayName
+                            <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
+                        </label>
+                    }
+                </div>
             </fieldset>
 
-            <label>
-                Games per pair
-                <select id="games-per-pair" @bind="_gamesPerPair">
-                    @foreach (var games in GamesPerPairChoices)
-                    {
-                        <option value="@games">@games</option>
-                    }
-                </select>
-            </label>
+            @if (SelectedModels.Count >= 2)
+            {
+                var pairs = SelectedModels.Count * (SelectedModels.Count - 1) / 2;
+                var gameCount = pairs * _gamesPerPair;
+                var estimates = PremiumEstimate.For(_models!, SelectedModels, _gamesPerPair);
+                var unknown = estimates.Count(estimate => estimate.Requests is null);
 
-            <label>
-                Max concurrency
-                <select id="max-concurrency" @bind="_maxConcurrency">
-                    @for (var limit = 1; limit <= TournamentFormRules.MaxConcurrencyLimit; limit++)
-                    {
-                        <option value="@limit">@limit</option>
-                    }
-                </select>
-            </label>
-        </div>
-
-        @if (SelectedModels.Count >= 2)
-        {
-            var pairs = SelectedModels.Count * (SelectedModels.Count - 1) / 2;
-            var gameCount = pairs * _gamesPerPair;
-            var estimates = PremiumEstimate.For(_models!, SelectedModels, _gamesPerPair);
-            var unknown = estimates.Count(estimate => estimate.Requests is null);
-
-            <div class="tournament-estimate" aria-live="polite">
-                <h3>Estimated premium requests</h3>
-                <p>
-                    @gameCount @(gameCount == 1 ? "game" : "games") in @pairs @(pairs == 1 ? "pair" : "pairs").
-                    Each game is estimated at @PremiumEstimate.RequestsPerGame requests for each of its models (ADR-004),
-                    so this is an upper bound, not a bill.
-                </p>
-                <div class="table-scroll">
-                    <table>
-                        <thead>
-                            <tr><th>Model</th><th>Multiplier</th><th>Premium requests</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var estimate in estimates)
-                            {
-                                <tr>
-                                    <td>@estimate.ModelId</td>
-                                    <td>@TournamentFormat.Multiplier(Find(estimate.ModelId)?.PremiumMultiplier)</td>
-                                    <td>@TournamentFormat.Requests(estimate.Requests)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                <div class="callout callout-info tournament-estimate" aria-live="polite">
+                    <h3>Estimated premium requests</h3>
+                    <p>
+                        @gameCount @(gameCount == 1 ? "game" : "games") in @pairs @(pairs == 1 ? "pair" : "pairs").
+                        Each game is estimated at @PremiumEstimate.RequestsPerGame requests for each of its models (ADR-004),
+                        so this is an upper bound, not a bill.
+                    </p>
+                    <div class="table-wrap">
+                        <table class="table-compact">
+                            <thead>
+                                <tr><th>Model</th><th class="num">Multiplier</th><th class="num">Premium requests</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var estimate in estimates)
+                                {
+                                    <tr>
+                                        <td>@estimate.ModelId</td>
+                                        <td class="num">@TournamentFormat.Multiplier(Find(estimate.ModelId)?.PremiumMultiplier)</td>
+                                        <td class="num">@TournamentFormat.Requests(estimate.Requests)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p>
+                        Known total: @TournamentFormat.Requests(PremiumEstimate.Known(estimates))
+                        @if (unknown > 0)
+                        {
+                            <span>, plus @unknown model@(unknown == 1 ? "" : "s") with an unknown multiplier</span>
+                        }
+                    </p>
                 </div>
-                <p>
-                    Known total: @TournamentFormat.Requests(PremiumEstimate.Known(estimates))
-                    @if (unknown > 0)
-                    {
-                        <span>, plus @unknown model@(unknown == 1 ? "" : "s") with an unknown multiplier</span>
-                    }
-                </p>
+            }
+
+            @foreach (var problem in Problems)
+            {
+                <p class="tournament-problem error-text">@problem</p>
+            }
+
+            <div class="cluster">
+                <button id="start-tournament" type="button" class="btn-primary" @onclick="StartAsync" disabled="@(Problems.Count > 0 || _submitting)">
+                    Start tournament
+                </button>
             </div>
-        }
 
-        @foreach (var problem in Problems)
-        {
-            <p class="tournament-problem">@problem</p>
-        }
+            @if (_createError is not null)
+            {
+                <p class="status-error" role="alert">@_createError</p>
+            }
 
-        <button id="start-tournament" type="button" @onclick="StartAsync" disabled="@(Problems.Count > 0 || _submitting)">
-            Start tournament
-        </button>
-
-        @if (_createError is not null)
-        {
-            <p class="status-error" role="alert">@_createError</p>
-        }
-
-        @if (_created is { } created)
-        {
-            <div class="tournament-created" role="status">
-                <p>
-                    Started <strong>@created.Tournament.Name</strong> with @created.Tournament.GamesTotal games.
-                    <a href="/tournaments/@created.Tournament.Id">Open the tournament</a>
-                </p>
-                <p>Premium requests estimated by the API:</p>
-                <ul>
-                    @foreach (var estimate in created.EstimatedPremiumRequests)
-                    {
-                        <li>@estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)</li>
-                    }
-                </ul>
-            </div>
-        }
+            @if (_created is { } created)
+            {
+                <div class="callout tournament-created" role="status">
+                    <p>
+                        Started <strong>@created.Tournament.Name</strong> with @created.Tournament.GamesTotal games.
+                        <a href="/tournaments/@created.Tournament.Id">Open the tournament</a>
+                    </p>
+                    <p>Premium requests estimated by the API:</p>
+                    <ul>
+                        @foreach (var estimate in created.EstimatedPremiumRequests)
+                        {
+                            <li>@estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
     }
 </section>
 
@@ -152,13 +162,13 @@
     }
     else
     {
-        <div class="table-scroll">
+        <div class="table-wrap">
             <table class="tournament-table">
                 <thead>
                     <tr>
                         <th>Name</th>
                         <th>Models</th>
-                        <th>Games per pair</th>
+                        <th class="num">Games per pair</th>
                         <th>Status</th>
                         <th>Progress</th>
                         <th><span class="visually-hidden">Actions</span></th>
@@ -170,8 +180,8 @@
                         <tr>
                             <td><a href="/tournaments/@tournament.Id">@tournament.Name</a></td>
                             <td>@string.Join(", ", tournament.Models)</td>
-                            <td>@tournament.GamesPerPair</td>
-                            <td>@TournamentFormat.Status(tournament.Status)</td>
+                            <td class="num">@tournament.GamesPerPair</td>
+                            <td><span class="badge @TournamentFormat.StatusBadge(tournament.Status)">@TournamentFormat.Status(tournament.Status)</span></td>
                             <td><TournamentProgress Finished="tournament.GamesFinished" Total="tournament.GamesTotal" /></td>
                             <td>
                                 @if (TournamentFormat.IsRunning(tournament.Status))
@@ -186,6 +196,7 @@
         </div>
     }
 </section>
+</div>
 
 @code {
     private static readonly int[] GamesPerPairChoices = [2, 4, 6, 8, 10];

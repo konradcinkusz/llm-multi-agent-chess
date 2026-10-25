@@ -1,58 +1,46 @@
-/* Tournament detail: facts, progress, leaderboard and games (03 §6). */
+/* Tournament detail: facts, progress, leaderboard and games (03 §6, 07 §6). */
 
 .back {
-    margin: 0 0 8px;
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
 }
 
 .tournament-facts {
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 4px 16px;
-    margin: 0 0 12px;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
 }
 
 .tournament-facts dt {
-    opacity: 0.75;
+    color: var(--text-2);
+    font-weight: 500;
 }
 
 .tournament-facts dd {
     margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .tournament-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 16px;
+    gap: var(--space-3) var(--space-4);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+
+.tournament-summary {
+    margin-bottom: var(--space-6);
 }
 
 .tournament-section {
-    margin: 0 0 24px;
+    margin: 0 0 var(--space-6);
 }
 
-.tournament-section h2 {
-    margin: 0 0 8px;
-    font-size: 1.125rem;
-}
-
-.table-scroll {
-    overflow-x: auto;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-th,
-td {
-    padding: 4px 8px;
-    text-align: left;
-    border-bottom: 1px solid rgba(127, 127, 127, 0.3);
-    vertical-align: middle;
-}
-
-.muted {
-    opacity: 0.75;
+.tournament-section > p {
+    margin: 0 0 var(--space-3);
 }

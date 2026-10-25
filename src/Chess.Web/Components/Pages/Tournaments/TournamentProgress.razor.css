@@ -1,12 +1,14 @@
+/* A progress track (07 §4 .progress) with a fixed width, and the count beside it. */
 .tournament-progress {
     display: inline-flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2) var(--space-3);
+    color: var(--text-2);
+    font-size: var(--text-sm);
     white-space: nowrap;
 }
 
-progress {
-    width: 120px;
-    height: 10px;
+.progress {
+    width: 140px;
 }
