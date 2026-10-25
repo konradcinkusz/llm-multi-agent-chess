@@ -5,17 +5,26 @@ namespace Chess.Llm;
 /// moves listed on its <c>Legal moves:</c> line, chosen by a seeded RNG. Replies can be scripted per
 /// model with <see cref="Script"/> (for illegal-reply and forfeit tests); scripted replies are returned
 /// first, in order, and are not checked against the prompt. CI and E2E run on it.
+/// The two fake models take the reasoning efforts <c>low</c>, <c>medium</c> and <c>high</c>. Configured custom models
+/// (<c>Arena:CustomModels</c>) are listed and served the same way, without efforts, so the whole custom-model path
+/// runs offline (ADR-014).
 /// </summary>
 /// <param name="seed">Seed for the RNG that picks legal moves.</param>
 /// <param name="latency">Simulated delay before every reply; reported as the reply latency.</param>
-public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null) : ILlmGateway
+/// <param name="customModels">Custom models to list and serve next to the two fake models.</param>
+public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnumerable<CustomModelOptions>? customModels = null) : ILlmGateway
 {
     private const string LegalMovesPrefix = "Legal moves:";
+    private const string FakeAId = "fake-a";
+    private const string FakeBId = "fake-b";
+    private const string DefaultEffort = "medium";
+    private static readonly IReadOnlyList<string> FakeEfforts = ["low", "medium", "high"];
 
     private readonly Random _random = new(seed);
     private readonly Dictionary<string, Queue<string>> _scripted = new(StringComparer.Ordinal);
     private readonly object _gate = new();
     private readonly TimeSpan _latency = latency ?? TimeSpan.Zero;
+    private readonly IReadOnlyList<CustomModelOptions> _customModels = CheckedCustomModels(customModels);
 
     public LlmGatewayStatus Status { get; } = new(LlmGatewayState.Fake, "Fake gateway: no Copilot runtime");
 
@@ -44,14 +53,39 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null) : ILl
     {
         IReadOnlyList<LlmModelInfo> models =
         [
-            new LlmModelInfo("fake-a", "Fake A", 0, true, FakePrices),
-            new LlmModelInfo("fake-b", "Fake B", 0, true, FakePrices),
+            new LlmModelInfo(FakeAId, "Fake A", 0, true, FakePrices, FakeEfforts, DefaultEffort),
+            new LlmModelInfo(FakeBId, "Fake B", 0, true, FakePrices, FakeEfforts, DefaultEffort),
+            .. _customModels.Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true, Custom: true)),
         ];
         return Task.FromResult(models);
     }
 
-    public Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct) =>
-        Task.FromResult<ILlmConversation>(new FakeConversation(this, options.ModelId));
+    public Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct)
+    {
+        if (options.ReasoningEffort is { } effort && !OffersEffort(options.ModelId, effort))
+        {
+            throw new ArgumentException($"Model {options.ModelId} does not offer reasoning effort '{effort}'.", nameof(options));
+        }
+
+        return Task.FromResult<ILlmConversation>(new FakeConversation(this, options.ModelId));
+    }
+
+    private bool OffersEffort(string modelId, string effort) =>
+        modelId is FakeAId or FakeBId && FakeEfforts.Contains(effort, StringComparer.Ordinal);
+
+    private static IReadOnlyList<CustomModelOptions> CheckedCustomModels(IEnumerable<CustomModelOptions>? customModels)
+    {
+        var list = customModels?.ToList() ?? [];
+        foreach (var custom in list)
+        {
+            if (custom.Id is FakeAId or FakeBId)
+            {
+                throw new ArgumentException($"Custom model id '{custom.Id}' clashes with a fake model.", nameof(customModels));
+            }
+        }
+
+        return list;
+    }
 
     private string NextReply(string modelId, string prompt, CancellationToken ct)
     {
