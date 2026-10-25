@@ -1,0 +1,38 @@
+/* The snapshot strip and the footer of the static site. Colour comes from the tokens in app.css only (07 §1). */
+.site-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--gutter);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.site-live {
+    font-weight: 600;
+}
+
+.site-footer {
+    max-width: var(--content-max);
+    margin: var(--space-7) auto 0;
+    padding: var(--space-5) var(--gutter);
+    border-top: 1px solid var(--border);
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.site-footer p {
+    max-width: 70ch;
+    margin: 0 0 var(--space-3);
+}
+
+.site-support {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
