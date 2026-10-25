@@ -1,3 +1,4 @@
+using Chess.Api.Catalog;
 using Chess.Engine;
 using Chess.Llm;
 using Microsoft.Extensions.Options;
@@ -23,8 +24,9 @@ public sealed class ChessPlayerFactory(ILlmGateway gateway, IOptions<PlayerOptio
                 }
 
                 var timeout = TimeSpan.FromSeconds(settings.MoveTimeoutSeconds);
+                var (model, effort) = ModelVariant.Split(descriptor.ModelId);
                 var conversation = await gateway.StartConversationAsync(
-                    new LlmConversationOptions(descriptor.ModelId, RatedPromptBuilder.SystemPrompt, timeout), ct);
+                    new LlmConversationOptions(model, RatedPromptBuilder.SystemPrompt, timeout, effort), ct);
                 return new LlmChessPlayer(descriptor, conversation, settings.MaxAttemptsPerMove);
 
             default:

@@ -14,7 +14,7 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
 {
     public const string RandomModelId = "random";
 
-    private const string AutoModelId = "auto";
+    public const string AutoModelId = "auto";
     private const string CacheKey = "catalog:models";
     private static readonly ModelDto Random = new(RandomModelId, "Random", 0, true);
 
@@ -35,7 +35,7 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
                 var rate = options.Value.Cost.UsdPerAiCredit;
                 return listed
                     .Select(m => new ModelDto(m.Id, m.DisplayName, m.PremiumMultiplier, m.Enabled,
-                        ModelPricing.ToDto(m.Pricing, rate)))
+                        ModelPricing.ToDto(m.Pricing, rate), m.ReasoningEfforts, m.DefaultReasoningEffort, m.Custom))
                     .ToArray();
             });
 
@@ -49,10 +49,85 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
         }
     }
 
-    private static bool IsAuto(ModelDto model) => model.Id.Equals(AutoModelId, StringComparison.OrdinalIgnoreCase);
+    private static bool IsAuto(ModelDto model) => IsAutoModel(model.Id);
+
+    public static bool IsAutoModel(string modelId) => modelId.Equals(AutoModelId, StringComparison.OrdinalIgnoreCase);
 
     private static ModelListing NotReady(LlmGatewayState state) =>
         new([Random], $"LLM gateway is {state}; only the random player is available");
 }
 
 public sealed record ModelListing(IReadOnlyList<ModelDto> Models, string? Warning);
+
+/// <summary>
+/// A player id may name a reasoning effort: <c>model@effort</c> (03 §12.1). The effort is part of the player's identity
+/// (games, ratings, results), so each configuration is ranked as its own player. A plain model id means the model's default
+/// effort. A model id may not contain <c>@</c>. Pure: no I/O.
+/// </summary>
+public static class ModelVariant
+{
+    private const char Separator = '@';
+
+    /// <summary>The model and effort of a player id; the effort is null for a plain model id.</summary>
+    /// <exception cref="ArgumentException">The id is not <c>model</c> or <c>model@effort</c>.</exception>
+    public static (string Model, string? Effort) Split(string playerId)
+    {
+        if (!TryParts(playerId, out var model, out var effort))
+        {
+            throw new ArgumentException($"'{playerId}' is not a player id: write a variant as model@effort, with one @.", nameof(playerId));
+        }
+
+        return (model, effort);
+    }
+
+    /// <summary>The model of a player id, without its effort.</summary>
+    public static string BaseOf(string playerId)
+    {
+        var at = playerId.IndexOf(Separator);
+        return at < 0 ? playerId : playerId[..at];
+    }
+
+    /// <returns>What is wrong with a player id, or null when it is fine. Only an id that names an effort is checked against the catalog.</returns>
+    public static string? Problem(string playerId, ModelListing listing)
+    {
+        if (!TryParts(playerId, out var model, out var effort))
+        {
+            return $"'{playerId}' is not a player id: write a variant as model@effort, with one @.";
+        }
+
+        if (effort is null)
+        {
+            return null;
+        }
+
+        var listed = listing.Models.FirstOrDefault(m => m.Id == model);
+        if (listed is null)
+        {
+            return $"'{model}' is not a model the gateway offers, so its reasoning effort cannot be checked.";
+        }
+
+        if (listed.ReasoningEfforts is not { Count: > 0 } efforts)
+        {
+            return $"{model} does not take a reasoning effort.";
+        }
+
+        return efforts.Contains(effort, StringComparer.Ordinal)
+            ? null
+            : $"{model} does not offer reasoning effort '{effort}'. It offers: {string.Join(", ", efforts)}.";
+    }
+
+    private static bool TryParts(string playerId, out string model, out string? effort)
+    {
+        var at = playerId.IndexOf(Separator);
+        if (at < 0)
+        {
+            model = playerId;
+            effort = null;
+            return model.Length > 0;
+        }
+
+        model = playerId[..at];
+        effort = playerId[(at + 1)..];
+        return model.Length > 0 && effort.Length > 0 && effort.IndexOf(Separator) < 0;
+    }
+}

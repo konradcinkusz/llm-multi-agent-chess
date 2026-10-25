@@ -38,19 +38,39 @@ public sealed class TournamentService(
     {
         var models = request.Models.ToList();
         var pairings = RoundRobin.Pairings(models, request.GamesPerPair);
-        var startFen = ChessBoard.StartingPosition().ToFen();
-        var now = clock.GetUtcNow();
-        var tournament = new TournamentEntity
+        var tournament = NewTournament(request.Name, models, request.GamesPerPair, request.MaxConcurrency,
+            TournamentKind.RoundRobin, candidate: null);
+        await StartAsync(tournament, pairings, ct);
+
+        var estimate = await EstimateAsync(models, pairings, ct);
+        return new TournamentCreatedDto(ToDto(tournament, (pairings.Count, 0)), estimate);
+    }
+
+    /// <summary>
+    /// A new run of the given kind, not yet saved: <see cref="StartAsync"/> saves it with its games. <paramref name="candidate"/>
+    /// is set only for a benchmark (03 §12.2).
+    /// </summary>
+    public TournamentEntity NewTournament(string name, IReadOnlyList<string> models, int gamesPerPair, int maxConcurrency,
+        string kind, string? candidate) => new()
         {
             Id = Guid.NewGuid(),
-            Name = request.Name.Trim(),
-            Models = models,
-            GamesPerPair = request.GamesPerPair,
-            MaxConcurrency = request.MaxConcurrency,
+            Name = name.Trim(),
+            Models = [.. models],
+            GamesPerPair = gamesPerPair,
+            MaxConcurrency = maxConcurrency,
             Status = TournamentStatus.Running,
-            CreatedAt = now,
+            CreatedAt = clock.GetUtcNow(),
+            Kind = kind,
+            Candidate = candidate,
         };
 
+    /// <summary>
+    /// Saves a new run with one rated game per pairing, then hands as many of them to the runner as its concurrency allows.
+    /// The games of a run are created up front; <see cref="DispatchAsync"/> starts the rest as room frees up.
+    /// </summary>
+    public async Task StartAsync(TournamentEntity tournament, IReadOnlyList<Pairing> pairings, CancellationToken ct)
+    {
+        var startFen = ChessBoard.StartingPosition().ToFen();
         await _gate.WaitAsync(ct);
         try
         {
@@ -70,7 +90,7 @@ public sealed class TournamentService(
                     Result = "*",
                     StartFen = startFen,
                     CurrentFen = startFen,
-                    CreatedAt = now,
+                    CreatedAt = tournament.CreatedAt,
                 });
             }
 
@@ -81,15 +101,14 @@ public sealed class TournamentService(
         {
             _gate.Release();
         }
-
-        var estimate = await EstimateAsync(models, request.GamesPerPair, ct);
-        return new TournamentCreatedDto(ToDto(tournament, (pairings.Count, 0)), estimate);
     }
 
     public async Task<IReadOnlyList<TournamentDto>> ListAsync(CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        // Benchmarks have their own list (03 §12.2); a round robin is what this one shows.
         var tournaments = await db.Tournaments.AsNoTracking()
+            .Where(t => t.Kind == TournamentKind.RoundRobin)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(ct);
         var progress = await ProgressAsync(db, tournaments.Select(t => t.Id).ToList(), ct);
@@ -240,18 +259,23 @@ public sealed class TournamentService(
         return queued;
     }
 
-    private async Task<IReadOnlyList<ModelPremiumEstimateDto>> EstimateAsync(IReadOnlyList<string> models, int gamesPerPair, CancellationToken ct)
+    /// <summary>
+    /// What each model is expected to cost in these pairings: its games × the moves a side makes in a game. A variant
+    /// (<c>model@effort</c>) is priced as its model, because the premium multiplier and the token prices belong to the model.
+    /// </summary>
+    public async Task<IReadOnlyList<ModelPremiumEstimateDto>> EstimateAsync(IReadOnlyList<string> models,
+        IReadOnlyList<Pairing> pairings, CancellationToken ct)
     {
         var listing = await catalog.GetModelsAsync(ct);
         var inputs = await costs.ForAsync(listing, ct);
-        // Each model plays every other model gamesPerPair times.
-        var gamesPerModel = (models.Count - 1) * gamesPerPair;
         return models
             .Select(id =>
             {
-                var cost = CostEstimator.Estimate(id, gamesPerModel * CostEstimator.MovesPerSidePerGame,
-                    inputs.GetValueOrDefault(id), costs.UsdPerAiCredit);
-                return new ModelPremiumEstimateDto(id, Estimate(listing, id, gamesPerModel),
+                var model = ModelVariant.BaseOf(id);
+                var gamesOfModel = pairings.Count(p => p.White == id || p.Black == id);
+                var cost = CostEstimator.Estimate(model, gamesOfModel * CostEstimator.MovesPerSidePerGame,
+                    inputs.GetValueOrDefault(model), costs.UsdPerAiCredit);
+                return new ModelPremiumEstimateDto(id, Estimate(listing, model, gamesOfModel),
                     cost.AiCredits, cost.Usd, cost.Basis, cost.SampleMoves);
             })
             .ToArray();
@@ -263,7 +287,8 @@ public sealed class TournamentService(
         return multiplier is { } value ? gamesPerModel * EstimatedRequestsPerGame * value : null;
     }
 
-    private static async Task<Dictionary<Guid, (int Total, int Finished)>> ProgressAsync(
+    /// <summary>The games and finished games of each run, by run id; a run with no games is absent.</summary>
+    internal static async Task<Dictionary<Guid, (int Total, int Finished)>> ProgressAsync(
         ArenaDbContext db, List<Guid> tournamentIds, CancellationToken ct)
     {
         var rows = await db.Games

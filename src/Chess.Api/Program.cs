@@ -1,3 +1,4 @@
+using Chess.Api.Benchmarks;
 using Chess.Api.Broadcast;
 using Chess.Api.Usage;
 
@@ -23,6 +24,7 @@ var api = app.MapGroup("/api");
 api.MapCatalogEndpoints();
 api.MapGameEndpoints();
 api.MapTournamentEndpoints();
+api.MapBenchmarkEndpoints();
 api.MapRatingEndpoints();
 api.MapResultEndpoints();
 api.MapAttemptEndpoints();

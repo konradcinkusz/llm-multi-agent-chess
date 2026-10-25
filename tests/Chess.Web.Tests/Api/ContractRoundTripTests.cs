@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
 using ApiDto = Chess.Api.Contracts;
+using ApiBenchmarks = Chess.Api.Benchmarks;
 using ApiTournaments = Chess.Api.Tournaments;
 using WebDto = Chess.Web.Api;
 
@@ -103,6 +104,31 @@ public class ContractRoundTripTests
         var black = new ApiDto.SideUsageDto("black", "random", 0, 0, 0, 0, 0, null, null, "free");
         AssertRoundTrip<ApiDto.SideUsageDto, WebDto.SideUsageDto>(white);
         AssertRoundTrip<ApiDto.GameUsageDto, WebDto.GameUsageDto>(new ApiDto.GameUsageDto(Id, white, black, 0.31, 0.0031, 0.01));
+    }
+
+    [Fact]
+    public void EveryBenchmarkContractRoundTrips()
+    {
+        var run = new ApiBenchmarks.BenchmarkDto(Id, "Medium pick", "claude@medium", ["fake-b", "random"], 30, "running", 60, 12, At, null);
+        var opponent = new ApiBenchmarks.BenchmarkOpponentDto("random", 30, 22, 4, 4, 0, 0.7, 190.85, 40.2, null, 0.82, 0.71, 0.91, 0.98, 0.0021);
+        var unrated = new ApiBenchmarks.BenchmarkOpponentDto("fake-b", 0, 0, 0, 0, 0, 0, null, null, null, null, null, null, 0, null);
+        var fingerprint = new ApiBenchmarks.BenchmarkFingerprintDto("1.0.0+abc1234", "1", "sha256:0123456789ab", At);
+
+        AssertRoundTrip<ApiBenchmarks.CreateBenchmarkRequest, WebDto.CreateBenchmarkRequest>(
+            new ApiBenchmarks.CreateBenchmarkRequest("Medium pick", "claude@medium", null));
+        AssertRoundTrip<ApiBenchmarks.CreateBenchmarkRequest, WebDto.CreateBenchmarkRequest>(
+            new ApiBenchmarks.CreateBenchmarkRequest("Quick", "fake-a@high", ["fake-b"], 4, 1));
+        AssertRoundTrip<ApiBenchmarks.BenchmarkDto, WebDto.BenchmarkDto>(run);
+        AssertRoundTrip<ApiBenchmarks.BenchmarkCreatedDto, WebDto.BenchmarkCreatedDto>(
+            new ApiBenchmarks.BenchmarkCreatedDto(run, [new ApiTournaments.ModelPremiumEstimateDto("random", null, 0, 0, "free")]));
+        AssertRoundTrip<ApiBenchmarks.BenchmarkOpponentDto, WebDto.BenchmarkOpponentDto>(opponent);
+        AssertRoundTrip<ApiBenchmarks.BenchmarkOpponentDto, WebDto.BenchmarkOpponentDto>(unrated);
+        AssertRoundTrip<ApiBenchmarks.BenchmarkSummaryDto, WebDto.BenchmarkSummaryDto>(
+            new ApiBenchmarks.BenchmarkSummaryDto(60, 0.6, 1512, 1430, 1601, 0.71, false, 91000, 0.2, null));
+        AssertRoundTrip<ApiBenchmarks.BenchmarkFingerprintDto, WebDto.BenchmarkFingerprintDto>(fingerprint);
+        AssertRoundTrip<ApiBenchmarks.BenchmarkReportDto, WebDto.BenchmarkReportDto>(
+            new ApiBenchmarks.BenchmarkReportDto(run, [opponent, unrated],
+                new ApiBenchmarks.BenchmarkSummaryDto(30, 0.7, null, null, null, null, true, 0, null, null), fingerprint));
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using Chess.Api.Catalog;
 using Chess.Api.Contracts;
 
 namespace Chess.Api.Tournaments;
@@ -5,8 +6,9 @@ namespace Chess.Api.Tournaments;
 /// <summary>The checks a tournament request must pass before any game is created. Keys are the JSON property names.</summary>
 public static class TournamentRules
 {
+    /// <param name="listing">When given, a player id that names an effort (model@effort) is checked against the model's efforts.</param>
     /// <returns>The problems found, by property name; empty when the request is valid.</returns>
-    public static Dictionary<string, string[]> Validate(CreateTournamentRequest request, int maxConcurrentGames)
+    public static Dictionary<string, string[]> Validate(CreateTournamentRequest request, int maxConcurrentGames, ModelListing? listing = null)
     {
         var errors = new Dictionary<string, string[]>();
 
@@ -27,6 +29,15 @@ public static class TournamentRules
         else if (models.Distinct().Count() != models.Count)
         {
             errors["models"] = ["Each model may appear only once."];
+        }
+
+        if (listing is not null && !errors.ContainsKey("models"))
+        {
+            var problems = models.Select(m => ModelVariant.Problem(m, listing)).OfType<string>().ToArray();
+            if (problems.Length > 0)
+            {
+                errors["models"] = problems;
+            }
         }
 
         // Colours alternate within a pair, so each pair needs an even number of games (at least one each way).
