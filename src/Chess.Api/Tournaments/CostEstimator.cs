@@ -15,8 +15,8 @@ public sealed record ModelCostEstimate(double? AiCredits, double? Usd, string Ba
 /// <summary>
 /// The expected cost of a model's moves (03 §10.2, ADR-012): expected moves × (input and output tokens per move) × the
 /// model's token prices, converted to AI credits and then to USD. The tokens are the model's average over its stored
-/// moves when it has any, else the assumed tokens of <see cref="CostEstimateOptions"/>. Cached input is priced as
-/// uncached input (an upper bound). Pure: no I/O, no clock.
+/// moves when it has any, else the assumed tokens below. Cached input is priced as uncached input (an upper bound).
+/// Pure: no I/O, no clock.
 /// </summary>
 public static class CostEstimator
 {
@@ -28,10 +28,17 @@ public static class CostEstimator
     /// <summary>The moves one side makes in an 80-ply game (03 §9.1: plies ÷ 2).</summary>
     public const double MovesPerSidePerGame = 40;
 
+    /// <summary>Input tokens a move is assumed to take when a model has no stored moves (03 §10.2). Not configurable.</summary>
+    public const double AssumedInputTokensPerMove = 700;
+
+    /// <summary>Output tokens a move is assumed to take when a model has no stored moves (03 §10.2). Not configurable.</summary>
+    public const double AssumedOutputTokensPerMove = 300;
+
     /// <param name="model">The model id. The random player costs nothing.</param>
     /// <param name="expectedMoves">The moves the model is expected to make.</param>
     /// <param name="inputs">The model's catalog entry and stored moves; null when the model is not listed.</param>
-    public static ModelCostEstimate Estimate(string model, double expectedMoves, ModelCostInputs? inputs, CostEstimateOptions options)
+    /// <param name="usdPerAiCredit">US dollars per AI credit (<c>Arena:Cost:UsdPerAiCredit</c>).</param>
+    public static ModelCostEstimate Estimate(string model, double expectedMoves, ModelCostInputs? inputs, double usdPerAiCredit)
     {
         if (model == ModelCatalog.RandomModelId)
         {
@@ -47,9 +54,9 @@ public static class CostEstimator
         var history = inputs.History;
         var (inputTokens, outputTokens, basis, sample) = history is { Moves: > 0 }
             ? (history.AverageInputTokens, history.AverageOutputTokens, HistoryBasis, (int?)history.Moves)
-            : (options.AssumedInputTokensPerMove, options.AssumedOutputTokensPerMove, AssumedBasis, null);
+            : (AssumedInputTokensPerMove, AssumedOutputTokensPerMove, AssumedBasis, null);
 
         var usd = expectedMoves * (inputTokens * inputUsd + outputTokens * outputUsd) / 1_000_000;
-        return new ModelCostEstimate(usd / options.UsdPerAiCredit, usd, basis, sample);
+        return new ModelCostEstimate(usd / usdPerAiCredit, usd, basis, sample);
     }
 }

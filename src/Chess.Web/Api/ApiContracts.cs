@@ -48,3 +48,8 @@ public sealed record SideUsageDto(string Color, string ModelId, int Requests, lo
     long ReasoningTokens, long CachedInputTokens, double? AiCredits, double? EstimatedUsd, string CostBasis);
 public sealed record GameUsageDto(Guid GameId, SideUsageDto White, SideUsageDto Black, double? TotalAiCredits,
     double? TotalEstimatedUsd, double UsdPerAiCredit);
+
+// 03 §10 (G5): GET /api/cost/inputs. Models lists the models with stored moves; the rest are assumed.
+public sealed record CostInputsDto(double UsdPerAiCredit, int AssumedInputTokensPerMove, int AssumedOutputTokensPerMove,
+    IReadOnlyList<ModelTokenAverageDto> Models);
+public sealed record ModelTokenAverageDto(string ModelId, int Moves, double? AverageInputTokens, double? AverageOutputTokens);

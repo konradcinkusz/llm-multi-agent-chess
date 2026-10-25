@@ -27,12 +27,11 @@ public static class BroadcastPlanner
     /// final gap is left empty rather than starting a game that cannot end.
     /// </summary>
     /// <param name="inputs">Per model id: its premium multiplier, prices and stored moves. A missing entry gives null estimates.</param>
-    /// <param name="costs">The assumed tokens and the USD rate of an AI credit (ADR-012).</param>
-    public static BroadcastPlan Plan(PlanRequest request, IReadOnlyDictionary<string, ModelCostInputs> inputs, CostEstimateOptions costs)
+    /// <param name="usdPerAiCredit">The USD value of one AI credit (<c>Arena:Cost:UsdPerAiCredit</c>, ADR-012).</param>
+    public static BroadcastPlan Plan(PlanRequest request, IReadOnlyDictionary<string, ModelCostInputs> inputs, double usdPerAiCredit)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(inputs);
-        ArgumentNullException.ThrowIfNull(costs);
 
         var models = Validate(request);
         var gameLength = TimeSpan.FromMilliseconds(request.AssumedPlies * (request.AssumedMoveLatencyMs + request.Pacing.MoveDelayMs));
@@ -80,7 +79,7 @@ public static class BroadcastPlanner
 
         return new BroadcastPlan(slots, models.Select(model => EstimateFor(model,
             slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model),
-            request.AssumedPlies, inputs, costs)).ToList());
+            request.AssumedPlies, inputs, usdPerAiCredit)).ToList());
     }
 
     private static IReadOnlyList<string> Validate(PlanRequest request)
@@ -234,11 +233,11 @@ public static class BroadcastPlanner
     /// The random player costs nothing. Also used by the API for a stored schedule, so a plan and its saved copy agree.
     /// </summary>
     public static ModelPremiumEstimateDto EstimateFor(string model, int slotsForModel, double assumedPlies,
-        IReadOnlyDictionary<string, ModelCostInputs> inputs, CostEstimateOptions costs)
+        IReadOnlyDictionary<string, ModelCostInputs> inputs, double usdPerAiCredit)
     {
         var entry = inputs.GetValueOrDefault(model);
         var moves = slotsForModel * (assumedPlies / 2);
-        var cost = CostEstimator.Estimate(model, moves, entry, costs);
+        var cost = CostEstimator.Estimate(model, moves, entry, usdPerAiCredit);
 
         double? premium = model == ModelCatalog.RandomModelId ? 0
             : entry?.PremiumMultiplier is { } multiplier ? moves * multiplier

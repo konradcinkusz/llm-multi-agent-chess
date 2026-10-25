@@ -55,11 +55,11 @@ public class TournamentsPageTests
         cut.Find("#model-gpt").Change(true);
         cut.Find("#model-claude").Change(true);
 
-        // Two models, two games per pair: each model plays two games, at 80 requests a game and its multiplier.
-        cut.WaitForAssertion(() => Assert.Contains("Known total: 400", cut.Markup));
+        // Two models, two games per pair: each model plays two games, at 40 requests a game and its multiplier.
+        cut.WaitForAssertion(() => Assert.Contains("Known total: 200", cut.Markup));
         var rows = cut.FindAll(".tournament-estimate tbody tr");
-        Assert.Equal("160", rows[0].Children[2].TextContent);
-        Assert.Equal("240", rows[1].Children[2].TextContent);
+        Assert.Equal("80", rows[0].Children[2].TextContent);
+        Assert.Equal("120", rows[1].Children[2].TextContent);
         Assert.DoesNotContain(handler.Requests, request => request.Method == "POST");
     }
 
@@ -80,7 +80,7 @@ public class TournamentsPageTests
 
         cut.Find("#games-per-pair").Change("4");
 
-        cut.WaitForAssertion(() => Assert.Equal("320", cut.FindAll(".tournament-estimate tbody tr")[0].Children[2].TextContent));
+        cut.WaitForAssertion(() => Assert.Equal("160", cut.FindAll(".tournament-estimate tbody tr")[0].Children[2].TextContent));
         Assert.Contains("4 games in 1 pair.", cut.Markup);
     }
 
@@ -259,7 +259,7 @@ public class TournamentsPageTests
         cut.Find("#model-gpt").Change(true);
         cut.Find("#model-claude").Change(true);
 
-        cut.WaitForAssertion(() => Assert.Contains("Known total: 400", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("Known total: 200", cut.Markup));
         var estimate = cut.Find(".tournament-estimate");
         Assert.Contains("callout-info", estimate.ClassName);
         Assert.NotNull(estimate.QuerySelector("table")!.Closest(".table-wrap"));

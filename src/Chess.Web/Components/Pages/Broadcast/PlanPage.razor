@@ -111,21 +111,25 @@
             <h3>Premium requests for the day (estimate, before saving)</h3>
             <p class="muted">
                 Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
-                AI credits and USD are estimated by the API when the draft is saved, from the stored moves.
+                AI credits and USD use the API's rate and the tokens of past moves, as the saved draft will.
             </p>
             <div class="table-wrap">
                 <table class="table-compact">
                     <thead>
-                        <tr><th>Model</th><th>Price</th><th class="num">Games</th><th class="num">Premium requests</th></tr>
+                        <tr><th>Model</th><th>Price</th><th class="num">Games</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var model in request.Models)
                         {
+                            var cost = CostOf(model);
                             <tr>
                                 <td>@NameOf(model)</td>
                                 <td>@TournamentFormat.Price(Find(model)?.Pricing)</td>
                                 <td class="num">@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
                                 <td class="num">@TournamentFormat.Requests(RequestsFor(model))</td>
+                                <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
+                                <td class="num">@TournamentFormat.Usd(cost?.Usd)</td>
+                                <td>@TournamentFormat.Basis(cost?.Basis, cost?.SampleMoves)</td>
                             </tr>
                         }
                     </tbody>
@@ -133,6 +137,8 @@
             </div>
             <p>
                 Known total: @TournamentFormat.Requests(request.Models.Sum(model => RequestsFor(model) ?? 0))
+                · AI credits: @TournamentFormat.Credits(Known(request.Models.Select(model => CostOf(model)?.AiCredits)))
+                · USD: @TournamentFormat.Usd(Known(request.Models.Select(model => CostOf(model)?.Usd)))
                 @if (UnknownCount > 0)
                 {
                     <span>, plus @UnknownCount model@(UnknownCount == 1 ? "" : "s") with an unknown multiplier</span>
@@ -355,6 +361,7 @@
     private BroadcastApiClient _broadcast = null!;
 
     private IReadOnlyList<ModelDto>? _models;
+    private CostInputsDto? _costs;
     private string? _modelsError;
     private IReadOnlyList<ModelDto> _choices = [];
     private readonly HashSet<string> _selected = [];
@@ -392,7 +399,21 @@
             _modelsError = ex.Message;
         }
 
+        await LoadCostInputsAsync();
         await ReloadSchedulesAsync();
+    }
+
+    /// <summary>The API's rate and tokens. Null when they could not be loaded: the preview then shows premium requests only.</summary>
+    private async Task LoadCostInputsAsync()
+    {
+        try
+        {
+            _costs = await Api.GetCostInputsAsync(_cts.Token);
+        }
+        catch (HttpRequestException)
+        {
+            _costs = null;
+        }
     }
 
     private IReadOnlyList<string> SelectedModels =>
@@ -448,6 +469,25 @@
         .ToDictionary(model => model.Id, model => model.PremiumMultiplier, StringComparer.Ordinal);
 
     private double? RequestsFor(string model) => PlanPlanner.Requests(model, _slots, AssumedPlies, Multipliers);
+
+    /// <summary>A model's estimate over the games on screen: the same moves as the planner's (slots × plies ÷ 2 a side).</summary>
+    private CostPreview.Estimate? CostOf(string model)
+    {
+        if (_costs is not { } costs || Find(model) is not { } entry)
+        {
+            return null;
+        }
+
+        var games = _slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model);
+        return CostPreview.For(entry, costs, games * (AssumedPlies / 2));
+    }
+
+    /// <summary>The sum of the known figures, or null when none is known.</summary>
+    private static double? Known(IEnumerable<double?> values)
+    {
+        var known = values.OfType<double>().ToList();
+        return known.Count == 0 ? null : known.Sum();
+    }
 
     private ModelDto? Find(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId);
 

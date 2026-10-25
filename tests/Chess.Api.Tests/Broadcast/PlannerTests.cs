@@ -15,7 +15,7 @@ public class PlannerTests
     private static readonly TimeSpan Gap = TimeSpan.FromSeconds(20);
 
     private static readonly IReadOnlyDictionary<string, ModelCostInputs> NoInputs = new Dictionary<string, ModelCostInputs>();
-    private static readonly CostEstimateOptions Costs = new();
+    private const double Costs = 0.01;
 
     private static IReadOnlyDictionary<string, ModelCostInputs> Multipliers(params (string Id, double? Multiplier)[] models) =>
         models.ToDictionary(m => m.Id, m => new ModelCostInputs(m.Multiplier, null, null), StringComparer.Ordinal);
@@ -174,7 +174,7 @@ public class PlannerTests
         var a = plan.EstimatedPremiumRequests.Single(e => e.ModelId == "fake-a");
         Assert.Equal(moves * 3.0, a.EstimatedPremiumRequests);
         Assert.Equal(moves * (1000 * 3.0 + 200 * 15.0) / 1_000_000, a.EstimatedUsd!.Value, precision: 9);
-        Assert.Equal(a.EstimatedUsd!.Value / Costs.UsdPerAiCredit, a.EstimatedAiCredits!.Value, precision: 9);
+        Assert.Equal(a.EstimatedUsd!.Value / Costs, a.EstimatedAiCredits!.Value, precision: 9);
         Assert.Equal(CostEstimator.HistoryBasis, a.TokenBasis);
         Assert.Equal(5, a.SampleMoves);
 

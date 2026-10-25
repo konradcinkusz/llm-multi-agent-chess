@@ -133,7 +133,7 @@ internal sealed class SoakHarness : IAsyncDisposable
     /// <summary>Plans the day with the real planner and saves it as a scheduled schedule, the state a start is pressed from.</summary>
     public async Task<Guid> SeedDayAsync(PlanRequest request)
     {
-        var plan = BroadcastPlanner.Plan(request, new Dictionary<string, ModelCostInputs>(), new CostEstimateOptions());
+        var plan = BroadcastPlanner.Plan(request, new Dictionary<string, ModelCostInputs>(), 0.01);
         var id = Guid.NewGuid();
         await using var db = await Factory.CreateDbContextAsync();
         db.BroadcastSchedules.Add(new BroadcastScheduleEntity

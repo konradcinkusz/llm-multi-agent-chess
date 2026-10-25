@@ -14,7 +14,6 @@ public static class TournamentExtensions
     /// </summary>
     public static IHostApplicationBuilder AddTournaments(this IHostApplicationBuilder builder)
     {
-        builder.Services.AddOptions<CostEstimateOptions>().BindConfiguration("Arena:Cost");
         builder.Services.AddSingleton<CostInputs>();
         builder.Services.AddSingleton<TournamentService>();
         builder.Services.AddHostedService<TournamentScheduler>();
@@ -23,7 +22,20 @@ public static class TournamentExtensions
 
     public static IEndpointRouteBuilder MapTournamentEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/tournaments", async Task<Results<Created<TournamentCreatedDto>, ValidationProblem>> (
+        // 03 §10 (G5): the rate and the token averages, so the forms can estimate before anything is saved.
+        endpoints.MapGet("/cost/inputs", async (CostInputs costs, CancellationToken ct) =>
+        {
+            var history = await costs.HistoryAsync(ct);
+            var models = history
+                .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                .Select(entry => new ModelTokenAverageDto(entry.Key, entry.Value.Moves,
+                    entry.Value.AverageInputTokens, entry.Value.AverageOutputTokens))
+                .ToList();
+            return TypedResults.Ok(new CostInputsDto(costs.UsdPerAiCredit,
+                (int)CostEstimator.AssumedInputTokensPerMove, (int)CostEstimator.AssumedOutputTokensPerMove, models));
+        });
+
+        endpoints.MapPost("/tournaments",async Task<Results<Created<TournamentCreatedDto>, ValidationProblem>> (
             CreateTournamentRequest request,
             TournamentService tournaments,
             IOptions<GameRunnerOptions> limits,

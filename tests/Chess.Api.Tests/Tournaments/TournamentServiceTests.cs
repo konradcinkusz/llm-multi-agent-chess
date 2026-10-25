@@ -209,7 +209,7 @@ public class TournamentServiceTests
     }
 
     [Fact]
-    public async Task EstimateIsEightyRequestsAPerGameTimesEachModelsMultiplier()
+    public async Task EstimateIsFortyRequestsAPerGameTimesEachModelsMultiplier()
     {
         var models = new[]
         {
@@ -224,8 +224,8 @@ public class TournamentServiceTests
         Assert.Equal(
             [
                 // Without listed prices the credits and USD stay unknown; the premium figure is unchanged.
-                new ModelPremiumEstimateDto("fake-a", 4 * 80 * 1.0, TokenBasis: CostEstimator.UnknownBasis),
-                new ModelPremiumEstimateDto("fake-b", 4 * 80 * 0.5, TokenBasis: CostEstimator.UnknownBasis),
+                new ModelPremiumEstimateDto("fake-a", 4 * 40 * 1.0, TokenBasis: CostEstimator.UnknownBasis),
+                new ModelPremiumEstimateDto("fake-b", 4 * 40 * 0.5, TokenBasis: CostEstimator.UnknownBasis),
                 new ModelPremiumEstimateDto("fake-c", null, TokenBasis: CostEstimator.UnknownBasis),
             ],
             created.EstimatedPremiumRequests);

@@ -32,6 +32,33 @@ public class TournamentCostTests
     }
 
     [Fact]
+    public void BeforeAnythingIsSavedTheFormShowsCreditsUsdAndTheirBasis()
+    {
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, Serve.Routes(new Dictionary<string, Reply>
+        {
+            ["GET /api/models"] = Serve.Ok(Fixtures.Models),
+            ["GET /api/tournaments"] = Serve.Ok(Fixtures.Tournaments()),
+            ["GET /api/cost/inputs"] = Serve.Ok("""{"usdPerAiCredit":0.01,"assumedInputTokensPerMove":700,"assumedOutputTokensPerMove":300,"models":[]}"""),
+        }));
+        var cut = ctx.Render<TournamentsPage>();
+        cut.WaitForAssertion(() => Assert.Contains("No tournaments yet", cut.Markup));
+
+        cut.Find("#model-gpt").Change(true);
+        cut.Find("#model-claude").Change(true);
+
+        // Two models, two games per pair: gpt plays two games, 40 moves a side each, at the assumed 700 in and 300 out.
+        // 80 moves × (700 × $3 + 300 × $15) / 1M = $0.528 = 52.8 credits.
+        cut.WaitForAssertion(() => Assert.Contains("52.8 credits", cut.Find(".tournament-estimate").TextContent));
+        var rows = cut.FindAll(".tournament-estimate tbody tr");
+        Assert.Equal("52.8 credits", rows[0].Children[3].TextContent);
+        Assert.Equal("$0.53", rows[0].Children[4].TextContent);
+        Assert.Equal("assumed tokens per move", rows[0].Children[5].TextContent);
+        Assert.Equal("price unknown", rows[1].Children[5].TextContent);
+        Assert.DoesNotContain(".tournament-created", cut.Markup);
+    }
+
+    [Fact]
     public void TheCreatedTournamentShowsTheAiCreditsUsdAndTheirBasisPerModel()
     {
         using var ctx = new BunitContext();

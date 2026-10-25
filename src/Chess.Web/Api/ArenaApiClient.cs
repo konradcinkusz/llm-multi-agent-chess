@@ -12,6 +12,10 @@ public sealed class ArenaApiClient(HttpClient http)
     public Task<IReadOnlyList<ModelDto>> GetModelsAsync(CancellationToken ct = default) =>
         GetJsonAsync<IReadOnlyList<ModelDto>>("/api/models", ct);
 
+    /// <summary>The rate and the token averages the forms estimate with before anything is saved (03 §10).</summary>
+    public Task<CostInputsDto> GetCostInputsAsync(CancellationToken ct = default) =>
+        GetJsonAsync<CostInputsDto>("/api/cost/inputs", ct);
+
     public Task<StatusDto> GetStatusAsync(CancellationToken ct = default) =>
         GetJsonAsync<StatusDto>("/api/status", ct);
 

@@ -25,6 +25,29 @@ public class PlanCostTests
     }
 
     [Fact]
+    public void BeforeSaveThePreviewShowsTheAiCreditsUsdAndTheirBasis()
+    {
+        var fake = new FakeBroadcast();
+        using var ctx = new BunitContext();
+        PlanWire.Api(ctx, fake);
+        var cut = Render(ctx);
+        cut.Find("[data-testid='plan-model-gpt']").Change(true);
+        cut.Find("[data-testid='plan-model-claude']").Change(true);
+        cut.Find("[data-testid='plan-hours']").Change("2");
+
+        cut.Find("[data-testid='plan-generate']").Click();
+
+        // Two games, so each model plays two: 2 × 40 moves a side = 80 moves, at the assumed tokens for gpt.
+        // 80 × (700 × $3 + 300 × $15) / 1M = $0.528 = 52.8 credits. claude has no prices.
+        var rows = cut.FindAll("[data-testid='plan-estimate'] tbody tr");
+        Assert.Equal("52.8 credits", rows[0].Children[4].TextContent);
+        Assert.Equal("$0.53", rows[0].Children[5].TextContent);
+        Assert.Equal("assumed tokens per move", rows[0].Children[6].TextContent);
+        Assert.Equal("price unknown", rows[1].Children[6].TextContent);
+        Assert.DoesNotContain(fake.Requests, request => request.Method == "POST");
+    }
+
+    [Fact]
     public void SavingTheDraftShowsTheAiCreditsAndUsdWithTheirBasis()
     {
         var fake = new FakeBroadcast();

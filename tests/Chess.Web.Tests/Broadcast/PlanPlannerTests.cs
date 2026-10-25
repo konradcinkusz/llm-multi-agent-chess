@@ -38,7 +38,7 @@ public class PlanPlannerTests
 
             var expected = ApiBroadcast.BroadcastPlanner.Plan(apiRequest,
                 Multipliers.ToDictionary(m => m.Key, m => new ApiTournaments.ModelCostInputs(m.Value, null, null), StringComparer.Ordinal),
-                new ApiTournaments.CostEstimateOptions());
+                0.01);
             var actual = PlanPlanner.Plan(request);
 
             Assert.Equal(expected.Slots.Count, actual.Count);

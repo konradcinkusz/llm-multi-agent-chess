@@ -67,6 +67,12 @@ internal sealed class FakeBroadcast
             return Canned.Json(Fixtures.Models);
         }
 
+        if (request.Method == "GET" && path == "/api/cost/inputs")
+        {
+            // The rate and the assumed tokens of 03 §10; no stored moves, so every estimate is assumed.
+            return Canned.Json("""{"usdPerAiCredit":0.01,"assumedInputTokensPerMove":700,"assumedOutputTokensPerMove":300,"models":[]}""");
+        }
+
         if (request.Method == "POST" && path == "/api/broadcast/plan")
         {
             return Plan(request.Body!);
@@ -99,7 +105,7 @@ internal sealed class FakeBroadcast
     private HttpResponseMessage Plan(string body)
     {
         var plan = JsonSerializer.Deserialize<ApiBroadcast.PlanRequest>(body, Json)!;
-        var planned = ApiBroadcast.BroadcastPlanner.Plan(plan, Inputs, new ApiTournaments.CostEstimateOptions());
+        var planned = ApiBroadcast.BroadcastPlanner.Plan(plan, Inputs, 0.01);
         var id = Guid.NewGuid();
         var slots = planned.Slots.Select(slot => new SlotDto(Guid.NewGuid(), slot.Index,
             new PlayerSpec(slot.White.Kind, slot.White.ModelId), new PlayerSpec(slot.Black.Kind, slot.Black.ModelId),
@@ -176,7 +182,7 @@ internal sealed class FakeBroadcast
     {
         var estimate = ApiBroadcast.BroadcastPlanner.EstimateFor(model,
             slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model), StoredAssumedPlies,
-            Inputs, new ApiTournaments.CostEstimateOptions());
+            Inputs, 0.01);
         return new ModelPremiumEstimateDto(estimate.ModelId, estimate.EstimatedPremiumRequests,
             estimate.EstimatedAiCredits, estimate.EstimatedUsd, estimate.TokenBasis, estimate.SampleMoves);
     }

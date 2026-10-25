@@ -86,7 +86,7 @@ public static class BroadcastEndpoints
         BroadcastPlan plan;
         try
         {
-            plan = BroadcastPlanner.Plan(request, inputs, costs.Options);
+            plan = BroadcastPlanner.Plan(request, inputs, costs.UsdPerAiCredit);
         }
         catch (InvalidPlanException ex)
         {
@@ -146,7 +146,7 @@ public static class BroadcastEndpoints
         var dtos = schedules.Select(schedule =>
         {
             var own = slots.Where(s => s.ScheduleId == schedule.Id).ToList();
-            return ToScheduleDto(schedule, own, inputs, costs.Options);
+            return ToScheduleDto(schedule, own, inputs, costs.UsdPerAiCredit);
         }).ToList();
         return TypedResults.Ok(dtos);
     }
@@ -168,7 +168,7 @@ public static class BroadcastEndpoints
         }
 
         var (schedule, slots) = loaded.Value;
-        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, inputs, costs.Options),
+        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, inputs, costs.UsdPerAiCredit),
             slots.Select(ToSlotDto).ToList()));
     }
 
@@ -225,7 +225,7 @@ public static class BroadcastEndpoints
         await db.SaveChangesAsync(ct);
 
         var inputs = await costs.ForAsync(await catalog.GetModelsAsync(ct), ct);
-        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, replaced, inputs, costs.Options),
+        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, replaced, inputs, costs.UsdPerAiCredit),
             replaced.Select(ToSlotDto).ToList()));
     }
 
@@ -260,7 +260,7 @@ public static class BroadcastEndpoints
 
         var inputs = await costs.ForAsync(await catalog.GetModelsAsync(ct), ct);
         var (schedule, slots) = loaded.Value;
-        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, inputs, costs.Options),
+        return TypedResults.Ok(new ScheduleDetailDto(ToScheduleDto(schedule, slots, inputs, costs.UsdPerAiCredit),
             slots.Select(ToSlotDto).ToList()));
     }
 
@@ -390,10 +390,10 @@ public static class BroadcastEndpoints
 
     /// <summary>The schedule as stored: the estimate is recomputed from its slots (see <see cref="StoredAssumedPlies"/>).</summary>
     private static ScheduleDto ToScheduleDto(BroadcastScheduleEntity schedule, IReadOnlyList<BroadcastSlotEntity> slots,
-        IReadOnlyDictionary<string, ModelCostInputs> inputs, CostEstimateOptions costs) =>
+        IReadOnlyDictionary<string, ModelCostInputs> inputs, double usdPerAiCredit) =>
         ToScheduleDto(schedule, slots.Count, slots.Count(s => s.State == SlotState.Finished),
             schedule.Models.Select(model => BroadcastPlanner.EstimateFor(model,
-                slots.Count(slot => slot.WhiteModel == model || slot.BlackModel == model), StoredAssumedPlies, inputs, costs))
+                slots.Count(slot => slot.WhiteModel == model || slot.BlackModel == model), StoredAssumedPlies, inputs, usdPerAiCredit))
                 .ToList());
 
     private static ValidationProblem ValidationProblemFor(string key, string message) =>

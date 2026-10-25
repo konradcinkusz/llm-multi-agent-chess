@@ -73,27 +73,32 @@
                 var gameCount = pairs * _gamesPerPair;
                 var estimates = PremiumEstimate.For(_models!, SelectedModels, _gamesPerPair);
                 var unknown = estimates.Count(estimate => estimate.Requests is null);
+                var gamesPerModel = (SelectedModels.Count - 1) * _gamesPerPair;
 
                 <div class="callout callout-info tournament-estimate" aria-live="polite">
-                    <h3>Estimated premium requests</h3>
+                    <h3>Estimated cost</h3>
                     <p>
                         @gameCount @(gameCount == 1 ? "game" : "games") in @pairs @(pairs == 1 ? "pair" : "pairs").
-                        Each game is estimated at @PremiumEstimate.RequestsPerGame requests for each of its models (ADR-004),
-                        so this is an upper bound, not a bill. AI credits and USD are estimated once the tournament starts,
-                        from the prices and the moves already stored.
+                        Each model is estimated at @PremiumEstimate.RequestsPerGame requests a game (its moves on one side, 03 §9.1),
+                        so the premium figure is an upper bound, not a bill. AI credits and USD use the API's rate and the
+                        tokens of past moves, as the saved tournament will.
                     </p>
                     <div class="table-wrap">
                         <table class="table-compact">
                             <thead>
-                                <tr><th>Model</th><th>Price</th><th class="num">Premium requests</th></tr>
+                                <tr><th>Model</th><th>Price</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
                             </thead>
                             <tbody>
                                 @foreach (var estimate in estimates)
                                 {
+                                    var cost = CostOf(estimate.ModelId, gamesPerModel);
                                     <tr>
                                         <td>@estimate.ModelId</td>
                                         <td>@TournamentFormat.Price(Find(estimate.ModelId)?.Pricing)</td>
                                         <td class="num">@TournamentFormat.Requests(estimate.Requests)</td>
+                                        <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
+                                        <td class="num">@TournamentFormat.Usd(cost?.Usd)</td>
+                                        <td>@TournamentFormat.Basis(cost?.Basis, cost?.SampleMoves)</td>
                                     </tr>
                                 }
                             </tbody>
@@ -105,6 +110,10 @@
                         {
                             <span>, plus @unknown model@(unknown == 1 ? "" : "s") with an unknown multiplier</span>
                         }
+                    </p>
+                    <p>
+                        Known AI credits: @TournamentFormat.Credits(KnownCredits(SelectedModels, gamesPerModel)),
+                        USD: @TournamentFormat.Usd(KnownUsd(SelectedModels, gamesPerModel)).
                     </p>
                 </div>
             }
@@ -216,6 +225,7 @@
 
     private IReadOnlyList<ModelDto>? _models;
     private string? _modelsError;
+    private CostInputsDto? _costs;
     private IReadOnlyList<ModelDto> _choices = [];
 
     private IReadOnlyList<TournamentDto>? _tournaments;
@@ -248,6 +258,7 @@
             _modelsError = ex.Message;
         }
 
+        await LoadCostInputsAsync();
         await LoadTournamentsAsync(_cts.Token);
         _ = PollAsync();
     }
@@ -301,6 +312,38 @@
     }
 
     private ModelDto? Find(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId);
+
+    /// <summary>One model's estimate in this tournament: the games it plays, at its moves on one side each.</summary>
+    private CostPreview.Estimate? CostOf(string modelId, int gamesPerModel) =>
+        _costs is { } costs && Find(modelId) is { } model
+            ? CostPreview.For(model, costs, gamesPerModel * CostPreview.MovesPerSidePerGame)
+            : null;
+
+    private double? KnownCredits(IEnumerable<string> modelIds, int gamesPerModel) =>
+        Known(modelIds.Select(id => CostOf(id, gamesPerModel)?.AiCredits));
+
+    private double? KnownUsd(IEnumerable<string> modelIds, int gamesPerModel) =>
+        Known(modelIds.Select(id => CostOf(id, gamesPerModel)?.Usd));
+
+    /// <summary>The sum of the known figures, or null when none is known.</summary>
+    private static double? Known(IEnumerable<double?> values)
+    {
+        var known = values.OfType<double>().ToList();
+        return known.Count == 0 ? null : known.Sum();
+    }
+
+    /// <summary>The API's rate and tokens. Null when they could not be loaded: the form then shows premium requests only.</summary>
+    private async Task LoadCostInputsAsync()
+    {
+        try
+        {
+            _costs = await Api.GetCostInputsAsync(_cts.Token);
+        }
+        catch (HttpRequestException)
+        {
+            _costs = null;
+        }
+    }
 
     private async Task StartAsync()
     {
