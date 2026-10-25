@@ -6,6 +6,6 @@ public sealed class PlayerOptions
     /// <summary>Illegal or failed replies allowed for one move before the side forfeits.</summary>
     public int MaxAttemptsPerMove { get; set; } = 3;
 
-    /// <summary>How long one reply from an LLM may take.</summary>
-    public int MoveTimeoutSeconds { get; set; } = 60;
+    /// <summary>How long one reply from an LLM may take. Reasoning models routinely think longer than a minute (03 §10.3).</summary>
+    public int MoveTimeoutSeconds { get; set; } = 180;
 }
