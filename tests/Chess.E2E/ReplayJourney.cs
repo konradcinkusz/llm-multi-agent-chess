@@ -5,7 +5,7 @@ using static Microsoft.Playwright.Assertions;
 
 namespace Chess.E2E;
 
-/// <summary>Journey 2: open a finished game on its replay page and step to the last move.</summary>
+/// <summary>Journey 2: open a finished game on its replay page, step to the last move, and read its engine log and summary.</summary>
 [Collection(ArenaCollection.Name)]
 public sealed class ReplayJourney(ArenaFixture arena)
 {
@@ -32,5 +32,13 @@ public sealed class ReplayJourney(ArenaFixture arena)
             () => Expect(ply).ToHaveTextAsync(new Regex(@"^Ply ([1-9]\d*) of \1$"), new() { Timeout = 2_000 }));
         await Expect(page.GetByTestId("replay-last")).ToBeDisabledAsync();
         await Expect(page.GetByTestId("replay-next")).ToBeDisabledAsync();
+
+        // The engine log lists the attempts the models made, and the summary shows what they cost.
+        await Expect(page.GetByTestId("engine-panel")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("engine-entry").First).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("engine-entry").First.Locator(".engine-model")).ToHaveTextAsync("Fake B");
+        await Expect(page.GetByTestId("game-summary")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("usage-table")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("usage-total-usd")).ToHaveTextAsync(new Regex(@"^\$\d"));
     }
 }

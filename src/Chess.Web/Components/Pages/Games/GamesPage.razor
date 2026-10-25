@@ -1,5 +1,6 @@
 @page "/games"
 @using Chess.Web.Api
+@using Chess.Web.Components.Shared.Game
 @implements IDisposable
 @inject ArenaApiClient Api
 
@@ -71,6 +72,7 @@ else
                     <th>Termination</th>
                     <th class="num">Plies</th>
                     <th>State</th>
+                    <th class="num" title="Estimated from the AI credits of the game (03 §10.2). — when unknown.">Est. USD</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,6 +86,7 @@ else
                         <td>@GameFormat.Termination(game.Termination)</td>
                         <td class="num">@game.PlyCount</td>
                         <td>@GameFormat.State(game.State)</td>
+                        <td class="num" data-testid="game-cost">@GameFigures.Usd(_costs.GetValueOrDefault(game.Id))</td>
                     </tr>
                 }
             </tbody>
@@ -103,6 +106,7 @@ else
     private IReadOnlyList<ModelDto> _models = [];
     private string? _modelsError;
     private PageDto<GameSummaryDto>? _page;
+    private Dictionary<Guid, double?> _costs = [];
     private string? _listError;
     private string _model = "";
     private string _status = "";
@@ -151,6 +155,28 @@ else
         catch (HttpRequestException ex)
         {
             _listError = ex.Message;
+            return;
+        }
+
+        _costs = await LoadCostsAsync(_page.Items);
+    }
+
+    /// <summary>Each game's estimated USD from its usage (03 §10.2). A game whose usage cannot be read shows a dash.</summary>
+    private async Task<Dictionary<Guid, double?>> LoadCostsAsync(IReadOnlyList<GameSummaryDto> games)
+    {
+        var costs = await Task.WhenAll(games.Select(async game => (game.Id, Usd: await EstimatedUsdAsync(game.Id))));
+        return costs.ToDictionary(cost => cost.Id, cost => cost.Usd);
+    }
+
+    private async Task<double?> EstimatedUsdAsync(Guid id)
+    {
+        try
+        {
+            return (await Api.GetGameUsageAsync(id, _cts.Token)).TotalEstimatedUsd;
+        }
+        catch (HttpRequestException)
+        {
+            return null;
         }
     }
 
