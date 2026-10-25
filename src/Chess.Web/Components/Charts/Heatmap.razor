@@ -7,12 +7,12 @@
     }
     else
     {
-        <svg class="chart-svg" width="@Num(_width)" viewBox="@_viewBox" role="img" aria-label="@Title">
+        <svg class="chart-svg" width="@Num(_width)" style="@FillStyle(_width)" viewBox="@_viewBox" role="img" aria-label="@Title">
             @for (var i = 0; i < Labels.Count; i++)
             {
                 var label = Labels[i];
                 <ChartText class="chart-label" x="@Num(LabelWidth - 8)" y="@Num(RowY(i) + CellSize / 2 + 4)" text-anchor="end">@label</ChartText>
-                <ChartText class="chart-label" transform="@($"translate({Num(ColumnX(i) + CellSize / 2)} {Num(TopBand - 8)}) rotate(-45)")">@label</ChartText>
+                <ChartText class="chart-label" transform="@($"translate({Num(ColumnX(i) + CellSize / 2)} {Num(_topBand - 8)}) rotate(-45)")">@label</ChartText>
             }
 
             @for (var row = 0; row < Labels.Count; row++)
@@ -77,22 +77,30 @@
     public string ValueFormat { get; set; } = "0.00";
 
     private const double LabelWidth = 170;
-    private const double TopBand = 130;
 
-    /// <summary>Pitch of one cell in pixels. Capped at 72 (07 §6); the drawn square is 2 px smaller.</summary>
-    private const double CellSize = 56;
+    /// <summary>
+    /// Pitch of one cell in the viewBox. At the 1.5× cap the pitch is 72 px on screen (07 §6); the drawn square is 2 px smaller.
+    /// </summary>
+    private const double CellSize = 48;
 
     private Dictionary<(string Row, string Column), HeatCell> _cells = [];
     private string _viewBox = "";
     private double _width;
+    private double _topBand;
     private IReadOnlyList<string> _tableHeaders = [];
     private IReadOnlyList<IReadOnlyList<string>> _tableRows = [];
 
     protected override void OnParametersSet()
     {
         _cells = Cells.ToDictionary(c => (c.Row, c.Column));
-        _width = LabelWidth + Labels.Count * CellSize + 8;
-        _viewBox = $"0 0 {Num(_width)} {Num(TopBand + Labels.Count * CellSize + 8)}";
+
+        // The column labels are rotated 45°, so they rise by about 0.71 of their length. The top band holds that rise
+        // and a few pixels of air, nothing more; the last column's label runs past its cell centre, so the right edge makes room for it.
+        var longest = Labels.Select(l => l.Length * LabelCharWidth).DefaultIfEmpty(0).Max();
+        var rise = Math.Ceiling(longest * Math.Sqrt(0.5));
+        _topBand = rise + 20;
+        _width = LabelWidth + Labels.Count * CellSize + Math.Max(8, rise + 8 - CellSize / 2);
+        _viewBox = $"0 0 {Num(_width)} {Num(_topBand + Labels.Count * CellSize + 8)}";
 
         _tableHeaders = new[] { "" }.Concat(Labels).ToList();
         _tableRows = Labels.Select(row => (IReadOnlyList<string>)new[] { row }
@@ -100,7 +108,7 @@
             .ToList()).ToList();
     }
 
-    private double RowY(int row) => TopBand + row * CellSize;
+    private double RowY(int row) => _topBand + row * CellSize;
 
     private double ColumnX(int column) => LabelWidth + column * CellSize;
 

@@ -66,7 +66,8 @@ public class ChartPolishTests
             var d = bar.GetAttribute("d")!;
             var left = double.Parse(Regex.Match(d, @"^M([\d.]+),").Groups[1].Value, Invariant);
             var right = double.Parse(Regex.Match(d, @"Q([\d.]+),[\d.]+ [\d.]+,[\d.]+V[\d.]+Z$").Groups[1].Value, Invariant);
-            Assert.True(right - left <= 48, $"bar is {right - left} px wide");
+            // 48 px on screen at the 1.5x cap (07 §6), so 32 px in the viewBox.
+            Assert.True((right - left) * 1.5 <= 48, $"bar is {right - left} px wide in the viewBox");
         }
     }
 
@@ -88,7 +89,7 @@ public class ChartPolishTests
         foreach (var rect in cut.FindAll("g.chart-cell > rect"))
             Assert.True(double.Parse(rect.GetAttribute("width")!, Invariant) <= 72);
 
-        // Drawn at its natural size: the SVG is never scaled up or down, so the cells keep their pixel size.
+        // The width attribute is the natural width; CSS scales the SVG to its card within the 1.5x cap.
         var svg = cut.Find("svg");
         var viewBoxWidth = double.Parse(svg.GetAttribute("viewBox")!.Split(' ')[2], Invariant);
         Assert.Equal(viewBoxWidth, double.Parse(svg.GetAttribute("width")!, Invariant));

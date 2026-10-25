@@ -7,7 +7,7 @@
     }
     else
     {
-        <svg class="chart-svg" width="@Num(Width)" viewBox="@_viewBox" role="img" aria-label="@Title">
+        <svg class="chart-svg" width="@Num(Width)" style="@FillStyle(Width)" viewBox="@_viewBox" role="img" aria-label="@Title">
             @foreach (var tick in _ticks)
             {
                 <line class="chart-grid" x1="@Num(PlotLeft)" y1="@Num(_scale.Map(tick))" x2="@Num(PlotRight)" y2="@Num(_scale.Map(tick))" />
