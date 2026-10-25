@@ -235,11 +235,13 @@ public static class BroadcastPlanner
     public static ModelPremiumEstimateDto EstimateFor(string model, int slotsForModel, double assumedPlies,
         IReadOnlyDictionary<string, ModelCostInputs> inputs, double usdPerAiCredit)
     {
-        var entry = inputs.GetValueOrDefault(model);
+        // A variant (model@effort) is priced and rated with its base model (03 §10.2, ADR-012).
+        var baseModel = ModelVariant.BaseOf(model);
+        var entry = inputs.GetValueOrDefault(baseModel);
         var moves = slotsForModel * (assumedPlies / 2);
-        var cost = CostEstimator.Estimate(model, moves, entry, usdPerAiCredit);
+        var cost = CostEstimator.Estimate(baseModel, moves, entry, usdPerAiCredit);
 
-        double? premium = model == ModelCatalog.RandomModelId ? 0
+        double? premium = baseModel == ModelCatalog.RandomModelId ? 0
             : entry?.PremiumMultiplier is { } multiplier ? moves * multiplier
             : null;
         return new ModelPremiumEstimateDto(model, premium, cost.AiCredits, cost.Usd, cost.Basis, cost.SampleMoves);

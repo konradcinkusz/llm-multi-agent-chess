@@ -15,6 +15,7 @@ namespace Chess.Api.Tests.Usage;
 internal sealed class PricedFakeGateway(FakeLlmGateway inner) : ILlmGateway
 {
     public static readonly LlmTokenPrices FakePrices = new(1_000_000, 1.0, 4.0, 0.1);
+    private static readonly string[] Efforts = ["low", "medium", "high"];
 
     public LlmGatewayStatus Status => inner.Status;
 
@@ -22,8 +23,8 @@ internal sealed class PricedFakeGateway(FakeLlmGateway inner) : ILlmGateway
     {
         IReadOnlyList<LlmModelInfo> models =
         [
-            new LlmModelInfo("fake-a", "Fake A", 0, true, FakePrices),
-            new LlmModelInfo("fake-b", "Fake B", 0, true, FakePrices),
+            new LlmModelInfo("fake-a", "Fake A", 0, true, FakePrices, Efforts, "medium"),
+            new LlmModelInfo("fake-b", "Fake B", 0, true, FakePrices, Efforts, "medium"),
             new LlmModelInfo("auto", "Auto", null, true),
         ];
         return Task.FromResult(models);
