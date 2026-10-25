@@ -1,0 +1,93 @@
+/* One player beside the board: colour chip, name, the side to move, the thinking line, captures and running usage. */
+
+.player-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    min-width: 0;
+}
+
+.player-bar-active {
+    border-color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.player-chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    font-size: var(--text-lg);
+    line-height: 1;
+}
+
+.player-chip-white {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.player-chip-black {
+    background: var(--text);
+    color: var(--surface);
+}
+
+.player-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.player-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.player-thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--accent);
+    font-size: var(--text-sm);
+}
+
+.player-captured {
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+}
+
+.player-captured .num {
+    margin-left: var(--space-2);
+    color: var(--text-2);
+    font-weight: 600;
+}
+
+.player-usage {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: none;
+    gap: 2px;
+    font-size: var(--text-xs);
+    text-align: right;
+}
+
+@media (max-width: 480px) {
+    .player-usage {
+        align-items: flex-start;
+        text-align: left;
+    }
+}

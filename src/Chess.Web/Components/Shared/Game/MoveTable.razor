@@ -1,0 +1,102 @@
+@using Chess.Web.Api
+
+<div class="move-table-scroll">
+    <ol class="move-table" data-testid="move-list" aria-label="Moves">
+        @foreach (var row in Rows)
+        {
+            <li class="move-row">
+                <span class="move-number" aria-hidden="true">@row.Number.</span>
+                @foreach (var cell in new[] { row.White, row.Black })
+                {
+                    @if (cell is null)
+                    {
+                        // Keeps the column for a side that has not moved yet, so the numbers stay in their column.
+                        <span class="move-cell move-empty" aria-hidden="true"></span>
+                    }
+                    else if (cell.Move is null)
+                    {
+                        <span class="move-cell move-pending" data-testid="move-pending" data-color="@cell.Color"
+                              aria-label="@cell.Color is thinking">…</span>
+                    }
+                    else
+                    {
+                        var move = cell.Move;
+                        var selected = SelectedPly == move.Ply;
+                        var color = move.Ply % 2 == 1 ? "White" : "Black";
+                        var label = move.Attempts > 1 ? $"{color} {move.San}, {move.Attempts} attempts" : $"{color} {move.San}";
+                        <button type="button" class="move-cell @(move.Ply == LatestPly ? "move-latest" : null) @(selected ? "move-selected" : null)"
+                                data-testid="move-cell" data-ply="@move.Ply" data-color="@color"
+                                aria-pressed="@(selected ? "true" : "false")" aria-current="@(move.Ply == LatestPly ? "step" : null)"
+                                aria-label="@label"
+                                @onclick="() => Pick(move.Ply)">
+                            @move.San
+                            @if (move.Attempts > 1)
+                            {
+                                <span class="badge badge-warning move-retries" data-testid="move-retries"
+                                      title="@move.Attempts attempts: @(move.Attempts - 1) rejected">@move.Attempts tries</span>
+                            }
+                        </button>
+                    }
+                }
+            </li>
+        }
+    </ol>
+</div>
+
+@if (Moves.Count == 0 && PendingPly is null)
+{
+    <p class="muted empty-state" data-testid="no-moves">No moves yet.</p>
+}
+
+@code {
+    /// <summary>The moves played so far, in ply order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MoveDto> Moves { get; set; } = [];
+
+    /// <summary>The ply a model is deciding now (its attempts are not moves yet), shown as a pending cell.</summary>
+    [Parameter]
+    public int? PendingPly { get; set; }
+
+    /// <summary>The ply whose entries are selected in the engine log, highlighted here too.</summary>
+    [Parameter]
+    public int? SelectedPly { get; set; }
+
+    /// <summary>Raised with the ply of a move the user picked. Picking the selected move again clears it (null).</summary>
+    [Parameter]
+    public EventCallback<int?> OnSelect { get; set; }
+
+    private int LatestPly => Moves.Count == 0 ? 0 : Moves.Max(move => move.Ply);
+
+    /// <summary>Two plies to a row: a numbered move as it is written, "1. e4 e5".</summary>
+    private IReadOnlyList<MoveRow> Rows
+    {
+        get
+        {
+            var played = Moves.ToDictionary(move => move.Ply);
+            var last = Math.Max(LatestPly, PendingPly ?? 0);
+            var rows = new List<MoveRow>();
+            for (var number = 1; (number - 1) * 2 < last; number++)
+            {
+                rows.Add(new MoveRow(number, CellAt(played, 2 * number - 1), CellAt(played, 2 * number)));
+            }
+
+            return rows;
+        }
+    }
+
+    private MoveCell? CellAt(Dictionary<int, MoveDto> played, int ply)
+    {
+        if (played.TryGetValue(ply, out var move))
+        {
+            return new MoveCell(move, ply % 2 == 1 ? "White" : "Black");
+        }
+
+        return ply == PendingPly ? new MoveCell(null, ply % 2 == 1 ? "White" : "Black") : null;
+    }
+
+    private async Task Pick(int ply) => await OnSelect.InvokeAsync(SelectedPly == ply ? null : ply);
+
+    private sealed record MoveCell(MoveDto? Move, string Color);
+
+    private sealed record MoveRow(int Number, MoveCell? White, MoveCell? Black);
+}

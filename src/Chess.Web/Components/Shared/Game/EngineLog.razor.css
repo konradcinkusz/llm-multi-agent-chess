@@ -1,0 +1,106 @@
+/* The engine log (03 §10.4): filters above, one expandable entry per attempt, the selected move's entries outlined. */
+
+.engine-log {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+}
+
+.engine-filters {
+    gap: var(--space-2);
+}
+
+.engine-filters .btn-filter-active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.engine-entries {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 640px;
+    overflow-y: auto;
+}
+
+.engine-entry {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.engine-entry-selected {
+    border-color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.engine-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius);
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.engine-summary::-webkit-details-marker {
+    display: none;
+}
+
+.engine-summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.engine-where,
+.engine-model,
+.engine-attempt {
+    white-space: nowrap;
+}
+
+.engine-san {
+    font-family: var(--font-mono);
+}
+
+.engine-figures {
+    margin-left: auto;
+    font-size: var(--text-xs);
+    overflow-wrap: anywhere;
+}
+
+.engine-body {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: 0 var(--space-3) var(--space-3);
+}
+
+.engine-heading {
+    margin: var(--space-2) 0 0;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.engine-text {
+    max-height: 240px;
+    overflow: auto;
+    margin: 0;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

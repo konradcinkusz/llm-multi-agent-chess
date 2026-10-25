@@ -1,0 +1,87 @@
+@using Chess.Web.Api
+
+@if (Usage is null)
+{
+    <p class="muted empty-state" data-testid="usage-pending">@(Message ?? "The usage of this game is not loaded yet.")</p>
+}
+else
+{
+    <p class="callout callout-info" data-testid="usage-rate">
+        Dollars are estimates: AI credits × @GameFigures.Rate(Usage.UsdPerAiCredit). The basis says where each figure came from.
+    </p>
+
+    <div class="table-wrap">
+        <table class="table-compact usage-table" data-testid="usage-table">
+            <caption class="visually-hidden">Requests, tokens and cost for each side of the game</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Side</th>
+                    <th scope="col">Model</th>
+                    <th scope="col" class="num">Requests</th>
+                    <th scope="col" class="num">Input</th>
+                    <th scope="col" class="num">Output</th>
+                    <th scope="col" class="num">Reasoning</th>
+                    <th scope="col" class="num">Cached</th>
+                    <th scope="col" class="num">AI credits</th>
+                    <th scope="col" class="num">Est. USD</th>
+                    <th scope="col">Basis</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var side in new[] { Usage.White, Usage.Black })
+                {
+                    <tr data-testid="usage-@side.Color.ToLowerInvariant()" data-basis="@side.CostBasis">
+                        <th scope="row">@side.Color</th>
+                        <td>@NameOf(side.ModelId)</td>
+                        <td class="num">@side.Requests</td>
+                        <td class="num">@GameFigures.Tokens(side.InputTokens)</td>
+                        <td class="num">@GameFigures.Tokens(side.OutputTokens)</td>
+                        <td class="num">@GameFigures.Tokens(side.ReasoningTokens)</td>
+                        <td class="num">@GameFigures.Tokens(side.CachedInputTokens)</td>
+                        <td class="num">@GameFigures.Credits(side.AiCredits)</td>
+                        <td class="num" data-testid="usage-usd">@GameFigures.Usd(side.EstimatedUsd)</td>
+                        <td><span class="badge @BasisTone(side.CostBasis)">@GameFigures.Basis(side.CostBasis)</span></td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr data-testid="usage-total">
+                    <th scope="row" colspan="2">Total</th>
+                    <td class="num">@(Usage.White.Requests + Usage.Black.Requests)</td>
+                    <td class="num">@GameFigures.Tokens(Usage.White.InputTokens + Usage.Black.InputTokens)</td>
+                    <td class="num">@GameFigures.Tokens(Usage.White.OutputTokens + Usage.Black.OutputTokens)</td>
+                    <td class="num">@GameFigures.Tokens(Usage.White.ReasoningTokens + Usage.Black.ReasoningTokens)</td>
+                    <td class="num">@GameFigures.Tokens(Usage.White.CachedInputTokens + Usage.Black.CachedInputTokens)</td>
+                    <td class="num">@GameFigures.Credits(Usage.TotalAiCredits)</td>
+                    <td class="num" data-testid="usage-total-usd">@GameFigures.Usd(Usage.TotalEstimatedUsd)</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    /// <summary>The game's usage (GET /api/games/{id}/usage). Null while it is not loaded.</summary>
+    [Parameter]
+    public GameUsageDto? Usage { get; set; }
+
+    /// <summary>Shown instead of the table while there is no usage, e.g. the error that stopped it loading.</summary>
+    [Parameter]
+    public string? Message { get; set; }
+
+    /// <summary>The display name of a model id. Defaults to the id itself.</summary>
+    [Parameter]
+    public Func<string, string>? ModelName { get; set; }
+
+    private string NameOf(string modelId) => ModelName?.Invoke(modelId) ?? modelId;
+
+    /// <summary>Reported and free are plain; estimates are a warning-free accent; unknown and partial are warnings.</summary>
+    private static string BasisTone(string costBasis) => costBasis switch
+    {
+        "reported" => "badge-success",
+        "estimated" => "badge-accent",
+        "free" => "badge-neutral",
+        _ => "badge-warning",
+    };
+}

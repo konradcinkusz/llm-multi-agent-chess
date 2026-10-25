@@ -21,6 +21,11 @@
             <rect data-highlight="@square" class="last-move" x="@x" y="@y" width="100" height="100" fill="#f6f669" fill-opacity="0.6" />
         }
 
+        @if (square == CheckSquare)
+        {
+            <rect data-check="@square" class="in-check" x="@x" y="@y" width="100" height="100" fill="#e5484d" fill-opacity="0.75" />
+        }
+
         @if (pieces.TryGetValue(square, out var piece))
         {
             @SvgText(new() { ["data-piece"] = piece, ["x"] = x + 50, ["y"] = y + 50, ["text-anchor"] = "middle", ["dominant-baseline"] = "central", ["font-size"] = 80, ["fill"] = "#1a1a1a" }, FenBoard.Symbol(piece))
@@ -40,7 +45,7 @@
 </svg>
 
 @code {
-    // The board keeps a fixed wood palette, the piece ink and the last-move highlight (07 §1, documented exception for U4):
+    // The board keeps a fixed wood palette, the piece ink and the last-move and check highlights (07 §1, documented exception for U4):
     // a board is drawn in wood in both themes, so these are not page tokens.
     private const string LightSquare = "#f0d9b5";
     private const string DarkSquare = "#b58863";
@@ -52,6 +57,10 @@
     /// <summary>The last move, highlighted on both squares. Null draws no highlight.</summary>
     [Parameter]
     public BoardMove? LastMove { get; set; }
+
+    /// <summary>The square of the king in check, highlighted in red. Null draws no check highlight.</summary>
+    [Parameter]
+    public string? CheckSquare { get; set; }
 
     /// <summary>When true, Black is at the bottom (rank 1 at the top).</summary>
     [Parameter]

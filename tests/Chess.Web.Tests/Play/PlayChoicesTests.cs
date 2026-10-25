@@ -60,11 +60,14 @@ public class PlayChoicesTests
     }
 
     [Fact]
-    public void ALabelShowsTheMultiplierAndRandomHasNone()
+    public void ALabelShowsThePricePerMillionTokensAndAnUnpricedModelSaysSo()
     {
-        Assert.Equal("Claude · ×1.5", PlayChoices.Label(Claude));
+        var priced = new ModelDto("gpt", "GPT", null, true, new ModelPricingDto(3.0, 15.0, 0.3));
+
+        Assert.Equal("GPT · $3.00 / $15.00 per 1M tokens", PlayChoices.Label(priced));
+        Assert.Equal("Claude · price unknown", PlayChoices.Label(Claude));
         Assert.Equal("Random", PlayChoices.Label(Random));
-        Assert.Equal("GPT · multiplier unknown", PlayChoices.Label(new ModelDto("gpt", "GPT", null, true)));
+        Assert.DoesNotContain("multiplier", PlayChoices.Label(Claude));
     }
 
     [Fact]

@@ -64,6 +64,10 @@ public sealed class ArenaApiClient(HttpClient http)
         GetJsonAsync<IReadOnlyList<ModelResultsDto>>(
             WithQuery("/api/results/breakdown", ("tournamentId", tournamentId)), ct);
 
+    /// <summary>03 §10: what the game's models used and what it cost (404 for an unknown game).</summary>
+    public Task<GameUsageDto> GetGameUsageAsync(Guid id, CancellationToken ct = default) =>
+        GetJsonAsync<GameUsageDto>($"/api/games/{id}/usage", ct);
+
     public Task<PageDto<AttemptDto>> GetAttemptsAsync(Guid? gameId, string? model, int page, CancellationToken ct = default) =>
         GetJsonAsync<PageDto<AttemptDto>>(
             WithQuery("/api/attempts", ("gameId", gameId), ("model", model), ("page", page)), ct);
