@@ -30,9 +30,9 @@ running; detach with `Ctrl-b d` in tmux and reattach with `tmux attach`.
 ### In the app: `/broadcast/plan`
 
 1. Open `http://localhost:5070/broadcast/plan`.
-2. Pick the models. Each model shows its premium multiplier. `Random` is always available and costs nothing.
+2. Pick the models. Each model shows its token price (or its premium multiplier, for a model that still reports one). `Random` is always available and costs nothing.
 3. Set the start time and the duration (24 h by default), the pacing (move delay 4000 ms and game gap 20 s by default), and the seed.
-4. Press **Generate preview**. The timeline of every slot and the premium-request estimate per model appear **before anything is saved**.
+4. Press **Generate preview**. The timeline of every slot and the cost estimate per model (AI credits and USD) appear **before anything is saved**.
 5. Edit if needed: **Up**, **Down** and **Delete** change the order of the slots.
 6. Press **Save draft**. Nothing runs yet.
 7. Press **Start**. The day plays from the start time; the button is offered only for the saved draft with no unsaved edits.

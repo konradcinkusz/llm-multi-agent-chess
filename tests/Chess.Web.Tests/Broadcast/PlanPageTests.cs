@@ -25,7 +25,7 @@ public class PlanPageTests
         // Two games fit a two-hour window at the default pace; both pit gpt against claude.
         Assert.Equal(2, cut.FindAll("[data-testid='plan-preview'] .plan-game").Count);
         var estimate = cut.Find("[data-testid='plan-estimate']").TextContent;
-        Assert.Contains("Premium requests for the day (estimate, before saving)", estimate);
+        Assert.Contains("Cost of the day (estimate, before saving)", estimate);
         // gpt: 2 games × 40 × 1; claude: 2 games × 40 × 1.5. The estimate is on screen before anything is sent.
         Assert.Contains("Known total: 200", estimate);
         Assert.DoesNotContain(fake.Requests, request => request.Method == "POST");

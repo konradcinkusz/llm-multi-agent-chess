@@ -27,9 +27,12 @@ public static class TournamentFormat
         _ => "badge-neutral",
     };
 
-    /// <summary>A premium-request figure; "unknown" when the model's multiplier is not known, as the API reports it.</summary>
+    /// <summary>
+    /// A premium-request figure; "by token" when the model has no multiplier. Copilot bills those models in AI credits
+    /// per token (03 §10), so their cost is in the credit and USD columns, not unknown.
+    /// </summary>
     public static string Requests(double? value) =>
-        value is { } requests ? requests.ToString("#,##0.#", CultureInfo.InvariantCulture) : "unknown";
+        value is { } requests ? requests.ToString("#,##0.#", CultureInfo.InvariantCulture) : "by token";
 
     /// <summary>A model's token prices as the forms show them (03 §10): "$3.00 / $15.00 per 1M tokens", or "price unknown".</summary>
     public static string Price(ModelPricingDto? pricing) =>

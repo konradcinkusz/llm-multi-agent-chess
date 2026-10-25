@@ -10,7 +10,7 @@
 
 <div class="page-header">
     <h1>Broadcast plan</h1>
-    <p class="page-lede">Plan a day of games, check the premium-request estimate, save the plan as a draft, then start it. Times are UTC.</p>
+    <p class="page-lede">Plan a day of games, check the cost estimate, save the plan as a draft, then start it. Times are UTC.</p>
 </div>
 
 @* Every action reports here, whichever section it came from. *@
@@ -108,7 +108,7 @@
         </ChartFrame>
 
         <div class="callout callout-info plan-estimate" data-testid="plan-estimate" aria-live="polite">
-            <h3>Premium requests for the day (estimate, before saving)</h3>
+            <h3>Cost of the day (estimate, before saving)</h3>
             <p class="muted">
                 Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
                 AI credits and USD use the API's rate and the tokens of past moves, as the saved draft will.
@@ -141,7 +141,7 @@
                 · USD: @TournamentFormat.Usd(Known(request.Models.Select(model => CostOf(model)?.Usd)))
                 @if (UnknownCount > 0)
                 {
-                    <span>, plus @UnknownCount model@(UnknownCount == 1 ? "" : "s") with an unknown multiplier</span>
+                    <span>, plus @UnknownCount model@(UnknownCount == 1 ? "" : "s") billed by token, counted in AI credits</span>
                 }
             </p>
         </div>
