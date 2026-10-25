@@ -5,13 +5,13 @@
 {
     <span class="cancel-confirm" role="group" aria-label="Confirm cancel">
         <span>Abort its queued and running games?</span>
-        <button type="button" class="danger" @onclick="ConfirmAsync" disabled="@_busy">Yes, cancel</button>
-        <button type="button" @onclick="Disarm" disabled="@_busy">Keep running</button>
+        <button type="button" class="btn-danger" @onclick="ConfirmAsync" disabled="@_busy">Yes, cancel</button>
+        <button type="button" class="btn" @onclick="Disarm" disabled="@_busy">Keep running</button>
     </span>
 }
 else
 {
-    <button type="button" class="danger" @onclick="Arm">Cancel tournament</button>
+    <button type="button" class="btn-danger" @onclick="Arm">Cancel tournament</button>
 }
 
 @if (_error is not null)

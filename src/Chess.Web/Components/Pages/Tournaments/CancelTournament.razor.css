@@ -1,10 +1,7 @@
+/* The confirm pair sits on one line and wraps on a phone. The buttons themselves are the shared .btn and .btn-danger (07 §4). */
 .cancel-confirm {
     display: inline-flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-}
-
-.danger {
-    color: #c0392b;
+    gap: var(--space-2);
 }

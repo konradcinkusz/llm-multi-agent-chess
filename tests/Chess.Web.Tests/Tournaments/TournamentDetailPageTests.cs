@@ -81,4 +81,28 @@ public class TournamentDetailPageTests
         Assert.Contains("1 of 2 games", cut.Markup);
         Assert.Contains("Cancel tournament", cut.Markup);
     }
+
+    [Fact]
+    public void TheTablesScrollInsideTableWrapsAndTheFactsSitInACard()
+    {
+        var handler = Serve.Routes(new Dictionary<string, Reply>
+        {
+            [$"GET /api/tournaments/{Fixtures.FinishedId}"] = Serve.Ok(Fixtures.FinishedTournament),
+            ["GET /api/games?page=1&pageSize=200"] = Serve.Ok(Fixtures.Page(
+            [
+                Fixtures.Game("55555555-5555-5555-5555-555555555555", Fixtures.FinishedId, "gpt", "claude", "1-0", 41, "2026-09-01T10:00:00Z"),
+            ], 1)),
+            [$"GET /api/ratings?tournamentId={Fixtures.FinishedId}"] = Serve.Ok(Leaderboard),
+        });
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, handler);
+
+        var cut = ctx.Render<TournamentDetailPage>(parameters => parameters.Add(page => page.Id, Guid.Parse(Fixtures.FinishedId)));
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("#tournament-leaderboard tbody tr").Count));
+        Assert.NotNull(cut.Find("#tournament-leaderboard").Closest(".table-wrap"));
+        Assert.NotNull(cut.Find("#tournament-games").Closest(".table-wrap"));
+        Assert.NotNull(cut.Find("dl.tournament-facts").Closest(".card"));
+        Assert.Equal(2, cut.FindAll("#tournament-leaderboard .badge-warning").Count);
+    }
 }

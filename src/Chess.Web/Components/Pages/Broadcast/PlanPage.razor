@@ -8,8 +8,10 @@
 
 <PageTitle>Broadcast plan · LLM Chess Arena</PageTitle>
 
-<h1>Broadcast plan</h1>
-<p class="muted">Plan a day of games, check the premium-request estimate, save the plan as a draft, then start it. Times are UTC.</p>
+<div class="page-header">
+    <h1>Broadcast plan</h1>
+    <p class="page-lede">Plan a day of games, check the premium-request estimate, save the plan as a draft, then start it. Times are UTC.</p>
+</div>
 
 @* Every action reports here, whichever section it came from. *@
 @if (_actionError is not null)
@@ -17,8 +19,11 @@
     <p class="status-error" role="alert">@_actionError</p>
 }
 
+<div class="stack-lg">
 <section class="plan-section" aria-labelledby="plan-form-heading">
     <h2 id="plan-form-heading">1. Plan the day</h2>
+
+    <div class="card stack">
 
     @if (_models is null && _modelsError is null)
     {
@@ -30,28 +35,28 @@
     }
     else
     {
-        <div class="plan-form">
-            <label>
+        <div class="field-row">
+            <label class="field">
                 Name
                 <input data-testid="plan-name" type="text" maxlength="120" @bind="_name" />
             </label>
-            <label>
+            <label class="field">
                 Start (UTC)
                 <input data-testid="plan-start" type="datetime-local" value="@_startText" @onchange="OnStartChanged" />
             </label>
-            <label>
+            <label class="field">
                 Hours
                 <input data-testid="plan-hours" type="number" min="1" max="@PlanPlanner.MaxDurationHours" @bind="_hours" />
             </label>
-            <label>
+            <label class="field">
                 Move delay (ms)
                 <input data-testid="plan-move-delay" type="number" min="0" step="500" @bind="_moveDelayMs" />
             </label>
-            <label>
+            <label class="field">
                 Game gap (s)
                 <input data-testid="plan-game-gap" type="number" min="0" @bind="_gameGapSeconds" />
             </label>
-            <label>
+            <label class="field">
                 Seed
                 <input data-testid="plan-seed" type="number" @bind="_seed" />
             </label>
@@ -59,28 +64,31 @@
 
         <fieldset class="plan-models" data-testid="plan-models">
             <legend>Models</legend>
-            @foreach (var model in _choices)
-            {
-                <label class="plan-model">
-                    <input data-testid="plan-model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
-                           @onchange="e => Toggle(model.Id, e.Value)" />
-                    @model.DisplayName
-                    <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
-                </label>
-            }
+            <div class="chips">
+                @foreach (var model in _choices)
+                {
+                    <label class="chip plan-model">
+                        <input data-testid="plan-model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
+                               @onchange="e => Toggle(model.Id, e.Value)" />
+                        @model.DisplayName
+                        <span class="muted">@TournamentFormat.Multiplier(model.PremiumMultiplier)</span>
+                    </label>
+                }
+            </div>
         </fieldset>
 
         @foreach (var problem in FormProblems)
         {
-            <p class="plan-problem">@problem</p>
+            <p class="plan-problem error-text">@problem</p>
         }
 
-        <div class="plan-actions">
-            <button data-testid="plan-generate" type="button" @onclick="Generate" disabled="@(FormProblems.Count > 0 || _busy)">
+        <div class="cluster">
+            <button data-testid="plan-generate" type="button" class="btn-primary" @onclick="Generate" disabled="@(FormProblems.Count > 0 || _busy)">
                 Generate preview
             </button>
         </div>
     }
+    </div>
 </section>
 
 @if (_request is { } request)
@@ -99,24 +107,24 @@
             <PlanTimeline Slots="_slots" StartsAt="request.StartsAt" EndsAt="ends" />
         </ChartFrame>
 
-        <div class="plan-estimate" data-testid="plan-estimate" aria-live="polite">
+        <div class="callout callout-info plan-estimate" data-testid="plan-estimate" aria-live="polite">
             <h3>Premium requests for the day (estimate, before saving)</h3>
             <p class="muted">
                 Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
             </p>
-            <div class="table-scroll">
-                <table>
+            <div class="table-wrap">
+                <table class="table-compact">
                     <thead>
-                        <tr><th>Model</th><th>Multiplier</th><th>Games</th><th>Premium requests</th></tr>
+                        <tr><th>Model</th><th class="num">Multiplier</th><th class="num">Games</th><th class="num">Premium requests</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var model in request.Models)
                         {
                             <tr>
                                 <td>@NameOf(model)</td>
-                                <td>@TournamentFormat.Multiplier(Find(model)?.PremiumMultiplier)</td>
-                                <td>@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
-                                <td>@TournamentFormat.Requests(RequestsFor(model))</td>
+                                <td class="num">@TournamentFormat.Multiplier(Find(model)?.PremiumMultiplier)</td>
+                                <td class="num">@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
+                                <td class="num">@TournamentFormat.Requests(RequestsFor(model))</td>
                             </tr>
                         }
                     </tbody>
@@ -132,11 +140,11 @@
         </div>
 
         <h3>Games</h3>
-        <div class="table-scroll">
+        <div class="table-wrap">
             <table class="plan-slots">
                 <thead>
                     <tr>
-                        <th>#</th>
+                        <th class="num">#</th>
                         <th>Starts</th>
                         <th>White</th>
                         <th>Black</th>
@@ -149,7 +157,7 @@
                         var index = i;
                         var slot = _slots[i];
                         <tr data-testid="plan-slot">
-                            <td>@(index + 1)</td>
+                            <td class="num">@(index + 1)</td>
                             <td>@PlanFormat.Utc(slot.PlannedStart)</td>
                             <td>
                                 <select data-testid="slot-white" aria-label="White, game @(index + 1)" value="@slot.White.ModelId"
@@ -170,11 +178,11 @@
                                 </select>
                             </td>
                             <td class="plan-row-actions">
-                                <button data-testid="slot-up" type="button" disabled="@(Locked || _busy || index == 0)"
+                                <button data-testid="slot-up" type="button" class="btn-sm" disabled="@(Locked || _busy || index == 0)"
                                         @onclick="() => Reorder(index, -1)">Up</button>
-                                <button data-testid="slot-down" type="button" disabled="@(Locked || _busy || index == _slots.Count - 1)"
+                                <button data-testid="slot-down" type="button" class="btn-sm" disabled="@(Locked || _busy || index == _slots.Count - 1)"
                                         @onclick="() => Reorder(index, 1)">Down</button>
-                                <button data-testid="slot-delete" type="button" disabled="@(Locked || _busy)"
+                                <button data-testid="slot-delete" type="button" class="btn-sm btn-danger" disabled="@(Locked || _busy)"
                                         @onclick="() => Delete(index)">Delete</button>
                             </td>
                         </tr>
@@ -189,14 +197,14 @@
             <p class="plan-problem">@problem</p>
         }
 
-        <div class="plan-actions">
-            <button data-testid="plan-save" type="button" @onclick="SaveAsync" disabled="@(!CanSave)">Save draft</button>
-            <button data-testid="plan-start-now" type="button" @onclick="StartAsync" disabled="@(!CanStart)">Start</button>
+        <div class="cluster">
+            <button data-testid="plan-save" type="button" class="btn" @onclick="SaveAsync" disabled="@(!CanSave)">Save draft</button>
+            <button data-testid="plan-start-now" type="button" class="btn-primary" @onclick="StartAsync" disabled="@(!CanStart)">Start</button>
         </div>
 
         @if (_saved is { } saved)
         {
-            <p class="plan-saved" role="status">
+            <p class="callout @(Dirty ? "callout-warning" : "callout-info") plan-saved" role="status">
                 Saved as <strong>@saved.Schedule.Name</strong> (@PlanFormat.Status(saved.Schedule.Status)).
                 @if (Dirty)
                 {
@@ -226,7 +234,7 @@
     }
     else
     {
-        <div class="table-scroll">
+        <div class="table-wrap">
             <table class="plan-schedules">
                 <thead>
                     <tr>
@@ -243,9 +251,9 @@
                     {
                         <tr data-testid="schedule-row">
                             <td>@schedule.Name</td>
-                            <td>@PlanFormat.Status(schedule.Status)</td>
+                            <td><span class="badge @ScheduleBadge(schedule.Status)">@PlanFormat.Status(schedule.Status)</span></td>
                             <td>@PlanFormat.Utc(schedule.StartsAt) to @PlanFormat.Utc(schedule.EndsAt)</td>
-                            <td>@schedule.SlotsFinished of @schedule.SlotsTotal</td>
+                            <td class="num">@schedule.SlotsFinished of @schedule.SlotsTotal</td>
                             <td>
                                 @string.Join(", ", schedule.EstimatedPremiumRequests.Select(estimate =>
                                     $"{NameOf(estimate.ModelId)} {TournamentFormat.Requests(estimate.EstimatedPremiumRequests)}"))
@@ -253,23 +261,23 @@
                             <td class="plan-row-actions">
                                 @if (schedule.Status is ScheduleStatuses.Draft or ScheduleStatuses.Scheduled)
                                 {
-                                    <button data-testid="schedule-start" type="button"
+                                    <button data-testid="schedule-start" type="button" class="btn-sm btn-primary"
                                             disabled="@(_busy || ChannelBusy(schedule.Id))"
                                             @onclick="() => CommandAsync(schedule.Id, StartFailure, _broadcast.StartAsync)">Start</button>
                                 }
                                 @if (schedule.Status == ScheduleStatuses.Running)
                                 {
-                                    <button data-testid="schedule-pause" type="button" disabled="@_busy"
+                                    <button data-testid="schedule-pause" type="button" class="btn-sm" disabled="@_busy"
                                             @onclick="() => CommandAsync(schedule.Id, PauseFailure, _broadcast.PauseAsync)">Pause</button>
                                 }
                                 @if (schedule.Status == ScheduleStatuses.Paused)
                                 {
-                                    <button data-testid="schedule-resume" type="button" disabled="@(_busy || ChannelBusy(schedule.Id))"
+                                    <button data-testid="schedule-resume" type="button" class="btn-sm" disabled="@(_busy || ChannelBusy(schedule.Id))"
                                             @onclick="() => CommandAsync(schedule.Id, ResumeFailure, _broadcast.ResumeAsync)">Resume</button>
                                 }
                                 @if (schedule.Status is ScheduleStatuses.Scheduled or ScheduleStatuses.Running or ScheduleStatuses.Paused)
                                 {
-                                    <button data-testid="schedule-stop" type="button" disabled="@_busy"
+                                    <button data-testid="schedule-stop" type="button" class="btn-sm btn-danger" disabled="@_busy"
                                             @onclick="() => CommandAsync(schedule.Id, StopFailure, _broadcast.StopAsync)">Stop</button>
                                 }
                             </td>
@@ -280,6 +288,7 @@
         </div>
     }
 </section>
+</div>
 
 @code {
     /// <summary>
@@ -292,6 +301,15 @@
     private const int DefaultMoveDelayMs = 4000;
     private const int DefaultGameGapSeconds = 20;
     private const int DefaultSeed = 1;
+
+    /// <summary>The badge variant (07 §4) for a schedule status: running is accented, paused a warning, finished a success.</summary>
+    private static string ScheduleBadge(string status) => status switch
+    {
+        ScheduleStatuses.Running => "badge-accent",
+        ScheduleStatuses.Paused => "badge-warning",
+        ScheduleStatuses.Finished => "badge-success",
+        _ => "badge-neutral",
+    };
 
     private const string SaveFailure = "Not saved:";
     private const string StartFailure = "Could not start:";

@@ -1,5 +1,8 @@
 <span class="tournament-progress">
-    <progress value="@Finished" max="@Math.Max(Total, 1)" aria-label="Games finished"></progress>
+    <span class="progress" role="progressbar" aria-label="Games finished" aria-valuemin="0"
+          aria-valuemax="@Max" aria-valuenow="@Finished">
+        <span class="progress-bar @(Done ? "progress-bar-success" : null)" style="width: @Percent%"></span>
+    </span>
     <span>@Finished of @Total games</span>
 </span>
 
@@ -9,4 +12,10 @@
 
     [Parameter, EditorRequired]
     public int Total { get; set; }
+
+    private int Max => Math.Max(Total, 1);
+
+    private bool Done => Total > 0 && Finished >= Total;
+
+    private int Percent => Math.Clamp((int)Math.Round(100.0 * Finished / Max), 0, 100);
 }

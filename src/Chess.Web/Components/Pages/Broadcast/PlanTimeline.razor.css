@@ -1,14 +1,14 @@
-/* The preview timeline (03 §9.4). Text follows the page colour, so light and dark themes both read. */
+/* The preview timeline (03 §9.4). Text follows the page ink, so both themes read. */
 
 .plan-timeline {
-    margin: 8px 0 4px;
+    margin: var(--space-2) 0 0;
 }
 
 .plan-timeline svg {
     display: block;
     width: 100%;
     height: auto;
-    color: CanvasText;
+    color: var(--text);
 }
 
 .plan-axis line {
@@ -16,31 +16,34 @@
     stroke-opacity: 0.25;
 }
 
+/* The viewBox is 1000 units wide and scales down on a phone, so the labels are sized to stay readable at 390 px. */
 .plan-axis text {
     fill: currentColor;
-    font-size: 12px;
+    font-family: var(--font-sans);
+    font-size: 26px;
     opacity: 0.8;
 }
 
 .plan-legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 16px;
-    margin: 8px 0 0;
+    gap: var(--space-1) var(--space-4);
+    margin: var(--space-3) 0 0;
     padding: 0;
     list-style: none;
-    font-size: 0.875rem;
+    color: var(--text-2);
+    font-size: var(--text-sm);
 }
 
 .plan-legend li {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
 }
 
 .plan-swatch {
     display: inline-block;
     width: 12px;
     height: 12px;
-    border-radius: 2px;
+    border-radius: 3px;
 }

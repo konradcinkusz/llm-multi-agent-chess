@@ -205,4 +205,19 @@ public class AttemptsPageTests
 
     private static HttpResponseMessage Page(int page, int pageSize, int total, params AttemptDto[] items) =>
         Canned.Json(JsonSerializer.Serialize(new PageDto<AttemptDto>(items, page, pageSize, total), JsonOptions));
+
+    [Fact]
+    public void FiltersSitInOneFieldRowAndApplyIsThePrimaryButton()
+    {
+        var handler = Api(_ => Page(1, 50, 1, Attempt(1, "PROMPT ONE")));
+        using var ctx = new BunitContext();
+
+        var cut = Render(ctx, handler);
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("li.attempt")));
+        Assert.NotNull(cut.Find("#attempts-game").Closest(".field-row"));
+        Assert.NotNull(cut.Find("#attempts-model").Closest(".field-row"));
+        Assert.NotNull(cut.Find("#attempts-legal").Closest(".field-row"));
+        Assert.Contains("btn-primary", cut.Find("form button[type='submit']").ClassName);
+    }
 }
