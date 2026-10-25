@@ -4,9 +4,9 @@
 <div class="status-strip" role="status">
     @if (status is not null)
     {
-        <span>Copilot: <strong>@status.Copilot</strong> (@status.CopilotDetail)</span>
-        <span>Database: <strong>@status.Database</strong></span>
-        <span>Stockfish: <strong>@status.Stockfish</strong></span>
+        <span class="status-item" data-service="copilot" title="@status.CopilotDetail"><span class="dot dot-@CopilotTone(status.Copilot)" aria-hidden="true"></span>Copilot: <strong>@status.Copilot</strong> <span class="status-detail">(@status.CopilotDetail)</span></span>
+        <span class="status-item" data-service="database"><span class="dot dot-@ServiceTone(status.Database)" aria-hidden="true"></span>Database: <strong>@status.Database</strong></span>
+        <span class="status-item" data-service="stockfish"><span class="dot dot-@ServiceTone(status.Stockfish)" aria-hidden="true"></span>Stockfish: <strong>@status.Stockfish</strong></span>
     }
     else if (unavailable)
     {
@@ -22,6 +22,25 @@
     private StatusDto? status;
     private bool unavailable;
     private string? detail;
+
+    // The Copilot state is the gateway's own (03 §8); the dot colour follows 07 §5.
+    internal static string CopilotTone(string state) => state switch
+    {
+        "Ready" => "success",
+        "Fake" => "accent",
+        "NotAuthenticated" => "warning",
+        "Unavailable" => "danger",
+        _ => "neutral",
+    };
+
+    // Database and Stockfish report a health status. An absent Stockfish is neutral: it is optional, not broken.
+    internal static string ServiceTone(string status) => status switch
+    {
+        "healthy" => "success",
+        "degraded" => "warning",
+        "unhealthy" => "danger",
+        _ => "neutral",
+    };
 
     protected override async Task OnInitializedAsync()
     {

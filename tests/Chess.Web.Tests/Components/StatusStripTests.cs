@@ -25,6 +25,52 @@ public class StatusStripTests
         Assert.Equal("/api/status", Assert.Single(handler.Requests).Target);
     }
 
+    [Theory]
+    [InlineData("Ready", "dot-success")]
+    [InlineData("Fake", "dot-accent")]
+    [InlineData("NotAuthenticated", "dot-warning")]
+    [InlineData("Unavailable", "dot-danger")]
+    public void CopilotStateSetsTheDotColourAndKeepsTheDetail(string state, string dot)
+    {
+        var handler = new FakeHandler(_ => Canned.Json($$"""{"copilot":"{{state}}","copilotDetail":"signed in","database":"healthy","stockfish":"healthy"}"""));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Contains(dot, cut.Find("[data-service='copilot'] .dot").ClassList));
+        Assert.Contains($"Copilot: {state} (signed in)", cut.Find(".status-strip").TextContent);
+    }
+
+    [Fact]
+    public void TheCopilotDetailIsAlsoTheTooltipOfItsItem()
+    {
+        var handler = new FakeHandler(_ => Canned.Json("""{"copilot":"NotAuthenticated","copilotDetail":"run the login","database":"healthy","stockfish":"healthy"}"""));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Equal("run the login", cut.Find("[data-service='copilot']").GetAttribute("title")));
+    }
+
+    [Theory]
+    [InlineData("healthy", "dot-success")]
+    [InlineData("degraded", "dot-warning")]
+    [InlineData("unhealthy", "dot-danger")]
+    [InlineData("absent", "dot-neutral")]
+    public void DatabaseAndStockfishHealthSetTheirDotColour(string health, string dot)
+    {
+        var handler = new FakeHandler(_ => Canned.Json($$"""{"copilot":"Ready","copilotDetail":"signed in","database":"{{health}}","stockfish":"{{health}}"}"""));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Contains(dot, cut.Find("[data-service='database'] .dot").ClassList));
+        Assert.Contains(dot, cut.Find("[data-service='stockfish'] .dot").ClassList);
+    }
+
     [Fact]
     public void SaysSoWhenTheApiCannotBeReached()
     {

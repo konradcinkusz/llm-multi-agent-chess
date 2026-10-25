@@ -1,8 +1,11 @@
 using System.Reflection;
 using Bunit;
+using Chess.Web.Api;
 using Chess.Web.Components.Layout;
 using Chess.Web.Components.Pages.Results;
+using Chess.Web.Tests.Support;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Chess.Web.Tests.Components;
@@ -58,5 +61,21 @@ public class NavigationTests
 
         var hrefs = cut.FindAll("a").Select(a => a.GetAttribute("href")!).ToArray();
         Assert.Equal(NavHrefs, hrefs);
+    }
+
+    [Fact]
+    public void TheShellWrapsHeaderStatusStripAndMainInThatOrder()
+    {
+        var handler = new FakeHandler(_ => Canned.Json("""{"copilot":"Ready","copilotDetail":"signed in","database":"healthy","stockfish":"healthy"}"""));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<MainLayout>(p => p.Add(l => l.Body, (RenderFragment)(b => b.AddMarkupContent(0, "<p>Page body</p>"))));
+
+        var shell = cut.Find(".app-shell");
+        Assert.Equal(new[] { "HEADER", "DIV", "MAIN" }, shell.Children.Select(c => c.TagName).ToArray());
+        Assert.Equal("♞", cut.Find(".brand-mark").TextContent);
+        Assert.Contains("LLM Chess Arena", cut.Find(".brand").TextContent);
+        Assert.Contains("Page body", cut.Find("main.app-main").TextContent);
     }
 }
