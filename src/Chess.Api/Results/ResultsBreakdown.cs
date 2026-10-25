@@ -1,3 +1,4 @@
+using Chess.Api.Catalog;
 using Chess.Api.Contracts;
 using Chess.Api.Persistence;
 using Chess.Api.Usage;
@@ -96,7 +97,8 @@ public static class ResultsBreakdown
             return;
         }
 
-        var prices = models.FirstOrDefault(m => m.Id == model)?.Pricing;
+        // A variant (model@effort) is priced with its base model's prices (03 §10.2, ADR-012).
+        var prices = models.FirstOrDefault(m => m.Id == ModelVariant.BaseOf(model))?.Pricing;
         var usage = GameCostCalculator.ForSide(color, model, isLlm: true,
             sideReplies.Select(r => new GameCostCalculator.ReplyUsage(r.InputTokens, r.OutputTokens, r.ReasoningTokens,
                 r.CachedInputTokens, r.AiCredits)).ToList(),

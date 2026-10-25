@@ -57,8 +57,9 @@ public static class UsageExtensions
                 a.CachedInputTokens, a.AiCredits))
             .ToList();
 
-    private static ModelPricingDto? PricesOf(IReadOnlyList<ModelDto> models, string modelId) =>
-        models.FirstOrDefault(m => m.Id == modelId)?.Pricing;
+    /// <summary>A variant (model@effort) is priced with its base model's prices (03 §10.2, ADR-012).</summary>
+    private static ModelPricingDto? PricesOf(IReadOnlyList<ModelDto> models, string playerId) =>
+        models.FirstOrDefault(m => m.Id == ModelVariant.BaseOf(playerId))?.Pricing;
 
     /// <summary>The columns of one attempt that the cost needs.</summary>
     private sealed record AttemptRow(int Ply, int? InputTokens, int? OutputTokens, int? ReasoningTokens,

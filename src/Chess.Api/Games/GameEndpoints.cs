@@ -101,11 +101,18 @@ public static class GameEndpoints
                         $"{listing.Warning}. Run `copilot` and log in, then try again.");
                 }
 
-                var model = listing.Models.FirstOrDefault(m => m.Id == player.ModelId);
-                if (model is null || player.ModelId == ModelCatalog.RandomModelId)
+                // A player id may be model@effort (03 §12.1): the effort must be one the model offers, checked by ModelVariant.
+                var baseModel = ModelVariant.BaseOf(player.ModelId);
+                var model = listing.Models.FirstOrDefault(m => m.Id == baseModel);
+                if (model is null || baseModel == ModelCatalog.RandomModelId)
                 {
                     return Problem(StatusCodes.Status400BadRequest, "Invalid game",
                         $"The {side} player's model '{player.ModelId}' is not one the gateway offers.");
+                }
+
+                if (ModelVariant.Problem(player.ModelId, listing) is { } effortProblem)
+                {
+                    return Problem(StatusCodes.Status400BadRequest, "Invalid game", $"The {side} player: {effortProblem}");
                 }
 
                 return model.Enabled
