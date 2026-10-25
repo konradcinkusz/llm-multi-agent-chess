@@ -34,3 +34,6 @@ logs/
 
 # MacOS
 .DS_Store
+
+# Visual Studio
+.vs/
