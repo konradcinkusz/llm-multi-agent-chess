@@ -101,5 +101,63 @@ internal static class Fixtures
         total,
     };
 
+    /// <summary>An attempt as GET /api/attempts returns it (03 §10.1). A legal attempt names its move; any other is rejected.</summary>
+    public static object Attempt(string gameId, int ply, int number, string modelId, bool legal, string? rejectionKind = null,
+        string? san = null, string? reasoning = null) => new
+        {
+            gameId,
+            ply,
+            number,
+            modelId,
+            prompt = $"Prompt for ply {ply}, attempt {number}",
+            rawReply = legal ? san : "not a move",
+            parsedSan = legal ? san : null,
+            legal,
+            latencyMs = 500L,
+            error = (string?)null,
+            createdAt = "2026-10-24T10:00:01Z",
+            reasoning,
+            inputTokens = 120,
+            outputTokens = 8,
+            reasoningTokens = (int?)null,
+            aiCredits = (double?)null,
+            rejectionKind,
+        };
+
+    /// <summary>The usage of a game (GET /api/games/{id}/usage): the white side pays <paramref name="usd"/>, the black side is unknown.</summary>
+    public static object Usage(string id, double? usd) => new
+    {
+        gameId = id,
+        white = new
+        {
+            color = "white",
+            modelId = "gpt",
+            requests = 2,
+            inputTokens = 240L,
+            outputTokens = 16L,
+            reasoningTokens = 4L,
+            cachedInputTokens = 0L,
+            aiCredits = usd * 100,
+            estimatedUsd = usd,
+            costBasis = "reported",
+        },
+        black = new
+        {
+            color = "black",
+            modelId = "claude",
+            requests = 1,
+            inputTokens = 120L,
+            outputTokens = 8L,
+            reasoningTokens = 0L,
+            cachedInputTokens = 0L,
+            aiCredits = (double?)null,
+            estimatedUsd = (double?)null,
+            costBasis = "unknown",
+        },
+        totalAiCredits = usd * 100,
+        totalEstimatedUsd = usd,
+        usdPerAiCredit = 0.01,
+    };
+
     public static string Json(object value) => JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
