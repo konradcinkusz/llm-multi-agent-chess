@@ -58,9 +58,16 @@
     [Parameter]
     public string? Description { get; set; }
 
-    /// <summary>The bars, in any order; they are drawn best-first.</summary>
+    /// <summary>The bars, in any order; they are drawn best-first unless <see cref="KeepOrder"/> is set.</summary>
     [Parameter, EditorRequired]
     public IReadOnlyList<RankedBar> Items { get; set; } = [];
+
+    /// <summary>
+    /// Draw the bars in the order given instead of by value. The Results page sets it so the chart follows the ranking
+    /// the leaderboard shows, which the conservative order does not sort by value.
+    /// </summary>
+    [Parameter]
+    public bool KeepOrder { get; set; }
 
     /// <summary>Lower end of the value axis.</summary>
     [Parameter]
@@ -97,7 +104,9 @@
 
     protected override void OnParametersSet()
     {
-        _bars = Items.OrderByDescending(b => b.Value).ThenBy(b => b.Label, StringComparer.Ordinal).ToList();
+        _bars = KeepOrder
+            ? Items.ToList()
+            : Items.OrderByDescending(b => b.Value).ThenBy(b => b.Label, StringComparer.Ordinal).ToList();
 
         var largest = Max ?? _bars.Select(b => b.High ?? b.Value).DefaultIfEmpty(Min + 1).Max();
         var (low, high, ticks) = NiceAxis(Min, largest);

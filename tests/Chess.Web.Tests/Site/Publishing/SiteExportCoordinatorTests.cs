@@ -90,6 +90,6 @@ public class SiteExportCoordinatorTests : IDisposable
             o.ExportDirectory = folder ?? Path.Combine(_git.Root, "export");
             o.Remote = _git.Remote;
         });
-        return new SiteExportCoordinator(exporter, publisher, options, new SiteFakeHostEnvironment(_git.Root), clock);
+        return new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(_git.Root), clock, exporter);
     }
 }

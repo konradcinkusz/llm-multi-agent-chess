@@ -9,13 +9,16 @@ namespace Chess.Web.Site.Publishing;
 /// newest finished game. It starts at the app's start, so a restart does not publish by itself.
 /// </summary>
 public sealed class SiteExportCoordinator(
-    ISiteExporter exporter,
     ISitePublisher publisher,
     IOptions<SitePublishingOptions> options,
     IHostEnvironment environment,
-    TimeProvider time)
+    TimeProvider time,
+    ISiteExporter? exporter = null)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    // Without a registered exporter the coordinator reports "no pages" rather than publishing an empty site.
+    private readonly ISiteExporter _exporter = exporter ?? new NullSiteExporter(time);
 
     public SiteExportResult? LastExport { get; private set; }
 
@@ -84,6 +87,6 @@ public sealed class SiteExportCoordinator(
             Directory.Delete(ExportDirectory, recursive: true);
         }
         Directory.CreateDirectory(ExportDirectory);
-        return await exporter.ExportAsync(ExportDirectory, ct);
+        return await _exporter.ExportAsync(ExportDirectory, ct);
     }
 }

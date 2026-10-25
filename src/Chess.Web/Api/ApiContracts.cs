@@ -25,7 +25,8 @@ public sealed record StatusDto(string Copilot, string CopilotDetail, string Data
 
 // Local copies of Chess.Rating.ModelRating and PairwiseCoefficient (03 §3.4).
 public sealed record ModelRating(string Model, double Rating, double CiLow, double CiHigh, int Games, double Score,
-    double Legality, double? MoveQuality, double Quality, double ArenaScore, bool Provisional);
+    double Legality, double? MoveQuality, double Quality, double ArenaScore, bool Provisional,
+    double? ArenaScoreLow = null, double? ArenaScoreHigh = null);   // R1: 2.5 / 97.5 percentiles of the arena score
 public sealed record PairwiseCoefficient(string A, string B, double ExpectedScore, double QualityShare,
     double Rqc, double RqcLow, double RqcHigh, double EloEquivalent, int HeadToHeadGames, double? HeadToHeadScore);
 

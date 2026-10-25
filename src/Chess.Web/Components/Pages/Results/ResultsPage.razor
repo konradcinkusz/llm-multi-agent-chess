@@ -21,6 +21,13 @@
                 }
             </select>
         </div>
+        <div class="field">
+            <label for="results-order">Order</label>
+            <select id="results-order" @onchange="OnOrderChanged" disabled="@_loading">
+                <option value="@RankingOrder.Score" selected="@(_order == RankingOrder.Score)">@RankingOrder.Option(RankingOrder.Score)</option>
+                <option value="@RankingOrder.Conservative" selected="@(_order == RankingOrder.Conservative)">@RankingOrder.Option(RankingOrder.Conservative)</option>
+            </select>
+        </div>
         @if (_loading)
         {
             <span class="muted" role="status">Loading…</span>
@@ -53,20 +60,21 @@ else
             <h2 id="big-picture-heading" class="card-title">Big picture</h2>
             <p class="headline">
                 <span class="hero-label">Best overall:</span> <strong class="hero-leader">@leader.Model</strong>
-                <span class="hero-stats">arena score @ResultsModel.Number(leader.ArenaScore, "0.0"), rating @ResultsModel.Number(leader.Rating, "0") ± @ResultsModel.Number(ResultsModel.HalfWidth(leader.CiLow, leader.CiHigh), "0")
+                <span class="hero-stats">arena score @ResultsModel.Number(leader.ArenaScore, "0.0")@if (_order == RankingOrder.Conservative && leader.ArenaScoreLow is { } leaderLow) { <span> (lower bound @ResultsModel.Number(leaderLow, "0.0"))</span> }, rating @ResultsModel.Number(leader.Rating, "0") ± @ResultsModel.Number(ResultsModel.HalfWidth(leader.CiLow, leader.CiHigh), "0")
                     @if (leader.Provisional)
                     {
                         <span class="badge badge-warning">Provisional</span>
                     }
                 </span>
+                <span class="hero-order">Ranked by @RankingOrder.Clause(_order).</span>
             </p>
             @if (_report.Verdict is { } verdict)
             {
                 <p class="callout callout-info verdict">@verdict</p>
             }
             <RankedBarChart Title="Arena score by model"
-                            Description="Arena score is 100 × the mean RQC against every other model; 50 is the average of the field. Whiskers approximate the 95 % interval from the pairwise RQC intervals."
-                            Items="_report.Bars" Min="0" Max="100" ValueFormat="0.0" />
+                            Description="Arena score is 100 × the mean RQC against every other model; 50 is the average of the field. Whiskers show its 95 % interval from a bootstrap over the rated games."
+                            Items="_report.Bars" KeepOrder="true" Min="0" Max="100" ValueFormat="0.0" />
         </section>
 
         @* 2. Rating over time. *@
@@ -132,7 +140,7 @@ else
             <h2 id="table-heading" class="card-title">Leaderboard table</h2>
             <p class="muted results-note">
                 White advantage: @ResultsModel.Number(_board!.WhiteAdvantage, "0") rating points over @_board.Games rated games.
-                Ranked by arena score, then rating; provisional models sort after the others.
+                @RankingOrder.TableNote(_order)
             </p>
             <div class="table-wrap table-compact">
                 <table class="results-table">
@@ -178,6 +186,7 @@ else
     private TournamentRatingsClient _ratings = null!;
     private IReadOnlyList<TournamentDto> _tournaments = [];
     private Guid? _tournamentId;
+    private string _order = RankingOrder.Score;
     private ResultsReport? _report;
     private LeaderboardDto? _board;
     private string? _error;
@@ -199,6 +208,12 @@ else
         return LoadAsync(selected);
     }
 
+    private Task OnOrderChanged(ChangeEventArgs args)
+    {
+        _order = args.Value?.ToString() == RankingOrder.Conservative ? RankingOrder.Conservative : RankingOrder.Score;
+        return LoadAsync(_tournamentId);
+    }
+
     /// <summary>Loads one scope. A newer scope cancels the load still running, so a late answer never overwrites the page.</summary>
     private async Task LoadAsync(Guid? tournamentId)
     {
@@ -210,7 +225,7 @@ else
         _error = null;
         try
         {
-            var boardTask = _ratings.GetLeaderboardAsync(tournamentId, ct);
+            var boardTask = _ratings.GetLeaderboardAsync(tournamentId, _order, ct);
             var allTask = Api.GetLeaderboardAsync(ct);
             var tournamentsTask = Api.GetTournamentsAsync(ct);
             await Task.WhenAll(boardTask, allTask, tournamentsTask);

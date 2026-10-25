@@ -1,0 +1,80 @@
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Site
+
+@* The shell every static page shares: the header and its navigation, the snapshot strip, the content and the footer.
+   Every link is relative to the page (Frame.Link), and nothing here runs a script (03 §11). *@
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@Title · LLM Chess Arena</title>
+    <link rel="icon" type="image/png" href="@Frame.Link("assets/favicon.png")" />
+    <link rel="stylesheet" href="@Frame.Link("assets/app.css")" />
+    <link rel="stylesheet" href="@Frame.Link("assets/Chess.Web.styles.css")" />
+</head>
+<body>
+    <div class="app-shell">
+        <header class="app-header">
+            <a class="brand" href="@Frame.Link(SitePaths.Results)"><span class="brand-mark" aria-hidden="true">♞</span>LLM Chess Arena</a>
+            <nav class="nav" aria-label="Main">
+                <a href="@Frame.Link(SitePaths.Results)" class="@Current("results")" aria-current="@Page("results")">Results</a>
+                <a href="@Frame.Link(SitePaths.HeadToHead)" class="@Current("head-to-head")" aria-current="@Page("head-to-head")">Head-to-head</a>
+                <a href="@Frame.Link(SitePaths.Tournaments)" class="@Current("tournaments")" aria-current="@Page("tournaments")">Tournaments</a>
+                <a href="@Frame.Link(SitePaths.Games)" class="@Current("games")" aria-current="@Page("games")">Games</a>
+                <a href="@Frame.Link(SitePaths.About)" class="@Current("about")" aria-current="@Page("about")">About</a>
+            </nav>
+        </header>
+
+        <div class="site-strip" data-section="snapshot">
+            <span>Snapshot taken @GameFormat.When(Frame.TakenAt)</span>
+            <span>@RatedText</span>
+            @if (Frame.WatchLiveUrl is { } live)
+            {
+                <a class="site-live" href="@live" rel="noopener noreferrer">Watch live</a>
+            }
+        </div>
+
+        <main class="app-main">
+            @ChildContent
+        </main>
+
+        <footer class="site-footer">
+            <p>
+                A static snapshot of the arena's results: no script runs on these pages.
+                The same numbers are published as JSON in <a href="@Frame.Link("data/leaderboard.json")">data/</a>.
+            </p>
+            @if (Frame.SupportLinks.Count > 0)
+            {
+                <ul class="site-support" aria-label="Support">
+                    @foreach (var link in Frame.SupportLinks)
+                    {
+                        <li><a href="@link.Url" rel="noopener noreferrer">@link.Label</a></li>
+                    }
+                </ul>
+            }
+        </footer>
+    </div>
+</body>
+</html>
+
+@code {
+    /// <summary>The page's own name, shown before the site name in the title.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    /// <summary>Which navigation item is the current page: results, head-to-head, tournaments, games or about.</summary>
+    [Parameter]
+    public string? Active { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private string RatedText => Frame.RatedGames == 1 ? "1 rated game" : $"{Frame.RatedGames} rated games";
+
+    private string? Current(string item) => Active == item ? "active" : null;
+
+    private string? Page(string item) => Active == item ? "page" : null;
+}

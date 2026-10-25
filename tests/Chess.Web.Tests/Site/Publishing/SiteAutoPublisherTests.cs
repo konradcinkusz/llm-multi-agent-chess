@@ -93,7 +93,7 @@ public class SiteAutoPublisherTests
         var publisher = new SiteFakePublisher(published) { At = Start };
         var activity = new SiteFakeActivity();
         var options = SiteTestOptions.Create(o => o.AutoPublishMinutes = minutes);
-        var coordinator = new SiteExportCoordinator(exporter, publisher, options, new SiteFakeHostEnvironment(Path.GetTempPath()), clock);
+        var coordinator = new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(Path.GetTempPath()), clock, exporter);
         var auto = new SiteAutoPublisher(options, coordinator, activity, clock, NullLogger<SiteAutoPublisher>.Instance);
         return (auto, exporter, publisher, activity, clock);
     }

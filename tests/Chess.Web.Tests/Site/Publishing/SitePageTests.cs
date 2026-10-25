@@ -94,8 +94,8 @@ public class SitePageTests
             o.Remote = "https://github.com/owner/repo.git";
             o.ExportDirectory = Path.Combine(Path.GetTempPath(), "arena-site-page-test");
         });
-        var coordinator = new SiteExportCoordinator(exporter, publisher, options,
-            new SiteFakeHostEnvironment(Path.GetTempPath()), new SiteFakeClock(Now));
+        var coordinator = new SiteExportCoordinator(publisher, options,
+            new SiteFakeHostEnvironment(Path.GetTempPath()), new SiteFakeClock(Now), exporter);
         ctx.Services.AddSingleton(options);
         ctx.Services.AddSingleton(coordinator);
         return ctx.Render<SitePage>();
