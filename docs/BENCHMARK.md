@@ -133,22 +133,39 @@ Declare the model in configuration. Each entry of `Arena:CustomModels` has these
 | `BaseUrl` | The endpoint, for example `http://127.0.0.1:8000/v1` for a local vLLM server. |
 | `Model` | The model name the endpoint expects in its requests. |
 | `WireApi` | Optional. Defaults to `chat-completions`. |
-| `ApiKey` | The key the endpoint expects. See below. |
+| `ApiKey` | Not a plain field: the key is the secret parameter `custom-model-<Id>-key`. See below. |
 
-**Keep the key out of the repository.** It is read from configuration only: an environment variable, or a user secret. It is
-never logged, printed, or stored in the database. One simple way is a file outside the repository, readable only by you, which
-you load into the environment for one shell session:
+**Put the entry in the AppHost's user secrets, and the key in a secret parameter.** The AppHost (`src/Chess.AppHost`) reads
+`Arena:CustomModels` from its configuration and passes it to the API. The plain fields go to the API as environment variables.
+The key does not: it is the secret parameter `custom-model-<Id>-key`, read from `Parameters:custom-model-<Id>-key` in the
+AppHost's user secrets, and it reaches the API as `Arena__CustomModels__<n>__ApiKey`. User secrets live in your home folder,
+not in the repository. The commands below use the fake profile, so they run with no Copilot login, and declare a model called
+`my-llama`. Keep the key in a file outside the repository and read it into the secret, so it never appears on the command line:
 
 ```bash
 mkdir -p "$HOME/.config/llm-arena"
-printf '%s\n' "not-a-real-key" > "$HOME/.config/llm-arena/my-llama.key"
+printf '%s\n' "your-key-here" > "$HOME/.config/llm-arena/my-llama.key"
 chmod 600 "$HOME/.config/llm-arena/my-llama.key"
-export Arena__CustomModels__0__ApiKey="$(cat "$HOME/.config/llm-arena/my-llama.key")"
+dotnet user-secrets --project src/Chess.AppHost set "Parameters:custom-model-my-llama-key" "$(cat "$HOME/.config/llm-arena/my-llama.key")"
+dotnet user-secrets --project src/Chess.AppHost set "Arena:CustomModels:0:Id" "my-llama"
+dotnet user-secrets --project src/Chess.AppHost set "Arena:CustomModels:0:DisplayName" "My Llama (local)"
+dotnet user-secrets --project src/Chess.AppHost set "Arena:CustomModels:0:ProviderType" "openai"
+dotnet user-secrets --project src/Chess.AppHost set "Arena:CustomModels:0:BaseUrl" "http://127.0.0.1:8000/v1"
+dotnet user-secrets --project src/Chess.AppHost set "Arena:CustomModels:0:Model" "llama-local"
+dotnet run --project src/Chess.AppHost --launch-profile fake
 ```
 
-Put your real key in that file, and never in a file under the repository. Then set the rest of the entry as environment
-variables for the same session and start the app. This example uses the fake profile, so it runs with no
-Copilot login, and it declares a model called `my-llama`:
+Replace `your-key-here` with the real key, and put that key only in the file outside the repository. The entries are numbered
+`0`, `1`, and so on, and an entry's key parameter is named after its `Id`. An entry with no key parameter gets no key, which
+is right for an endpoint that takes none. The AppHost never prints or writes the key. It is passed to the API process as an
+environment variable, the way the API reads its settings.
+
+A key written as a plain value stops the AppHost at startup, with a message that names the parameter to use instead and never
+quotes the value. That covers `Arena:CustomModels:<n>:ApiKey` in any configuration file, and an `Arena__CustomModels__<n>__ApiKey`
+environment variable.
+
+**Environment variables (an alternative).** The plain fields can instead be environment variables, set before the AppHost starts.
+Use this only for an entry that is not also in the user secrets, since both would use the same entry number:
 
 ```bash
 export Arena__CustomModels__0__Id=my-llama
@@ -158,8 +175,8 @@ export Arena__CustomModels__0__Model=llama-local
 dotnet run --project src/Chess.AppHost --launch-profile fake
 ```
 
-The `Id` of each entry is the part of the variable name after `Arena__CustomModels__`, so entries are numbered `0`, `1`, and
-so on. A bad entry stops the app at startup, with a message that names it and never quotes the URL or the key.
+The key still goes in the secret parameter above, never in an environment variable. A bad entry stops the app at startup, with a
+message that names it and never quotes the URL or the key.
 
 Check that the arena lists it, then benchmark it (the second command runs in a second terminal):
 

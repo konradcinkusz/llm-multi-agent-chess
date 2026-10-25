@@ -20,4 +20,9 @@
     <ProjectReference Include="..\..\src\Chess.Api\Chess.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The AppHost's custom-model rules are pure (no Aspire types): compiled here so they are unit-tested. -->
+    <Compile Include="..\..\src\Chess.AppHost\CustomModelSettings.cs" Link="AppHost\CustomModelSettings.cs" />
+  </ItemGroup>
+
 </Project>

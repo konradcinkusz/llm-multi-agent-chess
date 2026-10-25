@@ -1,4 +1,5 @@
 using Aspire.Hosting.ApplicationModel;
+using Chess.AppHost;
 using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -10,6 +11,18 @@ var fake = builder.Configuration["ARENA_FAKE"] is "1" or "true";
 var api = builder.AddProject<Projects.Chess_Api>("api")
     .WithHttpEndpoint(port: 5080, targetPort: 5080, name: "http", isProxied: false)
     .WithHttpHealthCheck("/health");
+
+// Custom models (Arena:CustomModels, 03 §12.1): the plain fields are forwarded as environment variables; each API key is a
+// secret parameter (Parameters:custom-model-<id>-key, user secrets), never a value written to a file or a log.
+foreach (var setting in CustomModelSettings.Fields(builder.Configuration))
+{
+    api.WithEnvironment(setting.Name, setting.Value);
+}
+
+foreach (var key in CustomModelSettings.Keys(builder.Configuration))
+{
+    api.WithEnvironment(key.Name, builder.AddParameter(key.ParameterName, secret: true));
+}
 
 var web = builder.AddProject<Projects.Chess_Web>("web")
     .WithHttpEndpoint(port: 5070, targetPort: 5070, name: "http", isProxied: false)
