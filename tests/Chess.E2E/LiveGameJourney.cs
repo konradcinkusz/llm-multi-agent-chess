@@ -28,6 +28,12 @@ public sealed class LiveGameJourney(ArenaFixture arena)
         await circuit.WaitAsync();
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Live game", Exact = true })).ToBeVisibleAsync();
 
+        // The pickers are disabled until the circuit has bound the page, and the start button until the models are
+        // loaded. Waiting for both means the selections below reach the server.
+        await Expect(page.GetByTestId("white-model")).ToBeEnabledAsync();
+        await Expect(page.GetByTestId("black-model")).ToBeEnabledAsync();
+        await Expect(page.GetByTestId("start-game")).ToBeEnabledAsync();
+
         // Starting creates the game, so the input is repeated only while the page still shows no game.
         await Interaction.RepeatUntilAsync(
             async () =>

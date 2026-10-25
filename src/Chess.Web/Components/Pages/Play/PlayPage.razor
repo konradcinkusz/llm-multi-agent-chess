@@ -35,7 +35,7 @@ else
 
             <label class="field">
                 <span class="play-side-name"><span class="play-side-chip" aria-hidden="true">♔</span>White</span>
-                <select id="white-model" data-testid="white-model" @bind="_white" disabled="@IsLive">
+                <select id="white-model" data-testid="white-model" @bind="_white" disabled="@PickersLocked">
                     @foreach (var choice in _choices)
                     {
                         <option value="@choice.Model.Id" disabled="@(!choice.Selectable)">@PlayChoices.Label(choice.Model)</option>
@@ -45,7 +45,7 @@ else
 
             <label class="field">
                 <span class="play-side-name"><span class="play-side-chip" aria-hidden="true">♚</span>Black</span>
-                <select id="black-model" data-testid="black-model" @bind="_black" disabled="@IsLive">
+                <select id="black-model" data-testid="black-model" @bind="_black" disabled="@PickersLocked">
                     @foreach (var choice in _choices)
                     {
                         <option value="@choice.Model.Id" disabled="@(!choice.Selectable)">@PlayChoices.Label(choice.Model)</option>
@@ -54,7 +54,7 @@ else
             </label>
 
             <label class="play-check">
-                <input type="checkbox" id="rated" data-testid="rated-toggle" @bind="_rated" disabled="@IsLive" />
+                <input type="checkbox" id="rated" data-testid="rated-toggle" @bind="_rated" disabled="@PickersLocked" />
                 Rated game
             </label>
 
@@ -197,6 +197,12 @@ else
     private string _black = PlayChoices.Random;
     private bool _rated = true;
     private bool _starting;
+
+    /// <summary>
+    /// False until the circuit has rendered the page. The prerendered page is static markup: a choice made on it is never
+    /// sent to the server, so its pickers stay disabled until the circuit binds them.
+    /// </summary>
+    private bool _bound;
     private string? _error;
 
     /// <summary>How often the pacing loop checks whether the next move may be shown.</summary>
@@ -226,6 +232,8 @@ else
 
     private bool IsLive => _live is { IsFinished: false };
 
+    private bool PickersLocked => IsLive || !_bound;
+
     /// <summary>
     /// What the page shows: the game as far as the viewer pace has released it (03 §10.5). The markup reads this many
     /// times per render, so it is built once per change.
@@ -253,7 +261,7 @@ else
     /// <summary>The moves the game has played that the page is not showing yet.</summary>
     private int Behind => _live is null ? 0 : _pace.Behind(_live.AppliedPly);
 
-    private bool CanStart => _models is not null && !_starting && !IsLive && IsSelectable(_white) && IsSelectable(_black);
+    private bool CanStart => _bound && _models is not null && !_starting && !IsLive && IsSelectable(_white) && IsSelectable(_black);
 
     private string BoardFen => Shown?.CurrentFen ?? LiveGame.StartFen;
 
@@ -323,6 +331,15 @@ else
         if (Game is { } gameId)
         {
             await OpenAsync(gameId);
+        }
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender && !_bound)
+        {
+            _bound = true;
+            StateHasChanged();
         }
     }
 
