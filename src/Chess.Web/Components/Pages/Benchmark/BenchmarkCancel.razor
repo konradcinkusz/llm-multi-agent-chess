@@ -1,0 +1,58 @@
+@using Chess.Web.Api
+@inject ArenaApiClient Api
+
+@if (_armed)
+{
+    <span class="cancel-confirm" role="group" aria-label="Confirm cancel">
+        <span>Abort its queued and running games?</span>
+        <button type="button" class="btn-danger" @onclick="ConfirmAsync" disabled="@_busy">Yes, cancel</button>
+        <button type="button" class="btn" @onclick="Disarm" disabled="@_busy">Keep running</button>
+    </span>
+}
+else
+{
+    <button type="button" class="btn-danger" @onclick="Arm">Cancel benchmark</button>
+}
+
+@if (_error is not null)
+{
+    <span class="status-error" role="alert">@_error</span>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid BenchmarkId { get; set; }
+
+    /// <summary>Raised once the API has accepted the cancel, so the page can reload.</summary>
+    [Parameter]
+    public EventCallback Cancelled { get; set; }
+
+    private bool _armed;
+    private bool _busy;
+    private string? _error;
+
+    // A cancel aborts games, so it takes a second click; the first only asks.
+    private void Arm() => _armed = true;
+
+    private void Disarm() => _armed = false;
+
+    private async Task ConfirmAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.CancelBenchmarkAsync(BenchmarkId);
+            _armed = false;
+            await Cancelled.InvokeAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"Could not cancel the benchmark: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

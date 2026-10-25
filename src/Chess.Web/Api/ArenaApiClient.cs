@@ -76,6 +76,31 @@ public sealed class ArenaApiClient(HttpClient http)
         GetJsonAsync<PageDto<AttemptDto>>(
             WithQuery("/api/attempts", ("gameId", gameId), ("model", model), ("page", page)), ct);
 
+    /// <summary>03 §12.2: the candidate's gauntlet. The estimate in the response is the API's, for the record of the run.</summary>
+    public async Task<BenchmarkCreatedDto> CreateBenchmarkAsync(CreateBenchmarkRequest request, CancellationToken ct = default) =>
+        await ReadJsonAsync<BenchmarkCreatedDto>(await http.PostAsJsonAsync("/api/benchmarks", request, JsonOptions, ct), ct);
+
+    public Task<IReadOnlyList<BenchmarkDto>> GetBenchmarksAsync(CancellationToken ct = default) =>
+        GetJsonAsync<IReadOnlyList<BenchmarkDto>>("/api/benchmarks", ct);
+
+    public Task<BenchmarkDto> GetBenchmarkAsync(Guid id, CancellationToken ct = default) =>
+        GetJsonAsync<BenchmarkDto>($"/api/benchmarks/{id}", ct);
+
+    /// <summary>The report so far: a running benchmark reports the games it has decided (03 §12.2).</summary>
+    public Task<BenchmarkReportDto> GetBenchmarkReportAsync(Guid id, CancellationToken ct = default) =>
+        GetJsonAsync<BenchmarkReportDto>($"/api/benchmarks/{id}/report", ct);
+
+    /// <summary>The same report as Markdown, the text a download link carries (<c>?format=md</c>).</summary>
+    public async Task<string> GetBenchmarkReportMarkdownAsync(Guid id, CancellationToken ct = default)
+    {
+        using var response = await http.GetAsync($"/api/benchmarks/{id}/report?format=md", ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(ct);
+    }
+
+    public Task CancelBenchmarkAsync(Guid id, CancellationToken ct = default) =>
+        EnsureSuccessAsync(http.PostAsync($"/api/benchmarks/{id}/cancel", null, ct), ct);
+
     private async Task<T> GetJsonAsync<T>(string url, CancellationToken ct) =>
         await ReadJsonAsync<T>(await http.GetAsync(url, ct), ct);
 
