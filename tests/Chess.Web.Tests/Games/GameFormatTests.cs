@@ -46,4 +46,24 @@ public class GameFormatTests
     {
         Assert.Equal(expectedPages, GameArchive.PageCount(total));
     }
+
+    [Fact]
+    public void TheListShowsAMinuteResolutionDateAndTheFullZoneOnlyInTheTitle()
+    {
+        var at = new DateTimeOffset(2026, 10, 25, 8, 19, 42, TimeSpan.Zero);
+
+        Assert.Equal("2026-10-25 08:19", GameFormat.Compact(at));
+        Assert.Equal("2026-10-25 08:19 UTC", GameFormat.When(at));
+    }
+
+    [Theory]
+    [InlineData("1-0", "White won", "badge-success")]
+    [InlineData("0-1", "Black won", "badge-success")]
+    [InlineData("1/2-1/2", "Draw", "badge-neutral")]
+    [InlineData("*", "Not decided", "badge-neutral")]
+    public void AResultReadsInWordsAndDecidedGamesAreSuccessBadges(string result, string meaning, string tone)
+    {
+        Assert.Equal(meaning, GameFormat.ResultMeaning(result));
+        Assert.Equal(tone, GameFormat.ResultTone(result));
+    }
 }

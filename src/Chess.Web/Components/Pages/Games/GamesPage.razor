@@ -5,10 +5,13 @@
 
 <PageTitle>Games · LLM Chess Arena</PageTitle>
 
-<h1>Games</h1>
+<header class="page-header">
+    <h1>Games</h1>
+    <p class="page-lede">Every game the arena has played. Open one to replay its moves.</p>
+</header>
 
-<div class="games-filters">
-    <label>
+<div class="field-row games-filters">
+    <label class="field">
         Model
         <select id="games-filter-model" data-testid="games-filter-model" @bind="_model" @bind:after="ApplyFilterAsync">
             <option value="">Any model</option>
@@ -19,7 +22,7 @@
         </select>
     </label>
 
-    <label>
+    <label class="field">
         Status
         <select id="games-filter-status" data-testid="games-filter-status" @bind="_status" @bind:after="ApplyFilterAsync">
             <option value="">Any status</option>
@@ -32,12 +35,12 @@
 
 @if (_modelsError is not null)
 {
-    <p class="status-error" role="alert">Could not load the models for the filter: @_modelsError</p>
+    <p class="callout callout-danger" role="alert">Could not load the models for the filter: @_modelsError</p>
 }
 
 @if (_listError is not null)
 {
-    <p class="status-error" role="alert" data-testid="games-error">Could not load the games: @_listError</p>
+    <p class="callout callout-danger" role="alert" data-testid="games-error">Could not load the games: @_listError</p>
 }
 
 @if (_page is null)
@@ -49,7 +52,7 @@
 }
 else if (_page.Items.Count == 0)
 {
-    <p data-testid="games-empty">
+    <p class="empty-state" data-testid="games-empty">
         @(Filtered ? "No games match these filters." : "No games yet. Start one on the Live game page.")
     </p>
 }
@@ -57,16 +60,16 @@ else
 {
     var pageCount = GameArchive.PageCount(_page.Total);
 
-    <div class="games-table-scroll">
-        <table class="games-table" data-testid="games-table">
+    <div class="table-wrap">
+        <table class="table-compact games-table" data-testid="games-table">
             <thead>
                 <tr>
-                    <th>Played</th>
+                    <th>Played (UTC)</th>
                     <th>White</th>
                     <th>Black</th>
                     <th>Result</th>
                     <th>Termination</th>
-                    <th>Plies</th>
+                    <th class="num">Plies</th>
                     <th>State</th>
                 </tr>
             </thead>
@@ -74,12 +77,12 @@ else
                 @foreach (var game in _page.Items)
                 {
                     <tr data-testid="game-row" data-game-id="@game.Id">
-                        <td><a href="/games/@game.Id">@GameFormat.When(game.CreatedAt)</a></td>
+                        <td><a href="/games/@game.Id" title="@GameFormat.When(game.CreatedAt)">@GameFormat.Compact(game.CreatedAt)</a></td>
                         <td>@game.White.ModelId</td>
                         <td>@game.Black.ModelId</td>
-                        <td>@game.Result</td>
+                        <td><span class="badge @GameFormat.ResultTone(game.Result)" title="@GameFormat.ResultMeaning(game.Result)">@game.Result</span></td>
                         <td>@GameFormat.Termination(game.Termination)</td>
-                        <td>@game.PlyCount</td>
+                        <td class="num">@game.PlyCount</td>
                         <td>@GameFormat.State(game.State)</td>
                     </tr>
                 }
@@ -87,10 +90,10 @@ else
         </table>
     </div>
 
-    <nav class="games-pager" aria-label="Pages of games">
-        <button id="games-prev" data-testid="games-prev" type="button" disabled="@(_pageNumber <= 1)" @onclick="PreviousPageAsync">Previous</button>
+    <nav class="cluster games-pager" aria-label="Pages of games">
+        <button id="games-prev" class="btn btn-sm" data-testid="games-prev" type="button" disabled="@(_pageNumber <= 1)" @onclick="PreviousPageAsync">Previous</button>
         <span data-testid="games-page">Page @_pageNumber of @pageCount · @_page.Total @(_page.Total == 1 ? "game" : "games")</span>
-        <button id="games-next" data-testid="games-next" type="button" disabled="@(_pageNumber >= pageCount)" @onclick="NextPageAsync">Next</button>
+        <button id="games-next" class="btn btn-sm" data-testid="games-next" type="button" disabled="@(_pageNumber >= pageCount)" @onclick="NextPageAsync">Next</button>
     </nav>
 }
 

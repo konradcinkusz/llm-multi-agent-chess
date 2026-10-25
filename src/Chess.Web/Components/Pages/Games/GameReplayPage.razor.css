@@ -1,26 +1,33 @@
-/* The replay (03 §6): the board first, the moves and details beside it when the screen is wide enough. */
+/* The replay (03 §6, 07 §6): the board and its stepping buttons in a card; the move details and the moves beside it on a wide screen. */
+
+.replay-back {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+}
 
 .replay-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
+    gap: var(--space-5);
+    align-items: start;
 }
 
 @media (min-width: 900px) {
     .replay-layout {
         grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-        align-items: start;
     }
 }
 
-.replay-board {
-    max-width: 520px;
-    border-radius: 4px;
+.replay-main,
+.replay-side {
+    min-width: 0;
 }
 
-.replay-board:focus-visible {
-    outline: 3px solid #2a78d6;
-    outline-offset: 2px;
+.replay-board {
+    width: 100%;
+    max-width: 560px;
+    margin-inline: auto;
+    border-radius: var(--radius);
 }
 
 .replay-board ::deep .chess-board {
@@ -29,54 +36,75 @@
     height: auto;
 }
 
+
 .replay-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    margin: 12px 0 4px;
+    gap: var(--space-3);
+}
+
+/* First, Previous, Next and Last share one segmented control. */
+.replay-buttons {
+    display: inline-flex;
+}
+
+.replay-buttons .btn {
+    margin-left: -1px;
+    border-radius: 0;
+}
+
+.replay-buttons .btn:first-child {
+    margin-left: 0;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.replay-buttons .btn:last-child {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.replay-buttons .btn:focus-visible {
+    position: relative;
+    z-index: 1;
 }
 
 .replay-ply {
-    min-width: 9em;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
 }
 
-.replay-notice {
-    padding: 8px 12px;
-    border-left: 3px solid #c58b2a;
-}
-
-.pgn-download {
-    display: inline-block;
-    margin-top: 8px;
-}
-
-.moves-scroll {
+.replay-moves-table {
     max-height: 420px;
     overflow: auto;
 }
 
 .moves-table {
     width: 100%;
-    border-collapse: collapse;
 }
 
-.moves-table th,
-.moves-table td {
-    padding: 4px 8px;
-    text-align: left;
+.moves-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-2);
 }
 
-.moves-table tr.current {
-    background: rgba(42, 120, 214, 0.15);
+.moves-table tr.current td {
+    background: var(--accent-soft);
 }
 
 .move-button {
-    padding: 0;
+    padding: 2px var(--space-1);
     border: 0;
+    border-radius: var(--radius-sm);
     background: none;
-    color: inherit;
+    color: var(--accent);
     font: inherit;
-    text-decoration: underline;
+    font-weight: 500;
     cursor: pointer;
+}
+
+.move-button:hover {
+    text-decoration: underline;
 }

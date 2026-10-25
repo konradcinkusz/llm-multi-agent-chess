@@ -25,6 +25,9 @@ public class PlayPageTests
         Assert.Equal(new[] { "GPT · ×1", "Claude · ×1.5", "Random" }, options.Select(option => option.TextContent).ToArray());
         Assert.All(options, option => Assert.False(option.HasAttribute("disabled")));
         Assert.Empty(cut.FindAll("[data-testid=gateway-banner]"));
+        Assert.True(cut.Find("[data-testid=start-game]").ClassList.Contains("btn-primary"));
+        Assert.NotNull(cut.Find("[data-testid=white-model]").Closest(".card"));
+        Assert.NotNull(cut.Find("[data-testid=board]").Closest(".card"));
     }
 
     [Fact]
@@ -187,6 +190,8 @@ public class PlayPageTests
         await server.SendAsync("GameFinished", PlayFixtures.GameFinished("1-0", "checkmate"));
 
         cut.WaitForAssertion(() => Assert.Equal("1-0 · checkmate", cut.Find("[data-testid=game-result]").TextContent));
+        Assert.True(cut.Find("[data-testid=game-result]").ClassList.Contains("badge"));
+        Assert.True(cut.Find("[data-testid=game-result]").ClassList.Contains("badge-success"));
         Assert.Empty(cut.FindAll("[data-testid=forfeit-notice]"));
         Assert.Empty(cut.FindAll("[data-testid=abort-game]"));
         Assert.False(cut.Find("[data-testid=start-game]").HasAttribute("disabled"));

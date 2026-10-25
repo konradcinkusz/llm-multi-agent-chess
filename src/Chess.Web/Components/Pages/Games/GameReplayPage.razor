@@ -11,7 +11,7 @@
 
 @if (_error is not null)
 {
-    <p class="status-error" role="alert" data-testid="replay-error">@_error</p>
+    <p class="callout callout-danger" role="alert" data-testid="replay-error">@_error</p>
 }
 else if (_game is not { } game)
 {
@@ -25,48 +25,53 @@ else
     var move = _ply == 0 ? null : game.Moves[_ply - 1];
     var lastPly = game.Moves.Count;
 
-    <h1>@GameFormat.Matchup(summary)</h1>
-
-    <p class="replay-summary" data-testid="replay-summary">
-        @GameFormat.State(summary.State) · result @summary.Result · @GameFormat.Termination(summary.Termination) ·
-        @summary.PlyCount plies · @GameFormat.When(summary.CreatedAt)
-        @if (summary.TournamentId is { } tournamentId)
-        {
-            <span> · <a href="/tournaments/@tournamentId">Tournament</a></span>
-        }
-    </p>
+    <header class="page-header">
+        <h1>@GameFormat.Matchup(summary)</h1>
+        <p class="page-lede replay-summary" data-testid="replay-summary">
+            @GameFormat.State(summary.State) · result @summary.Result · @GameFormat.Termination(summary.Termination) ·
+            @summary.PlyCount plies · @GameFormat.When(summary.CreatedAt)
+            @if (summary.TournamentId is { } tournamentId)
+            {
+                <span> · <a href="/tournaments/@tournamentId">Tournament</a></span>
+            }
+        </p>
+    </header>
 
     @if (summary.State != "finished")
     {
-        <p class="replay-notice" role="status">
+        <p class="callout callout-warning" role="status">
             This game has not finished, so the replay shows only the moves played so far.
         </p>
     }
 
     <div class="replay-layout">
-        <div class="replay-main">
+        <div class="card stack replay-main">
             <div class="replay-board" tabindex="0" role="region" data-testid="replay-board"
                  aria-label="Replay board. Use the arrow keys to step through the moves."
                  @onkeydown="OnKey">
                 <ChessBoardSvg Fen="@fen" LastMove="@lastMove" />
             </div>
 
-            <div class="replay-controls" role="group" aria-label="Replay controls">
-                <button type="button" data-testid="replay-first" disabled="@(_ply == 0)" @onclick="First">First</button>
-                <button type="button" data-testid="replay-prev" disabled="@(_ply == 0)" @onclick="Previous">Previous</button>
+            <div class="replay-controls">
+                <div class="replay-buttons" role="group" aria-label="Replay controls">
+                    <button type="button" class="btn" data-testid="replay-first" disabled="@(_ply == 0)" @onclick="First">First</button>
+                    <button type="button" class="btn" data-testid="replay-prev" disabled="@(_ply == 0)" @onclick="Previous">Previous</button>
+                    <button type="button" class="btn" data-testid="replay-next" disabled="@(_ply == lastPly)" @onclick="Next">Next</button>
+                    <button type="button" class="btn" data-testid="replay-last" disabled="@(_ply == lastPly)" @onclick="Last">Last</button>
+                </div>
                 <span class="replay-ply" data-testid="replay-ply" aria-live="polite">Ply @_ply of @lastPly</span>
-                <button type="button" data-testid="replay-next" disabled="@(_ply == lastPly)" @onclick="Next">Next</button>
-                <button type="button" data-testid="replay-last" disabled="@(_ply == lastPly)" @onclick="Last">Last</button>
             </div>
             <p class="muted">Click the board, then use the arrow keys, Home and End to step through the moves.</p>
 
             @if (_pgnHref is { } href)
             {
-                <a class="pgn-download" data-testid="pgn-download" href="@href" download="@PgnDownload.FileName(summary.Id)">Download PGN</a>
+                <div class="cluster">
+                    <a class="btn btn-sm" data-testid="pgn-download" href="@href" download="@PgnDownload.FileName(summary.Id)">Download PGN</a>
+                </div>
             }
             else if (_pgnError is not null)
             {
-                <p class="status-error" role="alert">The PGN could not be loaded: @_pgnError</p>
+                <p class="callout callout-danger" role="alert">The PGN could not be loaded: @_pgnError</p>
             }
             else
             {
@@ -74,38 +79,40 @@ else
             }
         </div>
 
-        <aside class="replay-side">
+        <aside class="stack replay-side">
             <MoveDetails Move="@move" />
 
-            <h2>Moves</h2>
-            @if (game.Moves.Count == 0)
-            {
-                <p>No moves yet.</p>
-            }
-            else
-            {
-                <div class="moves-scroll">
-                    <table class="moves-table" data-testid="moves-table">
-                        <thead>
-                            <tr><th>Ply</th><th>Move</th><th>Attempts</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var played in game.Moves)
-                            {
-                                <tr data-testid="move-row" class="@(played.Ply == _ply ? "current" : null)"
-                                    aria-current="@(played.Ply == _ply ? "step" : null)">
-                                    <td>@played.Ply</td>
-                                    <td>
-                                        <button type="button" class="move-button" data-testid="move-select"
-                                                @onclick="() => GoTo(played.Ply)">@played.San</button>
-                                    </td>
-                                    <td>@played.Attempts</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
+            <section class="card stack" aria-labelledby="replay-moves-heading">
+                <h2 id="replay-moves-heading" class="card-title">Moves</h2>
+                @if (game.Moves.Count == 0)
+                {
+                    <p class="muted">No moves yet.</p>
+                }
+                else
+                {
+                    <div class="table-wrap replay-moves-table">
+                        <table class="table-compact moves-table" data-testid="moves-table">
+                            <thead>
+                                <tr><th>Ply</th><th>Move</th><th class="num">Attempts</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var played in game.Moves)
+                                {
+                                    <tr data-testid="move-row" class="@(played.Ply == _ply ? "current" : null)"
+                                        aria-current="@(played.Ply == _ply ? "step" : null)">
+                                        <td>@played.Ply</td>
+                                        <td>
+                                            <button type="button" class="move-button" data-testid="move-select"
+                                                    @onclick="() => GoTo(played.Ply)">@played.San</button>
+                                        </td>
+                                        <td class="num">@played.Attempts</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
         </aside>
     </div>
 }

@@ -1,9 +1,9 @@
 @using Chess.Web.Api
 
-<section class="move-details" data-testid="move-details" aria-labelledby="move-details-heading">
+<section class="card move-details" data-testid="move-details" aria-labelledby="move-details-heading">
     @if (Move is { } move)
     {
-        <h2 id="move-details-heading">@(move.Ply). @GameFormat.Side(move.Color) played @move.San</h2>
+        <h2 id="move-details-heading" class="card-title">@(move.Ply). @GameFormat.Side(move.Color) played @move.San</h2>
         <dl>
             <dt>Attempts</dt>
             <dd data-testid="move-attempts">@move.Attempts</dd>
@@ -23,7 +23,7 @@
     }
     else
     {
-        <h2 id="move-details-heading">Start position</h2>
+        <h2 id="move-details-heading" class="card-title">Start position</h2>
         <p>No move has been played yet.</p>
     }
 </section>

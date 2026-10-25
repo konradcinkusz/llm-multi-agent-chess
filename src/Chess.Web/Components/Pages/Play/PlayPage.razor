@@ -7,7 +7,10 @@
 
 <PageTitle>Live game · LLM Chess Arena</PageTitle>
 
-<h1>Live game</h1>
+<header class="page-header">
+    <h1>Live game</h1>
+    <p class="page-lede">Choose two players, start a game and follow each move as it is played.</p>
+</header>
 
 @if (_models is null && _modelsError is null)
 {
@@ -15,21 +18,21 @@
 }
 else if (_modelsError is not null)
 {
-    <p class="status-error" role="alert">Could not load the models: @_modelsError</p>
+    <p class="callout callout-danger" role="alert">Could not load the models: @_modelsError</p>
 }
 else
 {
     <div class="play-layout">
-        <section class="play-setup" aria-labelledby="players-heading">
-            <h2 id="players-heading">Players</h2>
+        <section class="card stack play-setup" aria-labelledby="players-heading">
+            <h2 id="players-heading" class="card-title">Players</h2>
 
             @if (_gatewayMessage is not null)
             {
-                <div class="play-banner" role="alert" data-testid="gateway-banner">@_gatewayMessage</div>
+                <div class="callout callout-warning" role="alert" data-testid="gateway-banner">@_gatewayMessage</div>
             }
 
-            <label class="play-field">
-                White
+            <label class="field">
+                <span class="play-side-name"><span class="play-side-chip" aria-hidden="true">♔</span>White</span>
                 <select id="white-model" data-testid="white-model" @bind="_white" disabled="@IsLive">
                     @foreach (var choice in _choices)
                     {
@@ -38,8 +41,8 @@ else
                 </select>
             </label>
 
-            <label class="play-field">
-                Black
+            <label class="field">
+                <span class="play-side-name"><span class="play-side-chip" aria-hidden="true">♚</span>Black</span>
                 <select id="black-model" data-testid="black-model" @bind="_black" disabled="@IsLive">
                     @foreach (var choice in _choices)
                     {
@@ -53,21 +56,21 @@ else
                 Rated game
             </label>
 
-            <div class="play-actions">
-                <button type="button" data-testid="start-game" disabled="@(!CanStart)" @onclick="StartAsync">Start game</button>
+            <div class="cluster">
+                <button type="button" class="btn btn-primary" data-testid="start-game" disabled="@(!CanStart)" @onclick="StartAsync">Start game</button>
                 @if (IsLive)
                 {
-                    <button type="button" class="play-danger" data-testid="abort-game" @onclick="AbortAsync">Abort</button>
+                    <button type="button" class="btn btn-danger" data-testid="abort-game" @onclick="AbortAsync">Abort</button>
                 }
             </div>
 
             @if (_error is not null)
             {
-                <p class="status-error" role="alert" data-testid="play-error">@_error</p>
+                <p class="callout callout-danger" role="alert" data-testid="play-error">@_error</p>
             }
         </section>
 
-        <section class="play-board" aria-label="Board">
+        <section class="card stack play-board" aria-label="Board">
             <div class="play-board-frame" data-testid="board">
                 <ChessBoardSvg Fen="@BoardFen" />
             </div>
@@ -76,18 +79,20 @@ else
 
             @if (_live?.Thinking is { } thinking)
             {
-                <p class="play-thinking" data-testid="thinking">
+                <p class="play-thinking muted" data-testid="thinking">
                     @ModelName(thinking.ModelId) is thinking about @(thinking.Color)'s move (ply @thinking.Ply)…
                 </p>
             }
 
             @if (_live?.Outcome is { } outcome)
             {
-                <p class="play-result" data-testid="game-result">@PlayChoices.Outcome(outcome)</p>
+                <p class="play-result">
+                    <span class="badge @PlayChoices.OutcomeTone(outcome)" data-testid="game-result">@PlayChoices.Outcome(outcome)</span>
+                </p>
 
                 @if (PlayChoices.ForfeitNotice(outcome.Termination) is { } forfeit)
                 {
-                    <p class="play-notice" data-testid="forfeit-notice">@forfeit</p>
+                    <p class="callout callout-warning play-notice" data-testid="forfeit-notice">@forfeit</p>
                 }
             }
 
@@ -109,8 +114,8 @@ else
 
             @if (_live is { IsFinished: true })
             {
-                <div class="play-pgn-actions">
-                    <button type="button" data-testid="pgn-toggle" @onclick="TogglePgnAsync">
+                <div class="cluster">
+                    <button type="button" class="btn btn-sm" data-testid="pgn-toggle" @onclick="TogglePgnAsync">
                         @(_pgn is null ? "Show PGN" : "Hide PGN")
                     </button>
                 </div>
@@ -122,13 +127,13 @@ else
             }
         </section>
 
-        <aside class="play-moves" aria-labelledby="moves-heading">
-            <h2 id="moves-heading">Moves</h2>
+        <aside class="card stack play-moves" aria-labelledby="moves-heading">
+            <h2 id="moves-heading" class="card-title">Moves</h2>
             <ol class="move-list" data-testid="move-list">
                 @foreach (var move in Moves)
                 {
                     <li data-ply="@move.Ply" data-color="@move.Color">
-                        @if (move.Color == "White")
+                        @if (move.Ply % 2 == 1)
                         {
                             <span class="move-number">@((move.Ply + 1) / 2).</span>
                         }
