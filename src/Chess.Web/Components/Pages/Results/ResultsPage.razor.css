@@ -1,93 +1,75 @@
-/* Results page (03 §6.1). Sections stack in one column; the Big Picture sits at the top so it is visible at 1366×768. */
+/* Results page (03 §6.1, 07 §6). Each section is one card with its heading inside; the Big Picture is the hero card at the top,
+   so its headline and chart are visible at 1366×768. Colour comes from the tokens in app.css only. */
 
-.results-title {
-    margin: 0 0 8px;
-    font-size: 1.5rem;
+/* The chart frame keeps its own padding, border and radius for the charts on other pages. Inside a section card it is only
+   the chart, so the card supplies the frame. */
+.results-card ::deep .chart-frame {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
 }
 
-.results-filter {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.results-status {
-    opacity: 0.75;
-}
-
-.results-error {
-    color: #c0392b;
-}
-
-.results-section {
-    margin: 0 0 24px;
-}
-
-.results-section h2 {
-    margin: 0 0 8px;
-    font-size: 1.125rem;
-}
-
-.big-picture {
-    margin-bottom: 16px;
+.card-title {
+    margin-bottom: var(--space-3);
 }
 
 .headline {
-    margin: 0 0 4px;
-    font-size: 1.125rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 var(--space-4);
+}
+
+.hero-label {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.hero-leader {
+    font-size: var(--text-3xl);
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-2);
+    font-size: var(--text-base);
 }
 
 .verdict {
-    margin: 0 0 8px;
-    color: color-mix(in srgb, CanvasText 80%, transparent);
+    margin: 0 0 var(--space-5);
+    color: var(--text);
 }
 
 .results-note {
-    margin: 0 0 8px;
-    font-size: 0.875rem;
-    opacity: 0.85;
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
 }
 
 .results-more {
-    margin: 0 0 8px;
-    padding: 2px 8px;
-    font: inherit;
-    font-size: 0.875rem;
+    margin: 0 0 var(--space-3);
 }
 
 .results-folded {
-    font-size: 0.875rem;
+    margin: 0;
+    font-size: var(--text-sm);
 }
 
 .move-quality {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+    gap: var(--space-4);
 }
 
 .results-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
     font-variant-numeric: tabular-nums;
-}
-
-.results-table th,
-.results-table td {
-    padding: 4px 8px;
-    text-align: left;
-    border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
-}
-
-.results-table .num {
-    text-align: right;
-}
-
-@media (max-width: 600px) {
-    .results-table {
-        display: block;
-        overflow-x: auto;
-    }
 }

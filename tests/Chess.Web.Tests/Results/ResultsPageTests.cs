@@ -59,6 +59,61 @@ public class ResultsPageTests
 
         cut.WaitForAssertion(() => Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent));
         Assert.Contains("rating 120 ± 20", cut.Find(".headline").TextContent);
+        Assert.Equal("alpha", cut.Find(".big-picture .hero-leader").TextContent);
+    }
+
+    [Fact]
+    public void EachSectionIsOneCardWithItsHeadingInside()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: TwoModels, pair: Pair(0.52, 0.68)));
+
+        cut.WaitForAssertion(() => Assert.Equal(SectionOrder.Length, cut.FindAll("section[data-section]").Count));
+        foreach (var section in cut.FindAll("section[data-section]"))
+        {
+            Assert.Contains("card", section.ClassName);
+            Assert.NotNull(section.QuerySelector("h2.card-title"));
+        }
+    }
+
+    [Fact]
+    public void ProvisionalModelsCarryABadgeInTheHeroAndTheTable()
+    {
+        // Provisional models sort after established ones, so the leader is provisional only when every model is.
+        const string provisionalBoard =
+            """
+            {"models":[
+              {"model":"alpha","rating":120,"ciLow":100,"ciHigh":140,"games":12,"score":0.7,"legality":0.99,"moveQuality":null,"quality":0.99,"arenaScore":66,"provisional":true},
+              {"model":"beta","rating":90,"ciLow":70,"ciHigh":110,"games":12,"score":0.3,"legality":0.95,"moveQuality":null,"quality":0.95,"arenaScore":34,"provisional":true}],
+             "whiteAdvantage":12,"games":24,"moveQualityAvailable":false}
+            """;
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: provisionalBoard, pair: Pair(0.52, 0.68)));
+
+        cut.WaitForAssertion(() => Assert.Equal("Provisional", cut.Find(".hero-stats .badge").TextContent));
+        var statuses = cut.FindAll(".results-table tbody tr td:last-child .badge").Select(b => b.TextContent).ToList();
+        Assert.Equal(new[] { "Provisional", "Provisional" }, statuses);
+    }
+
+    [Fact]
+    public void EstablishedModelsCarryAnEstablishedBadgeAndNoHeroBadge()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: TwoModels, pair: Pair(0.52, 0.68)));
+
+        cut.WaitForAssertion(() => Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent));
+        Assert.Empty(cut.FindAll(".hero-stats .badge"));
+        var statuses = cut.FindAll(".results-table tbody tr td:last-child .badge").Select(b => b.TextContent).ToList();
+        Assert.Equal(new[] { "Established", "Established" }, statuses);
+    }
+
+    [Fact]
+    public void TheLeaderboardTableScrollsInsideItsWrapper()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: TwoModels, pair: Pair(0.52, 0.68)));
+
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find(".table-wrap > table.results-table")));
     }
 
     [Fact]
