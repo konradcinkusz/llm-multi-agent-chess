@@ -19,7 +19,7 @@ reflection probe of `lib/net10.0/GitHub.Copilot.SDK.dll`.
 | Models | `CopilotClient.ListModelsAsync(ct)` → `IList<ModelInfo>`; `ModelInfo { Id, Name, Capabilities, Policy: ModelPolicy?, Billing: ModelBilling? }`; `ModelBilling.Multiplier` is `double?`; `ModelPolicy.State` is a string |
 | Session | `CopilotClient.CreateSessionAsync(SessionConfig, ct)` → `CopilotSession`, with `SessionConfig.Model`, `SessionConfig.SystemMessage = new SystemMessageConfig { Mode = SystemMessageMode.Replace, Content }`, `SessionConfig.AvailableTools = []`, `SessionConfig.Streaming = false`, `SessionConfig.OnPermissionRequest` |
 | Permissions | `Func<PermissionRequest, PermissionInvocation, Task<Rpc.PermissionDecision>>`; the handler returns `Rpc.PermissionDecision.Reject(string feedback)` for every request |
-| One move | `CopilotSession.SendAndWaitAsync(MessageOptions { Prompt }, TimeSpan? timeout, ct)` → `Task<AssistantMessageEvent?>`; `.Data.Content` is the reply text. It resolves on the session's idle event, and its own timeout defaults to 60 s, so the gateway always passes `LlmConversationOptions.Timeout` |
+| One move | `CopilotSession.SendAndWaitAsync(MessageOptions { Prompt }, TimeSpan? timeout, ct)` → `Task<AssistantMessageEvent?>`; `.Data.Content` is the reply text. It resolves on the session's idle event, and its own timeout defaults to 60 s, so the gateway always passes `LlmConversationOptions.Timeout` (the API sets it from `Arena:MoveTimeoutSeconds`, 180 s by default) |
 | Abort on timeout | `CopilotSession.AbortAsync(ct)`. The docs say `SendAndWait` does not stop in-flight work, so a timed-out move is aborted |
 | Usage | `CopilotSession.On<AssistantUsageEvent>(handler)` (returns `IDisposable`); per event `Data.InputTokens`, `OutputTokens`, `ReasoningTokens`, `CacheReadTokens` (nullable), `CopilotUsage.TotalNanoAiu` and `AiCreditsStatus`. Summed per reply (see Usage and cost) |
 | Reasoning | `CopilotSession.On<AssistantReasoningEvent>(handler)`, `Data.Content`; the final `AssistantMessageData.ReasoningText` (see Usage and cost) |
@@ -57,7 +57,8 @@ What the gateway returns, and where each number comes from. Cost is never part o
 - If `models.listTokenPriceUnits` fails, the models are still listed, without prices, and a warning is logged. It does not change the gateway state.
 - Startup logs each model's raw billing at Debug (`multiplier …; token prices batch …, input …, output …, cache read …, cache …`). The unit is not in that line; it comes from the call above.
 
-**Fake gateway.** Usage is approximated from the text, four characters per token: input is the prompt, output is the reply plus the reasoning. The reasoning names the chosen move. Both fake models are priced at 1.0 input and 4.0 output AI credits per 1 000 000 tokens, so a fake reply costs well under a thousandth of a credit.
+**Fake gateway.** Usage is approximated from the text, four characters per token: input is the prompt, output is the reply plus the reasoning. The reasoning names the chosen move. Both fake models are priced at 1.0 input and 4.0 output AI credits per 1 000 000 tokens, so a fake reply costs well under a thousandth of a credit. The fake reports these credits on every reply, so a fake game's
+usage shows the `reported` cost basis (measured on a 100-reply game of `fake-a@high` against `random`: about 0.00016 credits a reply).
 
 Startup status: `GetStatusAsync` → `GetStatusResponse { Version, ProtocolVersion }` exists but is not
 used; the gateway's state comes from `GetAuthStatusAsync` and `ListModelsAsync`.
