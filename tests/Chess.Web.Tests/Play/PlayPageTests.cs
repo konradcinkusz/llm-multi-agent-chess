@@ -22,7 +22,8 @@ public class PlayPageTests
 
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[data-testid='white-model'] option").Count));
         var options = cut.FindAll("[data-testid='white-model'] option");
-        Assert.Equal(new[] { "GPT · ×1", "Claude · ×1.5", "Random" }, options.Select(option => option.TextContent).ToArray());
+        Assert.Equal(new[] { "GPT · $3.00 / $15.00 per 1M tokens", "Claude · price unknown", "Random" },
+            options.Select(option => option.TextContent).ToArray());
         Assert.All(options, option => Assert.False(option.HasAttribute("disabled")));
         Assert.Empty(cut.FindAll("[data-testid=gateway-banner]"));
         Assert.True(cut.Find("[data-testid=start-game]").ClassList.Contains("btn-primary"));
@@ -112,12 +113,13 @@ public class PlayPageTests
         cut.WaitForAssertion(() => Assert.True(server.StreamOpen));
 
         await server.SendAsync("MoveStarted", PlayFixtures.MoveStarted(1, "White", "gpt"));
-        cut.WaitForAssertion(() => Assert.Contains("GPT is thinking about White's move (ply 1)",
-            cut.Find("[data-testid=thinking]").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("GPT is thinking (attempt 1 of 3)",
+            cut.Find("[data-testid=game-status]").TextContent));
+        Assert.Equal("true", cut.Find("[data-testid=player-white]").GetAttribute("data-to-move"));
 
         await server.SendAsync("MovePlayed", PlayFixtures.MovePlayed(1, "White", "e4", PlayFixtures.AfterE4));
         cut.WaitForAssertion(() => Assert.Contains("e4", cut.Find("[data-testid=move-list]").TextContent));
-        Assert.Empty(cut.FindAll("[data-testid=thinking]"));
+        Assert.DoesNotContain("is thinking", cut.Find("[data-testid=game-status]").TextContent);
         Assert.Single(cut.FindAll("[data-testid=board] [data-piece='P'][x='450'][y='450']"));
         Assert.Empty(cut.FindAll("[data-testid=board] [data-piece='P'][x='450'][y='650']"));
 
@@ -125,10 +127,13 @@ public class PlayPageTests
         await server.SendAsync("MovePlayed", PlayFixtures.MovePlayed(1, "White", "e4", PlayFixtures.AfterE4));
         await server.SendAsync("MoveStarted", PlayFixtures.MoveStarted(1, "White", "gpt"));
         await server.SendAsync("MoveStarted", PlayFixtures.MoveStarted(2, "Black", "claude"));
-        cut.WaitForAssertion(() => Assert.Contains("Claude is thinking about Black's move (ply 2)",
-            cut.Find("[data-testid=thinking]").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("Claude is thinking (attempt 1 of 3)",
+            cut.Find("[data-testid=game-status]").TextContent));
+        Assert.Equal("Move 1 · Black to move · Claude is thinking (attempt 1 of 3)", cut.Find("[data-testid=game-status]").TextContent);
         Assert.Single(cut.FindAll("[data-testid=move-list] li"));
-        Assert.Equal("1", cut.Find("[data-testid=move-list] li").GetAttribute("data-ply"));
+        Assert.Single(cut.FindAll("[data-testid=move-cell]"));
+        Assert.Equal("1", cut.Find("[data-testid=move-cell]").GetAttribute("data-ply"));
+        Assert.Single(cut.FindAll("[data-testid=move-pending]"));
         server.EndStream();
     }
 
@@ -151,7 +156,7 @@ public class PlayPageTests
         // Ply 1 never arrived, so ply 2 is a gap: the page loads the game again rather than showing a guessed move.
         await server.SendAsync("MovePlayed", PlayFixtures.MovePlayed(2, "Black", "e5", PlayFixtures.AfterE5));
 
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=move-list] li").Count));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=move-cell]").Count));
         Assert.Equal(2, server.Handler.Requests.Count(request => request.Method == "GET" && request.Target == PlayServer.GameTarget));
         server.EndStream();
     }
@@ -173,7 +178,8 @@ public class PlayPageTests
         var notice = cut.Find("[data-testid=attempt-notices] li").TextContent;
         Assert.Contains("White's attempt 1 at ply 1 was not a legal move: Ke9 is not a legal move", notice);
         Assert.Contains("Ke9", cut.Find("[data-testid=attempt-notices] code").TextContent);
-        Assert.Contains("GPT is thinking", cut.Find("[data-testid=thinking]").TextContent);
+        // The rejected attempt moves the model on to its second attempt, and the status line says so.
+        Assert.Contains("GPT is thinking (attempt 2 of 3)", cut.Find("[data-testid=game-status]").TextContent);
         server.EndStream();
     }
 

@@ -1,6 +1,7 @@
 @page "/"
 @using Chess.Web.Api
 @using Chess.Web.Components.Shared
+@using Chess.Web.Components.Shared.Game
 @implements IDisposable
 @inject ArenaApiClient Api
 @inject GameEventsClient Events
@@ -71,18 +72,21 @@ else
         </section>
 
         <section class="card stack play-board" aria-label="Board">
+            <PlayerBar Color="Black" Name="@ModelName(SideModel(Black))" ToMove="@ToMove(Black)"
+                       Attempt="@AttemptOf(Black)" Seconds="@SecondsOf(Black)"
+                       CapturedHere="@Captured.CapturedByBlack" Lead="@LeadOf(Black)"
+                       Totals="@Totals(Black)" UsdPerAiCredit="@UsdPerAiCredit" />
+
             <div class="play-board-frame" data-testid="board">
-                <ChessBoardSvg Fen="@BoardFen" />
+                <ChessBoardSvg Fen="@BoardFen" LastMove="@_live?.LastMove" CheckSquare="@_live?.CheckSquare" />
             </div>
 
-            <p class="play-status" data-testid="game-status" role="status">@StatusLine</p>
+            <PlayerBar Color="White" Name="@ModelName(SideModel(White))" ToMove="@ToMove(White)"
+                       Attempt="@AttemptOf(White)" Seconds="@SecondsOf(White)"
+                       CapturedHere="@Captured.CapturedByWhite" Lead="@LeadOf(White)"
+                       Totals="@Totals(White)" UsdPerAiCredit="@UsdPerAiCredit" />
 
-            @if (_live?.Thinking is { } thinking)
-            {
-                <p class="play-thinking muted" data-testid="thinking">
-                    @ModelName(thinking.ModelId) is thinking about @(thinking.Color)'s move (ply @thinking.Ply)…
-                </p>
-            }
+            <p class="play-status" data-testid="game-status" role="status">@StatusLine</p>
 
             @if (_live?.Outcome is { } outcome)
             {
@@ -129,29 +133,39 @@ else
 
         <aside class="card stack play-moves" aria-labelledby="moves-heading">
             <h2 id="moves-heading" class="card-title">Moves</h2>
-            <ol class="move-list" data-testid="move-list">
-                @foreach (var move in Moves)
-                {
-                    <li data-ply="@move.Ply" data-color="@move.Color">
-                        @if (move.Ply % 2 == 1)
-                        {
-                            <span class="move-number">@((move.Ply + 1) / 2).</span>
-                        }
-                        <span class="san">@move.San</span>
-                        @if (move.Attempts > 1)
-                        {
-                            <span class="muted">(@move.Attempts attempts)</span>
-                        }
-                    </li>
-                }
-            </ol>
+            <MoveTable Moves="@Moves" PendingPly="@PendingPly" SelectedPly="@_selectedPly" OnSelect="@SelectPly" />
         </aside>
     </div>
+
+    @if (_live is { IsFinished: true })
+    {
+        <section class="card stack play-summary" aria-labelledby="summary-heading" data-testid="game-summary">
+            <div class="card-header">
+                <h2 id="summary-heading" class="card-title">Game summary</h2>
+                <span class="muted">Tokens and estimated cost, per side</span>
+            </div>
+            <GameUsageSummary Usage="@_usage" Message="@_usageError" ModelName="@ModelName" />
+        </section>
+    }
+
+    <section class="card stack play-log" aria-labelledby="log-heading" data-testid="engine-panel">
+        <div class="card-header">
+            <h2 id="log-heading" class="card-title">Engine log</h2>
+            <span class="muted">Every reply the models sent to the engine, newest first</span>
+        </div>
+        <EngineLog Entries="@Attempts" SelectedPly="@_selectedPly" ModelName="@ModelName" />
+    </section>
 }
 
 @code {
     /// <summary>How long to wait before reconnecting a stream that closed before the game finished.</summary>
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>The most pages of attempts a game's engine log loads. A game is far shorter than this.</summary>
+    private const int MaxAttemptPages = 50;
+
+    private const string White = "White";
+    private const string Black = "Black";
 
     private IReadOnlyList<ModelDto>? _models;
     private IReadOnlyList<ModelChoice> _choices = [];
@@ -167,6 +181,13 @@ else
     private LiveGame? _live;
     private CancellationTokenSource? _follow;
     private string? _pgn;
+    private GameUsageDto? _usage;
+    private string? _usageError;
+    private int? _selectedPly;
+
+    /// <summary>Opened by ?game=, or started here: the game the page follows.</summary>
+    [SupplyParameterFromQuery(Name = "game")]
+    public Guid? Game { get; set; }
 
     private bool IsLive => _live is { IsFinished: false };
 
@@ -176,12 +197,25 @@ else
 
     private IReadOnlyList<MoveDto> Moves => _live?.Moves ?? [];
 
+    private IReadOnlyList<EngineEntry> Attempts => _live?.Attempts ?? [];
+
+    /// <summary>The pieces each side has captured and the lead, from the moves so far.</summary>
+    private Material Captured => BoardFacts.MaterialOf(LiveGame.StartFen, Moves.Select(move => move.FenAfter));
+
+    /// <summary>The ply a model is deciding now, shown as a pending cell in the move table.</summary>
+    private int? PendingPly => _live is { IsFinished: false, Thinking: { } thinking } ? thinking.Ply : null;
+
+    private double UsdPerAiCredit => _usage?.UsdPerAiCredit ?? GameFigures.DefaultUsdPerAiCredit;
+
     private string StatusLine => _live switch
     {
         null => "No game yet. Choose two players and start one.",
         { IsFinished: true } => "Game over.",
         { Summary.State: "queued" } => "Queued, waiting for a free game slot.",
-        _ => "In progress.",
+        { Thinking: { } thinking } =>
+            $"Move {MoveNumber(thinking.Ply)} · {thinking.Color} to move · {ModelName(thinking.ModelId)} is thinking " +
+            $"(attempt {Math.Min(thinking.Attempt, EngineEntry.MaxAttempts)} of {EngineEntry.MaxAttempts})",
+        var live => $"Move {MoveNumber(live.NextPly)} · {LiveGame.ColorOf(live.NextPly)} to move",
     };
 
     protected override async Task OnInitializedAsync()
@@ -218,6 +252,11 @@ else
         _choices = PlayChoices.Choices(models, PlayChoices.GatewayReady(status));
         _white = PlayChoices.Default(_choices, 0);
         _black = PlayChoices.Default(_choices, 1);
+
+        if (Game is { } gameId)
+        {
+            await OpenAsync(gameId);
+        }
     }
 
     private async Task StartAsync()
@@ -225,6 +264,9 @@ else
         _starting = true;
         _error = null;
         _pgn = null;
+        _usage = null;
+        _usageError = null;
+        _selectedPly = null;
         StopFollowing();
 
         try
@@ -243,6 +285,24 @@ else
         finally
         {
             _starting = false;
+        }
+    }
+
+    /// <summary>Follows a game that already exists (a link with ?game=): running, queued or finished.</summary>
+    private async Task OpenAsync(Guid gameId)
+    {
+        try
+        {
+            var detail = await Api.GetGameAsync(gameId);
+            _live = new LiveGame(detail.Summary);
+            _live.Load(detail);
+
+            _follow = new CancellationTokenSource();
+            _ = FollowAsync(gameId, _follow.Token);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not open the game: {ex.Message}";
         }
     }
 
@@ -287,6 +347,9 @@ else
         }
     }
 
+    /// <summary>Picking a move selects its entries in the engine log; picking it again clears the selection.</summary>
+    private void SelectPly(int? ply) => _selectedPly = ply;
+
     /// <summary>
     /// Opens the stream first, then loads the game (03 §5.1). The stream replays nothing, so anything
     /// that happened before it connected is in the load; anything the load does not cover shows up on
@@ -297,6 +360,7 @@ else
         try
         {
             var reading = ReadStreamAsync(gameId, ct);
+            _ = TickAsync(ct);
             await LoadAsync(gameId, ct);
             await reading;
         }
@@ -324,6 +388,8 @@ else
 
                     if (message.Type == "GameFinished")
                     {
+                        // The final state, the attempts and the usage of the finished game are loaded from the API.
+                        await LoadAsync(gameId, ct);
                         return;
                     }
                 }
@@ -346,23 +412,123 @@ else
         }
     }
 
+    /// <summary>Loads the game, then the engine log, and the usage once the game is over.</summary>
     private async Task LoadAsync(Guid gameId, CancellationToken ct)
+    {
+        GameDetailDto detail;
+        try
+        {
+            detail = await Api.GetGameAsync(gameId, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            await InvokeAsync(() => ShowError($"Could not load the game: {ex.Message}"));
+            return;
+        }
+
+        await InvokeAsync(() =>
+        {
+            if (!ct.IsCancellationRequested && _live is { } live && live.GameId == gameId)
+            {
+                live.Load(detail);
+                StateHasChanged();
+            }
+        });
+
+        if (detail.Summary.State != "queued")
+        {
+            await LoadAttemptsAsync(gameId, ct);
+        }
+
+        if (detail.Summary.State == "finished")
+        {
+            await LoadUsageAsync(gameId, ct);
+        }
+    }
+
+    /// <summary>The engine log of the game: every attempt the API has, page by page.</summary>
+    private async Task LoadAttemptsAsync(Guid gameId, CancellationToken ct)
     {
         try
         {
-            var detail = await Api.GetGameAsync(gameId, ct);
+            var entries = new List<EngineEntry>();
+            for (var page = 1; page <= MaxAttemptPages; page++)
+            {
+                var result = await Api.GetAttemptsAsync(gameId, null, page, ct);
+                entries.AddRange(result.Items.Where(attempt => attempt.GameId == gameId).Select(EngineEntry.From));
+                if (result.Items.Count == 0 || page * result.PageSize >= result.Total)
+                {
+                    break;
+                }
+            }
+
             await InvokeAsync(() =>
             {
                 if (!ct.IsCancellationRequested && _live is { } live && live.GameId == gameId)
                 {
-                    live.Load(detail);
+                    live.AddAttempts(entries);
                     StateHasChanged();
                 }
             });
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            await InvokeAsync(() => ShowError($"Could not load the game: {ex.Message}"));
+            await InvokeAsync(() => ShowError($"Could not load the engine log: {ex.Message}"));
+        }
+    }
+
+    private async Task LoadUsageAsync(Guid gameId, CancellationToken ct)
+    {
+        try
+        {
+            var usage = await Api.GetGameUsageAsync(gameId, ct);
+            await InvokeAsync(() =>
+            {
+                if (!ct.IsCancellationRequested && _live is { } live && live.GameId == gameId)
+                {
+                    _usage = usage;
+                    _usageError = null;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            await InvokeAsync(() =>
+            {
+                _usageError = $"Could not load the usage of this game: {ex.Message}";
+                StateHasChanged();
+            });
+        }
+    }
+
+    /// <summary>Re-renders once a second while a model is thinking, so the elapsed seconds keep counting.</summary>
+    private async Task TickAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                var running = false;
+                await InvokeAsync(() =>
+                {
+                    running = _live is { IsFinished: false };
+                    if (running && _live!.Thinking is not null)
+                    {
+                        StateHasChanged();
+                    }
+                });
+
+                if (!running)
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The page left the game.
         }
     }
 
@@ -389,7 +555,30 @@ else
 
     private bool IsSelectable(string modelId) => _choices.Any(choice => choice.Model.Id == modelId && choice.Selectable);
 
+    /// <summary>The model a side plays: the game's once there is one, else the picker's choice.</summary>
+    private string SideModel(string color) => _live is { } live
+        ? (color == White ? live.Summary.White : live.Summary.Black).ModelId
+        : color == White ? _white : _black;
+
     private string ModelName(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId)?.DisplayName ?? modelId;
+
+    /// <summary>Whose move it is: the side the game waits for, unless the game is over or not started.</summary>
+    private bool ToMove(string color) => _live is { IsFinished: false } live && LiveGame.ColorOf(live.NextPly) == color;
+
+    private int? AttemptOf(string color) => _live is { IsFinished: false, Thinking: { } thinking } && thinking.Color == color
+        ? thinking.Attempt
+        : null;
+
+    private int SecondsOf(string color) => _live is { IsFinished: false, Thinking: { } thinking } && thinking.Color == color
+        ? Math.Max(0, (int)(DateTimeOffset.UtcNow - thinking.StartedAt).TotalSeconds)
+        : 0;
+
+    private SideTotals Totals(string color) => BoardFacts.Totals(Attempts, color);
+
+    /// <summary>The material lead in points, on the side that has it.</summary>
+    private int LeadOf(string color) => color == White ? Math.Max(0, Captured.Lead) : Math.Max(0, -Captured.Lead);
+
+    private static int MoveNumber(int ply) => (ply + 1) / 2;
 
     /// <summary>Why the LLM players cannot be picked, or null when they can. Random is always available.</summary>
     private string? GatewayMessage(StatusDto? status, string? statusError)

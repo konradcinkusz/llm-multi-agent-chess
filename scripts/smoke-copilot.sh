@@ -154,4 +154,11 @@ printf 'Result:    %s after %s plies\n' "${result}" "${plies}"
 printf 'Model:     %s (Black), %s moves played\n' "${model}" "${model_moves}"
 printf 'Attempts:  %s Copilot requests, %s rejected (illegal, unparseable or empty)\n' "${requests}" "${rejected}"
 printf 'Latency:   %s ms average per request\n' "${latency_ms}"
+
+# Per request: tokens, AI credits and whether the reply carried reasoning. A field the API does not return yet prints n/a.
+# TODO(G2): print the game's usage from GET /api/games/${game_id}/usage once G2 is merged; the endpoint is not on main yet.
+printf '\nRequests (ply, number, verdict, tokens in/out, AI credits, reasoning):\n'
+jq -r '.[] | "  ply \(.ply) request \(.number): \(if .legal then "legal" else "rejected" end), tokens \(.inputTokens // "n/a")/\(.outputTokens // "n/a"), credits \(.aiCredits // "n/a"), reasoning \(if (.reasoning // "") == "" then "no" else "yes" end)"' <<<"${model_attempts}"
+
+printf '\n'
 printf 'Log:       %s\n' "${api_log}"

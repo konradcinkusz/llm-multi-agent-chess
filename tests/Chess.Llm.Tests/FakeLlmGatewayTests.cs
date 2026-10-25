@@ -92,6 +92,73 @@ public class FakeLlmGatewayTests
         Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(40), $"Reply came back after {clock.Elapsed}.");
     }
 
+    [Fact]
+    public async Task FakeModelsListPricesInCreditsPerMillionTokens()
+    {
+        var models = await new FakeLlmGateway().ListModelsAsync(CancellationToken.None);
+
+        foreach (var model in models)
+        {
+            Assert.Equal(new LlmTokenPrices(1_000_000, 1.0, 4.0, null), model.Pricing);
+        }
+    }
+
+    [Fact]
+    public async Task EveryReplyReportsNonZeroUsageAndReasoningThatNamesTheMove()
+    {
+        var gateway = new FakeLlmGateway(seed: 9);
+        await using var conversation = await gateway.StartConversationAsync(
+            new LlmConversationOptions("fake-a", "system", TimeSpan.FromSeconds(5)), CancellationToken.None);
+
+        var reply = await conversation.AskAsync(Prompt, CancellationToken.None);
+
+        Assert.True(reply.InputTokens > 0, "input tokens");
+        Assert.True(reply.OutputTokens > 0, "output tokens");
+        Assert.True(reply.ReasoningTokens > 0, "reasoning tokens");
+        Assert.True(reply.AiCredits > 0, "AI credits");
+        Assert.NotNull(reply.Reasoning);
+        Assert.Contains(reply.Text, reply.Reasoning);
+    }
+
+    [Fact]
+    public async Task UsageFollowsTheApproximationAndThePricesOfTheFakeModel()
+    {
+        var gateway = new FakeLlmGateway(seed: 9);
+        await using var conversation = await gateway.StartConversationAsync(
+            new LlmConversationOptions("fake-a", "system", TimeSpan.FromSeconds(5)), CancellationToken.None);
+
+        var reply = await conversation.AskAsync(Prompt, CancellationToken.None);
+
+        // Input is the prompt at four characters per token; output is the reply plus the reasoning, which is part of the output.
+        Assert.Equal(Prompt.Length / 4, reply.InputTokens);
+        Assert.Equal(reply.Text.Length / 4 + reply.ReasoningTokens, reply.OutputTokens);
+        Assert.Equal((reply.InputTokens * 1.0 + reply.OutputTokens * 4.0) / 1_000_000, reply.AiCredits);
+        Assert.Null(reply.CachedInputTokens);
+    }
+
+    [Fact]
+    public async Task UsageAndReasoningAreDeterministicForTheSameSeed()
+    {
+        var first = await PlayTenRepliesAsync(new FakeLlmGateway(seed: 42));
+        var second = await PlayTenRepliesAsync(new FakeLlmGateway(seed: 42));
+
+        Assert.Equal(first, second);
+    }
+
+    private static async Task<List<LlmReply>> PlayTenRepliesAsync(FakeLlmGateway gateway)
+    {
+        await using var conversation = await gateway.StartConversationAsync(
+            new LlmConversationOptions("fake-a", "system", TimeSpan.FromSeconds(5)), CancellationToken.None);
+
+        var replies = new List<LlmReply>();
+        for (var i = 0; i < 10; i++)
+        {
+            replies.Add(await conversation.AskAsync(Prompt, CancellationToken.None));
+        }
+
+        return replies;
+    }
+
     private static async Task<List<string>> PlayTenMovesAsync(FakeLlmGateway gateway)
     {
         await using var conversation = await gateway.StartConversationAsync(

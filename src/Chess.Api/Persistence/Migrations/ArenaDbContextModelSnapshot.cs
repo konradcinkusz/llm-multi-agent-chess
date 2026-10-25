@@ -246,6 +246,14 @@ namespace Chess.Api.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("number");
 
+                    b.Property<double?>("AiCredits")
+                        .HasColumnType("double precision")
+                        .HasColumnName("ai_credits");
+
+                    b.Property<int?>("CachedInputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("cached_input_tokens");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -254,6 +262,10 @@ namespace Chess.Api.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("error");
 
+                    b.Property<int?>("InputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("input_tokens");
+
                     b.Property<long>("LatencyMs")
                         .HasColumnType("bigint")
                         .HasColumnName("latency_ms");
@@ -261,6 +273,10 @@ namespace Chess.Api.Persistence.Migrations
                     b.Property<bool>("Legal")
                         .HasColumnType("boolean")
                         .HasColumnName("legal");
+
+                    b.Property<int?>("OutputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("output_tokens");
 
                     b.Property<string>("ParsedSan")
                         .HasColumnType("text")
@@ -274,6 +290,18 @@ namespace Chess.Api.Persistence.Migrations
                     b.Property<string>("RawReply")
                         .HasColumnType("text")
                         .HasColumnName("raw_reply");
+
+                    b.Property<string>("Reasoning")
+                        .HasColumnType("text")
+                        .HasColumnName("reasoning");
+
+                    b.Property<int?>("ReasoningTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("reasoning_tokens");
+
+                    b.Property<string>("RejectionKind")
+                        .HasColumnType("text")
+                        .HasColumnName("rejection_kind");
 
                     b.HasKey("GameId", "Ply", "Number");
 

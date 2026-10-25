@@ -5,7 +5,10 @@ using static Microsoft.Playwright.Assertions;
 
 namespace Chess.E2E;
 
-/// <summary>Journey 1: start a random-vs-fake game on the live page and watch it finish.</summary>
+/// <summary>
+/// Journey 1: start a random-vs-fake game on the live page and watch it finish. The fake game ends in well under a second,
+/// so the turn indicator is checked by the bUnit tests (Play/PlayPageTests), not here.
+/// </summary>
 [Collection(ArenaCollection.Name)]
 public sealed class LiveGameJourney(ArenaFixture arena)
 {
@@ -43,5 +46,15 @@ public sealed class LiveGameJourney(ArenaFixture arena)
         await Expect(page.GetByTestId("game-result")).ToHaveTextAsync(FinishedResult, new() { Timeout = 120_000 });
         await Expect(page.GetByTestId("game-status")).ToHaveTextAsync("Game over.");
         await Expect(page.GetByTestId("move-list").GetByRole(AriaRole.Listitem).First).ToBeVisibleAsync();
+
+        // Both players are named on their bars, and the fake model's attempt is one entry of the engine log.
+        await Expect(page.GetByTestId("player-white").GetByTestId("player-name")).ToHaveTextAsync("Random");
+        await Expect(page.GetByTestId("player-black").GetByTestId("player-name")).ToHaveTextAsync("Fake A");
+        await Expect(page.GetByTestId("engine-entry").First).ToBeVisibleAsync();
+
+        // The summary states the tokens and the estimated cost, with the rate the dollars were computed at.
+        await Expect(page.GetByTestId("game-summary")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("usage-rate")).ToContainTextAsync("per AI credit");
+        await Expect(page.GetByTestId("usage-total")).ToBeVisibleAsync();
     }
 }
