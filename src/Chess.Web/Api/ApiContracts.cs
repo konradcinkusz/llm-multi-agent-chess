@@ -37,9 +37,10 @@ public sealed record LeaderboardDto(IReadOnlyList<ModelRating> Models, double Wh
 public sealed record MatrixDto(IReadOnlyList<string> Models, IReadOnlyList<PairwiseCoefficient> Cells);
 public sealed record RatingHistoryPointDto(DateTimeOffset TakenAt, int RatedGames, string Model, double Rating,
     double CiLow, double CiHigh, double ArenaScore, bool Provisional);
+// M1 (03 §13): the two cost and forfeit coefficients of the model map; null when the API has none.
 public sealed record ModelResultsDto(string Model, int Games, int Wins, int Draws, int Losses, int ForfeitLosses,
     int Moves, double FirstAttemptLegalRate, double AvgLatencyMs, double? AvgInputTokens, double? AvgOutputTokens,
-    double? AverageCentipawnLoss);
+    double? AverageCentipawnLoss, double? AvgEstimatedUsdPerGame = null, double? ForfeitRate = null);
 public sealed record AttemptDto(Guid GameId, int Ply, int Number, string ModelId, string Prompt, string? RawReply,
     string? ParsedSan, bool Legal, long LatencyMs, string? Error, DateTimeOffset CreatedAt,
     string? Reasoning = null, int? InputTokens = null, int? OutputTokens = null, int? ReasoningTokens = null,

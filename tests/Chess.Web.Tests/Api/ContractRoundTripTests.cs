@@ -81,9 +81,9 @@ public class ContractRoundTripTests
     public void EveryResultsAndAttemptContractRoundTrips()
     {
         AssertRoundTrip<ApiDto.ModelResultsDto, WebDto.ModelResultsDto>(
-            new ApiDto.ModelResultsDto("gpt-5", 10, 6, 2, 2, 1, 410, 0.97, 1500.5, 800.0, 45.5, 22.1));
+            new ApiDto.ModelResultsDto("gpt-5", 10, 6, 2, 2, 1, 410, 0.97, 1500.5, 800.0, 45.5, 22.1, 0.0105, 0.1));
         AssertRoundTrip<ApiDto.ModelResultsDto, WebDto.ModelResultsDto>(
-            new ApiDto.ModelResultsDto("random", 10, 2, 0, 8, 0, 300, 0.2, 0, null, null, null));
+            new ApiDto.ModelResultsDto("random", 10, 2, 0, 8, 0, 300, 0.2, 0, null, null, null, null, 0));
         AssertRoundTrip<ApiDto.AttemptDto, WebDto.AttemptDto>(
             new ApiDto.AttemptDto(Id, 3, 1, "gpt-5", "Legal moves: ...", "Nf3", "Nf3", true, 1200, null, At));
     }

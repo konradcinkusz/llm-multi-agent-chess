@@ -14,7 +14,7 @@ public sealed record ResultsInputs(
     PairwiseCoefficient? LeaderVsSecond,                        // scoped; null with fewer than two models
     IReadOnlyDictionary<string, IReadOnlyList<RatingHistoryPointDto>> History); // unscoped; keyed by the drawn models
 
-/// <summary>Chart inputs and sentences of the seven sections of 03 §6.1, in the order the page shows them.</summary>
+/// <summary>Chart inputs and sentences of the sections of 03 §6.1 (the model map of 03 §13 is the second), in the order the page shows them.</summary>
 public sealed record ResultsReport(
     IReadOnlyList<ModelRating> Ranking,
     IReadOnlyList<RankedBar> Bars,
@@ -26,7 +26,8 @@ public sealed record ResultsReport(
     IReadOnlyList<StackRow> Outcomes,
     IReadOnlyList<CategoryValue> Legality,
     IReadOnlyList<CategoryValue>? Acpl,
-    IReadOnlyList<ScatterPoint> Scatter);
+    IReadOnlyList<ScatterPoint> Scatter,
+    IReadOnlyList<MapModel> MapModels);
 
 /// <summary>
 /// The two leaderboard orders of the Results page (RATING.md §6). The values are the API's <c>order</c> parameter.
@@ -171,6 +172,10 @@ public static class ResultsModel
             .Select(r => new ScatterPoint(r.Model, breakdown[r.Model].AvgLatencyMs / 1000, r.Rating))
             .ToList();
 
+        var mapModels = ranking
+            .Select(r => MapModelOf(r, breakdown.GetValueOrDefault(r.Model), slots))
+            .ToList();
+
         return new ResultsReport(
             ranking,
             bars,
@@ -182,6 +187,33 @@ public static class ResultsModel
             outcomes,
             legality,
             acpl,
-            scatter);
+            scatter,
+            mapModels);
+    }
+
+    /// <summary>
+    /// One model of the map: its leaderboard numbers joined with its breakdown row. Tokens per move are the input plus the
+    /// output tokens, and only when both are recorded (03 §13).
+    /// </summary>
+    public static MapModel MapModelOf(ModelRating model, ModelResultsDto? results, IReadOnlyDictionary<string, int> slots)
+    {
+        var tokens = results?.AvgInputTokens is { } input && results.AvgOutputTokens is { } output ? input + output : (double?)null;
+        return new MapModel(
+            model.Model,
+            model.Games,
+            model.Provisional,
+            slots.TryGetValue(model.Model, out var slot) ? slot : null,
+            model.Rating,
+            model.CiLow,
+            model.CiHigh,
+            model.ArenaScore,
+            model.ArenaScoreLow,
+            model.ArenaScoreHigh,
+            model.Legality,
+            model.MoveQuality,
+            results?.AvgLatencyMs / 1000,
+            tokens,
+            results?.AvgEstimatedUsdPerGame,
+            results?.ForfeitRate);
     }
 }

@@ -12,6 +12,10 @@ internal sealed record ScoredGame(
 internal sealed record MoveRow(
     Guid GameId, string FenAfter, int Attempts, long LatencyMs, int? InputTokens, int? OutputTokens, int? CentipawnLoss);
 
+/// <summary>One row of <c>move_attempts</c> with the columns the cost of a game needs. Ply 1 is White's first reply.</summary>
+internal sealed record ReplyRow(
+    Guid GameId, int Ply, int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? CachedInputTokens, double? AiCredits);
+
 internal static class ResultsGames
 {
     public const string LlmKind = "llm";
@@ -35,6 +39,12 @@ internal static class ResultsGames
         g => g.Id,
         m => m.GameId,
         (g, m) => new MoveRow(m.GameId, m.FenAfter, m.Attempts, m.LatencyMs, m.InputTokens, m.OutputTokens, m.CentipawnLoss));
+
+    public static IQueryable<ReplyRow> RepliesOf(ArenaDbContext db, IQueryable<GameEntity> games) => games.Join(
+        db.MoveAttempts,
+        g => g.Id,
+        a => a.GameId,
+        (g, a) => new ReplyRow(a.GameId, a.Ply, a.InputTokens, a.OutputTokens, a.ReasoningTokens, a.CachedInputTokens, a.AiCredits));
 
     /// <summary>White's score: 1, ½ or 0.</summary>
     public static double WhiteScore(string result) => result switch

@@ -1,0 +1,44 @@
+/* The model map (03 §13). Colours come from the chart tokens of ChartFrame.razor.css, never from literals. */
+
+.model-map-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin: 0 0 12px;
+}
+
+.model-map-controls .field {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+.model-map-controls select {
+    width: 100%;
+}
+
+.model-map-median {
+    stroke: var(--chart-ink-2);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+    opacity: 0.6;
+}
+
+.model-map-quadrant {
+    fill: var(--chart-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+
+.model-map-bubble {
+    fill-opacity: 0.85;
+    stroke-width: 1.5;
+}
+
+.model-map-reading {
+    margin: 8px 0 0;
+    color: var(--chart-ink-2);
+}
+
+.model-map-unplaced {
+    margin: 4px 0 0;
+}
