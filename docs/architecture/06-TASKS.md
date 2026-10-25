@@ -706,11 +706,13 @@ classes). These rows are not on the board above.
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| U1 | Design tokens, base styles, shared classes, app shell | — | todo |
-| U2 | Chart polish | — | todo |
-| U3 | Results and head-to-head pages | U1 | todo |
-| U4 | Live game, games list and replay | U1 | todo |
-| U5 | Tournaments, broadcast planner, attempts log | U1 | todo |
+| U1 | Design tokens, base styles, shared classes, app shell | — | done (#69) |
+| U2 | Chart polish | — | done (#68) |
+| U3 | Results and head-to-head pages | U1 | in progress |
+| U4 | Live game, games list and replay | U1 | in progress |
+| U5 | Tournaments, broadcast planner, attempts log | U1 | in progress |
+| U6 | Charts fill their card on wide screens | U2 | todo |
+| U7 | Stockfish status reads `available` or `absent` | U1 | todo |
 
 Common to every U task: follow 07-UI-STYLE §1 (no dependencies, tokens only, both themes, phone width, accessibility, test
 hooks unchanged) and prove the work as in §7. **Verify:** `dotnet build Chess.sln -warnaserror`;
@@ -777,3 +779,33 @@ danger buttons; lists in `.table-wrap`; progress with `.progress`; attempts filt
 `details` readable in monospace.
 **Done when:** bUnit: model pickers render as `.chips`; the create/plan buttons have `.btn-primary` and cancel/stop have
 `.btn-danger`; tables are inside `.table-wrap`; existing tests pass; E2E tournament journey passes.
+
+### U6 — Charts fill their card on wide screens
+
+**Owns:** `src/Chess.Web/Components/Charts/**`, `tests/Chess.Web.Tests/Charts/**`.
+**Why:** after U2 every chart is drawn at its natural viewBox width, so at 1366 px the charts use a third to a half of their
+card and leave a wide empty band on the right (supervisor screenshots after U1 + U2). The heatmap also leaves a tall empty
+band above its rotated column labels.
+**Do:** on a wide screen a chart grows to the width of its card, up to 1.5× its natural size; it is never drawn smaller than
+its natural size (at phone width it still scrolls inside its frame, as U2 decided, so its text stays ≥ 11 px). A way that
+needs no JavaScript: `width: 100%` on the SVG with `min-width` = the natural width and `max-width` = 1.5 × the natural width
+as an inline style computed by the component. Trim the heatmap's top margin to what its rotated labels need.
+**Done when:** unit tests: every chart component's SVG carries a `min-width` equal to its viewBox width and a `max-width` of
+1.5 × that width; the heatmap's top margin is at most the measured label length plus 8 px for 3 and 12 models. At 1366 px
+(screenshot) each chart on `/results` spans at least 80 % of its card or reaches its 1.5× cap; at 390 px the page still has no
+horizontal scroll.
+
+### U7 — Stockfish status reads `available` or `absent`
+
+**Owns:** `src/Chess.Api/Catalog/StatusReporter.cs`, `tests/Chess.Api.Tests/Catalog/**`,
+`src/Chess.Web/Components/Shared/StatusStrip.razor`, `tests/Chess.Web.Tests/Components/StatusStripTests.cs`.
+**Why:** 03 §8 says `/api/status` reports `stockfish` as `available | absent`. `StatusReporter` passes the health verdict
+through, and `MoveQualityHealthCheck` is Healthy in both cases (absent is optional, not broken), so the status strip shows a
+green "Stockfish: healthy" on a machine without Stockfish (found by U1).
+**Do:** `StatusReporter` maps the `stockfish` entry to `available` or `absent` from its description (`available` /
+`absent — move quality disabled`) when the check is Healthy, passes any other verdict through as today (`degraded`,
+`unhealthy`), and keeps `unknown` when the check is not registered. `Database` is unchanged. The status
+strip shows `available` with a success dot and `absent` with a neutral dot and the tooltip "move quality disabled".
+**Done when:** API tests: an analyzer that is not available gives `Stockfish = "absent"`, an available one `"available"`, a
+missing check `"unknown"`; bUnit: `absent` renders a neutral dot, `available` a success dot. No contract shape changes
+(`StatusDto` keeps its four strings).
