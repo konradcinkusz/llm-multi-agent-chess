@@ -46,7 +46,7 @@ internal sealed class PricedGateway : ILlmGateway
     {
         IReadOnlyList<LlmModelInfo> models =
         [
-            new LlmModelInfo("fake-a", "Fake A", 3, true),
+            new LlmModelInfo("fake-a", "Fake A", 3, true, null, ["low", "medium", "high"], "medium"),
             new LlmModelInfo("fake-b", "Fake B", null, true),
             new LlmModelInfo("fake-off", "Fake Off", 1, false),
         ];

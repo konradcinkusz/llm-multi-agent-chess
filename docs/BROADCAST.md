@@ -41,7 +41,10 @@ Only one day plays at a time. A second start while one is playing or paused is r
 
 ### Through the API
 
-Model ids come from `GET /api/models`.
+Model ids come from `GET /api/models`. A model may be a variant with a reasoning effort, `model@effort`, as in games and
+benchmarks, and each effort is ranked as its own player. The effort must be one the model offers: `fake-a@ultra` is refused
+with a `400` that says `fake-a does not offer reasoning effort 'ultra'. It offers: low, medium, high.`. A custom model
+(see [BENCHMARK.md section 4](BENCHMARK.md#4-your-own-model)) is planned by its `Id` like any other.
 
 ```http
 POST /api/broadcast/plan

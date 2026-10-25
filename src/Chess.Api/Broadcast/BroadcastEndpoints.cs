@@ -277,7 +277,10 @@ public static class BroadcastEndpoints
         return (schedule, slots);
     }
 
-    /// <summary>Checks the model names of a plan against the gateway's list, as game creation does (03 §5).</summary>
+    /// <summary>
+    /// Checks the model names of a plan against the gateway's list, as game creation does (03 §5). A model may be a variant,
+    /// <c>model@effort</c>: its base model must be listed, and the effort must be one it offers (<see cref="ModelVariant"/>).
+    /// </summary>
     private static Dictionary<string, string[]>? ModelErrors(IEnumerable<string> models, ModelListing listing)
     {
         var errors = new Dictionary<string, string[]>();
@@ -288,10 +291,17 @@ public static class BroadcastEndpoints
                 continue;
             }
 
-            var listed = listing.Models.FirstOrDefault(m => m.Id == model);
-            if (listed is null)
+            var baseModel = ModelVariant.BaseOf(model);
+            var listed = listing.Models.FirstOrDefault(m => m.Id == baseModel);
+            if (listed is null || baseModel == ModelCatalog.RandomModelId)
             {
                 errors["models"] = [$"The model '{model}' is not one the gateway offers."];
+                return errors;
+            }
+
+            if (ModelVariant.Problem(model, listing) is { } effortProblem)
+            {
+                errors["models"] = [effortProblem];
                 return errors;
             }
 

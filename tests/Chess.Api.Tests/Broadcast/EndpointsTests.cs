@@ -83,6 +83,47 @@ public class EndpointsTests
     }
 
     [Fact]
+    public async Task Plan_accepts_a_variant_whose_effort_the_model_offers()
+    {
+        using var h = new BroadcastHarness();
+
+        var response = await h.Client.PostAsJsonAsync("/api/broadcast/plan", Plan("fake-a@high", "fake-b"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var detail = await ReadAsync<ScheduleDetailDto>(response);
+        Assert.Contains("fake-a@high", detail.Schedule.Models);
+        Assert.Contains(detail.Slots, slot => slot.White.ModelId == "fake-a@high" || slot.Black.ModelId == "fake-a@high");
+    }
+
+    [Fact]
+    public async Task Plan_with_an_effort_the_model_does_not_offer_is_worded_as_game_creation_words_it()
+    {
+        using var h = new BroadcastHarness();
+
+        var response = await h.Client.PostAsJsonAsync("/api/broadcast/plan", Plan("fake-a@ultra", "fake-b"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("fake-a does not offer reasoning effort 'ultra'. It offers: low, medium, high.",
+            await FirstErrorAsync(response, "models"));
+    }
+
+    [Theory]
+    [InlineData("fake-a@")]
+    [InlineData("fake-a@high@low")]
+    [InlineData("@high")]
+    [InlineData("fake-nope@high")]
+    [InlineData("random@high")]
+    public async Task Plan_with_a_malformed_or_unknown_variant_is_a_validation_problem(string model)
+    {
+        using var h = new BroadcastHarness();
+
+        var response = await h.Client.PostAsJsonAsync("/api/broadcast/plan", Plan(model, "fake-b"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True(await HasErrorKeyAsync(response, "models"));
+    }
+
+    [Fact]
     public async Task Plan_with_a_model_the_gateway_does_not_offer_is_a_validation_problem()
     {
         using var h = new BroadcastHarness();
@@ -482,6 +523,12 @@ public class EndpointsTests
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return document.RootElement.TryGetProperty("errors", out var errors) && errors.TryGetProperty(key, out _);
+    }
+
+    private static async Task<string?> FirstErrorAsync(HttpResponseMessage response, string key)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("errors").GetProperty(key)[0].GetString();
     }
 
     private static async Task<string?> TitleAsync(HttpResponseMessage response)

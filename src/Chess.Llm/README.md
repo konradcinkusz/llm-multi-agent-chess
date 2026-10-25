@@ -118,10 +118,14 @@ The owner's live smoke run confirms all three.
   (`Arena:CustomModels[0].Id 'x@y' must not contain '@' ...`). Messages never quote a URL or a key.
 - **Clash with a Copilot id.** The Copilot ids are known only once the runtime has listed them. A custom id that a
   Copilot model already uses is not listed, and an error is logged naming it. The gateway keeps running.
-- **The key.** `ApiKey` comes from configuration (an AppHost secret parameter or user secrets) and is never logged,
-  printed or stored. `CustomModelOptions.ToString()` leaves it out.
+- **The key.** `ApiKey` is never a plain value. The AppHost (`src/Chess.AppHost/CustomModelSettings.cs`) reads it from the
+  secret parameter `Parameters:custom-model-<Id>-key` (user secrets) and passes it to the API as `Arena__CustomModels__N__ApiKey`.
+  A plain `ApiKey`, in a file or an environment variable, stops the AppHost at startup. The key is never logged, printed or
+  stored. `CustomModelOptions.ToString()` leaves it out.
 - **Fake profile.** Configured custom models are listed and served by `FakeLlmGateway` as well, so the whole path
-  runs offline. Set them with the usual configuration keys, for example `Arena__CustomModels__0__Id`.
+  runs offline. Set them in the AppHost's user secrets (`Arena:CustomModels:0:Id` and the other fields), as
+  `docs/BENCHMARK.md` section 4 shows, or as environment variables such as `Arena__CustomModels__0__Id`. The AppHost forwards
+  both to the API.
 - **Not verified live.** Whether a provider session also needs a Copilot sign-in is unknown. Custom models are listed
   only while the Copilot runtime is `Ready`, so a runtime must be up even for a local endpoint. The owner's live run
   will show whether it must also be signed in.
