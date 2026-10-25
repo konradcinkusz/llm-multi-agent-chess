@@ -1,5 +1,5 @@
 using Chess.Web.Api;
-using Chess.Web.Components.Pages.Tournaments;
+using Chess.Web.Components.Shared.Game;
 
 namespace Chess.Web.Components.Pages.Play;
 
@@ -30,8 +30,12 @@ public static class PlayChoices
     public static PlayerSpec Player(string modelId) =>
         modelId == Random ? new("random", Random) : new("llm", modelId);
 
+    /// <summary>
+    /// "GPT · $3.00 / $15.00 per 1M tokens", or "GPT · price unknown" when the gateway reports no price (03 §10.2).
+    /// The premium multiplier is no longer shown: Copilot bills by AI credits.
+    /// </summary>
     public static string Label(ModelDto model) =>
-        model.Id == Random ? model.DisplayName : $"{model.DisplayName} · {TournamentFormat.Multiplier(model.PremiumMultiplier)}";
+        model.Id == Random ? model.DisplayName : $"{model.DisplayName} · {GameFigures.Price(model.Pricing) ?? "price unknown"}";
 
     /// <summary>"1-0 · checkmate"; the termination is left out when the server did not send one.</summary>
     public static string Outcome(GameOutcome outcome) =>

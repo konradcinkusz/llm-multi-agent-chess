@@ -1,4 +1,5 @@
 using Chess.Api.Broadcast;
+using Chess.Api.Usage;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -25,6 +26,7 @@ api.MapTournamentEndpoints();
 api.MapRatingEndpoints();
 api.MapResultEndpoints();
 api.MapAttemptEndpoints();
+api.MapUsageEndpoints();
 api.MapBroadcastEndpoints();
 app.Run();
 

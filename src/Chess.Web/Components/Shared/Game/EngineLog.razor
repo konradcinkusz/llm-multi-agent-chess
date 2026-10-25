@@ -1,0 +1,116 @@
+<div class="engine-log">
+    <div class="cluster engine-filters" role="group" aria-label="Filter the engine log">
+        @foreach (var option in FilterOptions)
+        {
+            <button type="button" class="btn btn-sm @(filter == option.Key ? "btn-filter-active" : null)"
+                    data-testid="log-filter-@option.Key" aria-pressed="@(filter == option.Key ? "true" : "false")"
+                    @onclick="() => SetFilter(option.Key)">
+                @option.Label <span class="muted num">@Count(option.Key)</span>
+            </button>
+        }
+    </div>
+
+    @if (Entries.Count == 0)
+    {
+        <p class="muted empty-state" data-testid="log-empty">No attempts yet. Each reply a model sends to the engine appears here.</p>
+    }
+    else if (Visible.Count == 0)
+    {
+        <p class="muted empty-state" data-testid="log-empty">No attempts match this filter.</p>
+    }
+
+    <ol class="engine-entries" data-testid="engine-log" aria-label="Engine log, newest first">
+        @foreach (var entry in Visible)
+        {
+            var selected = SelectedPly == entry.Ply;
+            <li class="engine-entry @(selected ? "engine-entry-selected" : null)" data-testid="engine-entry"
+                data-ply="@entry.Ply" data-color="@entry.Color" data-attempt="@entry.Attempt"
+                data-legal="@(entry.Legal ? "true" : "false")">
+                <details>
+                    <summary class="engine-summary">
+                        <span class="engine-where"><strong>@entry.Color</strong> · ply @entry.Ply</span>
+                        <span class="engine-model">@NameOf(entry.ModelId)</span>
+                        <span class="muted engine-attempt">attempt @entry.Attempt of @EngineEntry.MaxAttempts</span>
+                        <span class="badge @EngineVerdict.Tone(entry)" data-testid="verdict">@EngineVerdict.Label(entry)</span>
+                        @if (entry.ParsedSan is not null && entry.Legal)
+                        {
+                            <code class="engine-san">@entry.ParsedSan</code>
+                        }
+                        <span class="engine-figures num muted">
+                            @GameFigures.Latency(entry.LatencyMs) · @GameFigures.Tokens(entry.InputTokens) in / @GameFigures.Tokens(entry.OutputTokens) out · @GameFigures.Credits(entry.AiCredits)
+                        </span>
+                    </summary>
+
+                    <div class="engine-body">
+                        <h3 class="engine-heading">Prompt sent</h3>
+                        <pre class="engine-text" data-testid="entry-prompt">@entry.Prompt</pre>
+
+                        <h3 class="engine-heading">Reply</h3>
+                        @if (entry.RawReply is null)
+                        {
+                            <p class="muted" data-testid="entry-no-reply">No reply (the model did not answer in time).</p>
+                        }
+                        else
+                        {
+                            <pre class="engine-text" data-testid="entry-reply">@entry.RawReply</pre>
+                        }
+
+                        <h3 class="engine-heading">Reasoning</h3>
+                        @if (string.IsNullOrWhiteSpace(entry.Reasoning))
+                        {
+                            <p class="muted" data-testid="entry-no-reasoning">This model did not expose its reasoning.</p>
+                        }
+                        else
+                        {
+                            <pre class="engine-text" data-testid="entry-reasoning">@entry.Reasoning</pre>
+                        }
+                    </div>
+                </details>
+            </li>
+        }
+    </ol>
+</div>
+
+@code {
+    private static readonly (string Key, string Label)[] FilterOptions =
+    [
+        ("all", "All"),
+        ("rejected", "Rejected"),
+        ("white", "White"),
+        ("black", "Black"),
+    ];
+
+    private string filter = "all";
+
+    /// <summary>Every attempt of the game (or the part shown). Newest first is applied here.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<EngineEntry> Entries { get; set; } = [];
+
+    /// <summary>The ply whose entries are highlighted, e.g. the move picked in the move table.</summary>
+    [Parameter]
+    public int? SelectedPly { get; set; }
+
+    /// <summary>The display name of a model id. Defaults to the id itself.</summary>
+    [Parameter]
+    public Func<string, string>? ModelName { get; set; }
+
+    private IReadOnlyList<EngineEntry> Visible => Entries
+        .Where(entry => Matches(entry, filter))
+        .OrderByDescending(entry => entry.Ply)
+        .ThenByDescending(entry => entry.Attempt)
+        .ToArray();
+
+    private int Count(string key) => Entries.Count(entry => Matches(entry, key));
+
+    private static bool Matches(EngineEntry entry, string key) => key switch
+    {
+        "rejected" => !entry.Legal,
+        "white" => entry.Color == "White",
+        "black" => entry.Color == "Black",
+        _ => true,
+    };
+
+    private void SetFilter(string key) => filter = key;
+
+    private string NameOf(string modelId) => ModelName?.Invoke(modelId) ?? modelId;
+}

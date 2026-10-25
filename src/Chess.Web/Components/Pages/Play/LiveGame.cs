@@ -1,11 +1,13 @@
 using System.Text.Json;
 using Chess.Web.Api;
+using Chess.Web.Components.Shared;
+using Chess.Web.Components.Shared.Game;
 
 namespace Chess.Web.Components.Pages.Play;
 
 /// <summary>
-/// The game on the live page: the server's state as loaded (GET) and the events applied on top of it (SSE).
-/// Plies are 1-based; ply 1 is White's first move. The ply rule of 03 §5.1 lives here.
+/// The game on the live page: the server's state as loaded (GET) and the events applied on top of it (SSE), plus every
+/// attempt the engine log shows. Plies are 1-based; ply 1 is White's first move. The ply rule of 03 §5.1 lives here.
 /// </summary>
 public sealed class LiveGame
 {
@@ -15,6 +17,7 @@ public sealed class LiveGame
 
     private readonly List<MoveDto> _moves = [];
     private readonly List<AttemptNotice> _notices = [];
+    private readonly Dictionary<(int Ply, int Attempt), EngineEntry> _attempts = [];
 
     public LiveGame(GameSummaryDto summary)
     {
@@ -30,9 +33,18 @@ public sealed class LiveGame
     /// <summary>The highest ply applied. An event for this ply or a lower one is already known and is ignored.</summary>
     public int AppliedPly { get; private set; }
 
+    /// <summary>The ply the game is waiting for next.</summary>
+    public int NextPly => AppliedPly + 1;
+
     public IReadOnlyList<MoveDto> Moves => _moves;
 
     public IReadOnlyList<AttemptNotice> Notices => _notices;
+
+    /// <summary>Every attempt seen so far, in ply and attempt order.</summary>
+    public IReadOnlyList<EngineEntry> Attempts => _attempts.Values
+        .OrderBy(entry => entry.Ply)
+        .ThenBy(entry => entry.Attempt)
+        .ToArray();
 
     /// <summary>The side the server is asking a model for right now, or null between moves.</summary>
     public ThinkingState? Thinking { get; private set; }
@@ -41,6 +53,24 @@ public sealed class LiveGame
     public GameOutcome? Outcome { get; private set; }
 
     public bool IsFinished => Outcome is not null;
+
+    /// <summary>The squares of the last move, or null before the first move.</summary>
+    public BoardMove? LastMove
+    {
+        get
+        {
+            if (_moves.Count == 0)
+            {
+                return null;
+            }
+
+            var previous = _moves.Count == 1 ? StartFen : _moves[^2].FenAfter;
+            return BoardFacts.LastMove(previous, _moves[^1].FenAfter, _moves[^1].San);
+        }
+    }
+
+    /// <summary>The king in check after the last move, or null.</summary>
+    public string? CheckSquare => _moves.Count == 0 ? null : BoardFacts.CheckedKing(CurrentFen, _moves[^1].San);
 
     /// <summary>
     /// Applies the game as the server reports it. A report older than the events already applied is
@@ -67,6 +97,18 @@ public sealed class LiveGame
     }
 
     /// <summary>
+    /// Adds attempts the game already had (GET /api/attempts). An attempt that arrived as an event is kept as it is:
+    /// the same attempt twice is one entry.
+    /// </summary>
+    public void AddAttempts(IEnumerable<EngineEntry> attempts)
+    {
+        foreach (var attempt in attempts)
+        {
+            _attempts.TryAdd((attempt.Ply, attempt.Attempt), attempt);
+        }
+    }
+
+    /// <summary>
     /// Applies one event. A <see cref="ApplyResult.Gap"/> means a ply was missed before this one, so the
     /// caller should load the game again instead of guessing the missing move.
     /// </summary>
@@ -82,7 +124,25 @@ public sealed class LiveGame
                     return ApplyResult.Duplicate;
                 }
 
-                Thinking = new ThinkingState(e.Ply, e.Color, e.ModelId);
+                // The side comes from the ply: the API sends "white" and "black" in lower case, the page says "White".
+                Thinking = new ThinkingState(e.Ply, ColorOf(e.Ply), e.ModelId, e.At, 1);
+                MarkRunning();
+                return ApplyResult.Applied;
+            }
+            case "AttemptRecorded":
+            {
+                var e = Read<AttemptRecordedEvent>(message);
+                _attempts[(e.Ply, e.Attempt)] = new EngineEntry(e.Ply, e.Attempt, e.ModelId, e.Prompt, e.RawReply, e.Reasoning,
+                    e.ParsedSan, e.Legal, e.RejectionKind, e.LatencyMs, e.InputTokens, e.OutputTokens, e.ReasoningTokens,
+                    e.AiCredits, e.At);
+                MarkRunning();
+
+                // A legal attempt ends the move (MovePlayed follows); a rejected one sends the model to its next attempt.
+                if (!e.Legal)
+                {
+                    NextAttempt(e.Ply, e.Attempt);
+                }
+
                 return ApplyResult.Applied;
             }
             case "AttemptRejected":
@@ -94,6 +154,7 @@ public sealed class LiveGame
                 }
 
                 _notices.Add(new AttemptNotice(e.Ply, ColorOf(e.Ply), e.Attempt, e.Reason, e.RawReply));
+                NextAttempt(e.Ply, e.Attempt);
                 return ApplyResult.Applied;
             }
             case "MovePlayed":
@@ -109,10 +170,11 @@ public sealed class LiveGame
                     return ApplyResult.Gap;
                 }
 
-                _moves.Add(new MoveDto(e.Ply, e.Color, e.San, e.Fen, e.Attempts, e.LatencyMs, null, null, null, null));
+                _moves.Add(new MoveDto(e.Ply, ColorOf(e.Ply), e.San, e.Fen, e.Attempts, e.LatencyMs, null, null, null, null));
                 CurrentFen = e.Fen;
                 AppliedPly = e.Ply;
                 Thinking = null;
+                MarkRunning();
                 return ApplyResult.Applied;
             }
             case "GameFinished":
@@ -124,6 +186,27 @@ public sealed class LiveGame
             }
             default:
                 return ApplyResult.Unknown;
+        }
+    }
+
+    /// <summary>The model thinking about this ply is on the attempt after <paramref name="attempt"/>. Idempotent: the rejection and the record of one attempt both say so.</summary>
+    private void NextAttempt(int ply, int attempt)
+    {
+        if (Thinking is { } thinking && thinking.Ply == ply && attempt >= thinking.Attempt)
+        {
+            Thinking = thinking with { Attempt = attempt + 1 };
+        }
+    }
+
+    /// <summary>
+    /// The summary is loaded once, before the game starts; a game that is playing (an event arrived) is running, whatever
+    /// the summary said when it was loaded.
+    /// </summary>
+    private void MarkRunning()
+    {
+        if (Summary.State == "queued")
+        {
+            Summary = Summary with { State = "running" };
         }
     }
 
@@ -149,7 +232,11 @@ public enum ApplyResult
     Unknown,
 }
 
-public sealed record ThinkingState(int Ply, string Color, string ModelId);
+/// <summary>
+/// The move being decided: its ply and side, the model, when it started (the server's clock) and the attempt the model is on
+/// (1 to 3, the attempt after each illegal reply).
+/// </summary>
+public sealed record ThinkingState(int Ply, string Color, string ModelId, DateTimeOffset StartedAt, int Attempt);
 
 /// <summary>PGN-style result and the termination reason (03 §3.3).</summary>
 public sealed record GameOutcome(string Result, string? Termination);

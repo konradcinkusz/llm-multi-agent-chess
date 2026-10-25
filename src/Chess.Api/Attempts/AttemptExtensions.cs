@@ -77,7 +77,9 @@ public static class AttemptExtensions
                 .Select(x => new AttemptDto(
                     x.a.GameId, x.a.Ply, x.a.Number,
                     x.a.Ply % 2 == 1 ? x.g.WhiteModel : x.g.BlackModel,
-                    x.a.Prompt, x.a.RawReply, x.a.ParsedSan, x.a.Legal, x.a.LatencyMs, x.a.Error, x.a.CreatedAt))
+                    x.a.Prompt, x.a.RawReply, x.a.ParsedSan, x.a.Legal, x.a.LatencyMs, x.a.Error, x.a.CreatedAt,
+                    x.a.Reasoning, x.a.InputTokens, x.a.OutputTokens, x.a.ReasoningTokens, x.a.AiCredits,
+                    x.a.RejectionKind))
                 .ToListAsync(ct);
 
         return TypedResults.Ok(new PageDto<AttemptDto>(items, page, pageSize, total));

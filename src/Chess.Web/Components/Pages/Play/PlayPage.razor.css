@@ -1,4 +1,7 @@
-/* The live game (03 §6, 07 §6): players, board and moves each sit in a card. The moves are numbered, two to a row. */
+/*
+ * The live game (03 §6, 07 §6, 03 §10.4): players, board and moves each sit in a card; the game summary and the engine
+ * log take the full width below them. The player bars, move table and log are styled by their own components.
+ */
 
 .play-layout {
     display: grid;
@@ -73,11 +76,6 @@
     font-size: var(--text-sm);
 }
 
-.play-thinking {
-    margin: 0;
-    font-style: italic;
-}
-
 .play-result {
     margin: 0;
 }
@@ -118,35 +116,15 @@
     white-space: pre-wrap;
 }
 
-.move-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2px var(--space-3);
-    margin: 0;
-    max-height: 520px;
-    overflow-y: auto;
-    padding: 0;
-    list-style: none;
-    font-variant-numeric: tabular-nums;
+.play-summary,
+.play-log {
+    min-width: 0;
+    margin-top: var(--space-5);
 }
 
-.move-list li {
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-}
-
-/* Shade alternate rows of two plies so each full move reads as one line. */
-.move-list li:nth-child(4n+1),
-.move-list li:nth-child(4n+2) {
-    background: var(--surface-2);
-}
-
-.move-number {
-    display: inline-block;
-    width: 2.5em;
-    color: var(--text-3);
-}
-
-.move-list .muted {
-    font-size: var(--text-xs);
+.play-log .card-header,
+.play-summary .card-header {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    justify-content: flex-start;
 }
