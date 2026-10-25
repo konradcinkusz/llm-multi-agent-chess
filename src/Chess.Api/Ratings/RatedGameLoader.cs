@@ -31,8 +31,9 @@ public static class RatedGameLoader
         }
 
         var games = await rated
-            .Select(g => new GameRow(g.Id, g.Result, g.WhiteKind, g.WhiteModel, g.BlackKind, g.BlackModel))
+            // Order before projecting: Npgsql cannot translate an OrderBy over a constructed record.
             .OrderBy(g => g.Id)
+            .Select(g => new GameRow(g.Id, g.Result, g.WhiteKind, g.WhiteModel, g.BlackKind, g.BlackModel))
             .ToListAsync(ct);
 
         var moves = await db.Moves.AsNoTracking()
