@@ -97,7 +97,7 @@ public class CopilotLlmGatewayTests
     }
 
     private static CopilotLlmGateway NewGateway(CopilotOptions options) =>
-        new(Options.Create(options), NullLogger<CopilotLlmGateway>.Instance);
+        new(Options.Create(options), Options.Create(new ArenaOptions()), NullLogger<CopilotLlmGateway>.Instance);
 
     private static HostApplicationBuilder HostWithProvider(string? provider, string? copilotCliPath)
     {

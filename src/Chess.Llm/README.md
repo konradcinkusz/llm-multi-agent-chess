@@ -100,6 +100,32 @@ The owner's live smoke run confirms all three.
 | `Copilot:StartupTimeout` | 30 s | Start, sign-in check and model listing together |
 | `Llm:Seed` | `1` | Seed for `FakeLlmGateway` |
 | `Llm:FakeLatencyMs` | `0` | Simulated reply delay for `FakeLlmGateway` |
+| `Arena:CustomModels` | empty | Models on an OpenAI-compatible or Azure endpoint (see below); validated at startup |
+
+## Reasoning effort and custom models (B1, ADR-014)
+
+- **Effort.** `LlmConversationOptions.ReasoningEffort` becomes `SessionConfig.ReasoningEffort`. A Copilot model
+  lists its efforts (`ModelInfo.SupportedReasoningEfforts`) and its default (`DefaultReasoningEffort`) in
+  `LlmModelInfo`; a model that lists none gets `null` for both. The gateway does not check an effort against the
+  list for Copilot models; the API validates it (B2). `FakeLlmGateway`'s `fake-a` and `fake-b` list `low`,
+  `medium` and `high` with `medium` as default, and refuse any other effort with an `ArgumentException`.
+- **Custom models.** Each `Arena:CustomModels:N` entry has `Id`, `DisplayName` (defaults to `Id`), `ProviderType`
+  (`openai` or `azure`), `BaseUrl` (absolute http or https), `Model` (the name the endpoint expects, sent as
+  `ProviderConfig.WireModel`), `WireApi` (default `chat-completions`) and `ApiKey`. A custom model is listed with
+  `Custom = true` and started with `SessionConfig.Provider` and no Copilot model id.
+- **Validation at startup.** An `Id` may not contain `@` or spaces and must be unique, ignoring case. Every entry needs a
+  valid `ProviderType`, `BaseUrl`, `Model` and `WireApi`. A bad entry stops the host with a message that names it
+  (`Arena:CustomModels[0].Id 'x@y' must not contain '@' ...`). Messages never quote a URL or a key.
+- **Clash with a Copilot id.** The Copilot ids are known only once the runtime has listed them. A custom id that a
+  Copilot model already uses is not listed, and an error is logged naming it. The gateway keeps running.
+- **The key.** `ApiKey` comes from configuration (an AppHost secret parameter or user secrets) and is never logged,
+  printed or stored. `CustomModelOptions.ToString()` leaves it out.
+- **Fake profile.** Configured custom models are listed and served by `FakeLlmGateway` as well, so the whole path
+  runs offline. Set them with the usual configuration keys, for example `Arena__CustomModels__0__Id`.
+- **Not verified live.** Whether a provider session also needs a Copilot sign-in is unknown. Custom models are listed
+  only while the Copilot runtime is `Ready`, so a runtime must be up even for a local endpoint. The owner's live run
+  will show whether it must also be signed in.
+- **Prices.** Custom models have no `Pricing` yet, so their cost estimate is unknown.
 
 ## Status and health
 
