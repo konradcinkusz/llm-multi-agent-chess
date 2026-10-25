@@ -5,6 +5,7 @@
 @implements IDisposable
 @inject ArenaApiClient Api
 @inject GameEventsClient Events
+@inject IConfiguration Configuration
 
 <PageTitle>Live game · LLM Chess Arena</PageTitle>
 
@@ -78,7 +79,7 @@ else
                        Totals="@Totals(Black)" UsdPerAiCredit="@UsdPerAiCredit" />
 
             <div class="play-board-frame" data-testid="board">
-                <ChessBoardSvg Fen="@BoardFen" LastMove="@_live?.LastMove" CheckSquare="@_live?.CheckSquare" />
+                <ChessBoardSvg Fen="@BoardFen" LastMove="@Shown?.LastMove" CheckSquare="@Shown?.CheckSquare" />
             </div>
 
             <PlayerBar Color="White" Name="@ModelName(SideModel(White))" ToMove="@ToMove(White)"
@@ -88,7 +89,7 @@ else
 
             <p class="play-status" data-testid="game-status" role="status">@StatusLine</p>
 
-            @if (_live?.Outcome is { } outcome)
+            @if (Shown?.Outcome is { } outcome)
             {
                 <p class="play-result">
                     <span class="badge @PlayChoices.OutcomeTone(outcome)" data-testid="game-result">@PlayChoices.Outcome(outcome)</span>
@@ -100,7 +101,7 @@ else
                 }
             }
 
-            @if (_live is { Notices.Count: > 0 } notices)
+            @if (Shown is { Notices.Count: > 0 } notices)
             {
                 <ul class="play-notices" data-testid="attempt-notices">
                     @foreach (var notice in notices.Notices)
@@ -116,7 +117,7 @@ else
                 </ul>
             }
 
-            @if (_live is { IsFinished: true })
+            @if (Shown is { IsFinished: true })
             {
                 <div class="cluster">
                     <button type="button" class="btn btn-sm" data-testid="pgn-toggle" @onclick="TogglePgnAsync">
@@ -133,11 +134,31 @@ else
 
         <aside class="card stack play-moves" aria-labelledby="moves-heading">
             <h2 id="moves-heading" class="card-title">Moves</h2>
+            <fieldset class="play-pace" data-testid="pace">
+                <legend>Pace</legend>
+                <div class="chips">
+                    @foreach (var option in PlayChoices.Paces)
+                    {
+                        <label class="chip">
+                            <input type="radio" name="viewer-pace" value="@((int)option.Pause.TotalSeconds)" data-testid="pace-option"
+                                   checked="@(_pace.Pause == option.Pause)" @onchange="() => SetPace(option.Pause)" />
+                            @option.Label
+                        </label>
+                    }
+                </div>
+                @if (Behind > 0)
+                {
+                    <p class="play-pace-behind" data-testid="pace-behind">
+                        <span>@PlayChoices.Behind(Behind)</span>
+                        <button type="button" class="btn btn-sm" data-testid="catch-up" @onclick="CatchUp">Catch up</button>
+                    </p>
+                }
+            </fieldset>
             <MoveTable Moves="@Moves" PendingPly="@PendingPly" SelectedPly="@_selectedPly" OnSelect="@SelectPly" />
         </aside>
     </div>
 
-    @if (_live is { IsFinished: true })
+    @if (Shown is { IsFinished: true })
     {
         <section class="card stack play-summary" aria-labelledby="summary-heading" data-testid="game-summary">
             <div class="card-header">
@@ -178,8 +199,18 @@ else
     private bool _starting;
     private string? _error;
 
+    /// <summary>How often the pacing loop checks whether the next move may be shown.</summary>
+    private static readonly TimeSpan PaceCheck = TimeSpan.FromMilliseconds(250);
+
     private LiveGame? _live;
     private CancellationTokenSource? _follow;
+
+    /// <summary>The viewer pace (03 §10.5). The page starts at the configured pace and keeps the choice while it stays open.</summary>
+    private ViewerPacer _pace = new(TimeProvider.System);
+
+    /// <summary>The view of the game, rebuilt only when the game, its version or the shown ply changes.</summary>
+    private LiveGame? _shown;
+    private (LiveGame? Game, int Version, int Ply) _shownKey;
     private string? _pgn;
     private GameUsageDto? _usage;
     private string? _usageError;
@@ -189,25 +220,56 @@ else
     [SupplyParameterFromQuery(Name = "game")]
     public Guid? Game { get; set; }
 
+    /// <summary>The clock the viewer pace reads. The system clock unless a test supplies its own.</summary>
+    [Parameter]
+    public TimeProvider? Clock { get; set; }
+
     private bool IsLive => _live is { IsFinished: false };
+
+    /// <summary>
+    /// What the page shows: the game as far as the viewer pace has released it (03 §10.5). The markup reads this many
+    /// times per render, so it is built once per change.
+    /// </summary>
+    private LiveGame? Shown
+    {
+        get
+        {
+            if (_live is null)
+            {
+                return null;
+            }
+
+            var key = (_live, _live.Version, _pace.ShownPly);
+            if (_shown is null || _shownKey != key)
+            {
+                _shown = _live.ShownUpTo(_pace.ShownPly);
+                _shownKey = key;
+            }
+
+            return _shown;
+        }
+    }
+
+    /// <summary>The moves the game has played that the page is not showing yet.</summary>
+    private int Behind => _live is null ? 0 : _pace.Behind(_live.AppliedPly);
 
     private bool CanStart => _models is not null && !_starting && !IsLive && IsSelectable(_white) && IsSelectable(_black);
 
-    private string BoardFen => _live?.CurrentFen ?? LiveGame.StartFen;
+    private string BoardFen => Shown?.CurrentFen ?? LiveGame.StartFen;
 
-    private IReadOnlyList<MoveDto> Moves => _live?.Moves ?? [];
+    private IReadOnlyList<MoveDto> Moves => Shown?.Moves ?? [];
 
-    private IReadOnlyList<EngineEntry> Attempts => _live?.Attempts ?? [];
+    private IReadOnlyList<EngineEntry> Attempts => Shown?.Attempts ?? [];
 
     /// <summary>The pieces each side has captured and the lead, from the moves so far.</summary>
     private Material Captured => BoardFacts.MaterialOf(LiveGame.StartFen, Moves.Select(move => move.FenAfter));
 
     /// <summary>The ply a model is deciding now, shown as a pending cell in the move table.</summary>
-    private int? PendingPly => _live is { IsFinished: false, Thinking: { } thinking } ? thinking.Ply : null;
+    private int? PendingPly => Shown is { IsFinished: false, Thinking: { } thinking } ? thinking.Ply : null;
 
     private double UsdPerAiCredit => _usage?.UsdPerAiCredit ?? GameFigures.DefaultUsdPerAiCredit;
 
-    private string StatusLine => _live switch
+    private string StatusLine => Shown switch
     {
         null => "No game yet. Choose two players and start one.",
         { IsFinished: true } => "Game over.",
@@ -215,11 +277,16 @@ else
         { Thinking: { } thinking } =>
             $"Move {MoveNumber(thinking.Ply)} · {thinking.Color} to move · {ModelName(thinking.ModelId)} is thinking " +
             $"(attempt {Math.Min(thinking.Attempt, EngineEntry.MaxAttempts)} of {EngineEntry.MaxAttempts})",
-        var live => $"Move {MoveNumber(live.NextPly)} · {LiveGame.ColorOf(live.NextPly)} to move",
+        var shown => $"Move {MoveNumber(shown.NextPly)} · {LiveGame.ColorOf(shown.NextPly)} to move",
     };
 
     protected override async Task OnInitializedAsync()
     {
+        _pace = new ViewerPacer(Clock ?? TimeProvider.System)
+        {
+            Pause = PlayChoices.DefaultPace(Configuration["Arena:Viewer:MinMovePauseSeconds"]),
+        };
+
         IReadOnlyList<ModelDto>? models = null;
         StatusDto? status = null;
         string? statusError = null;
@@ -274,6 +341,7 @@ else
             var summary = await Api.CreateGameAsync(
                 new CreateGameRequest(PlayChoices.Player(_white), PlayChoices.Player(_black), _rated));
             _live = new LiveGame(summary);
+            _pace.Reset(0);
 
             _follow = new CancellationTokenSource();
             _ = FollowAsync(summary.Id, _follow.Token);
@@ -296,6 +364,9 @@ else
             var detail = await Api.GetGameAsync(gameId);
             _live = new LiveGame(detail.Summary);
             _live.Load(detail);
+
+            // A game opened mid-way shows its current position at once; only the moves that come after are paced.
+            _pace.Reset(_live.AppliedPly);
 
             _follow = new CancellationTokenSource();
             _ = FollowAsync(gameId, _follow.Token);
@@ -347,6 +418,66 @@ else
         }
     }
 
+    /// <summary>Changes the pace. Going to Live shows every move the game has at once.</summary>
+    private void SetPace(TimeSpan pause)
+    {
+        _pace.Pause = pause;
+        Release();
+    }
+
+    /// <summary>Shows everything the game has played, at once, and paces the moves after it.</summary>
+    private void CatchUp()
+    {
+        if (_live is { } live)
+        {
+            _pace.Reset(live.AppliedPly);
+        }
+    }
+
+    /// <summary>Releases the moves the pace allows now. Runs on the render thread.</summary>
+    private bool Release() => _live is { } live && _pace.Advance(live.AppliedPly);
+
+    /// <summary>
+    /// Releases the moves that wait for the pause. Events and loads release a move at once when the pause allows; this loop
+    /// releases the ones that waited. It ends once the game is over and every move is shown, or when the page leaves it.
+    /// </summary>
+    private async Task PaceAsync(Guid gameId, CancellationToken ct)
+    {
+        try
+        {
+            while (true)
+            {
+                var done = false;
+                await InvokeAsync(() =>
+                {
+                    if (ct.IsCancellationRequested || _live is not { } live || live.GameId != gameId)
+                    {
+                        done = true;
+                        return;
+                    }
+
+                    if (Release())
+                    {
+                        StateHasChanged();
+                    }
+
+                    done = live.IsFinished && Behind == 0;
+                });
+
+                if (done)
+                {
+                    return;
+                }
+
+                await Task.Delay(PaceCheck, ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The page left the game.
+        }
+    }
+
     /// <summary>Picking a move selects its entries in the engine log; picking it again clears the selection.</summary>
     private void SelectPly(int? ply) => _selectedPly = ply;
 
@@ -361,6 +492,7 @@ else
         {
             var reading = ReadStreamAsync(gameId, ct);
             _ = TickAsync(ct);
+            _ = PaceAsync(gameId, ct);
             await LoadAsync(gameId, ct);
             await reading;
         }
@@ -431,6 +563,7 @@ else
             if (!ct.IsCancellationRequested && _live is { } live && live.GameId == gameId)
             {
                 live.Load(detail);
+                Release();
                 StateHasChanged();
             }
         });
@@ -541,6 +674,7 @@ else
         }
 
         var result = live.Apply(message);
+        Release();
         StateHasChanged();
         return result;
     }
@@ -563,13 +697,13 @@ else
     private string ModelName(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId)?.DisplayName ?? modelId;
 
     /// <summary>Whose move it is: the side the game waits for, unless the game is over or not started.</summary>
-    private bool ToMove(string color) => _live is { IsFinished: false } live && LiveGame.ColorOf(live.NextPly) == color;
+    private bool ToMove(string color) => Shown is { IsFinished: false } shown && LiveGame.ColorOf(shown.NextPly) == color;
 
-    private int? AttemptOf(string color) => _live is { IsFinished: false, Thinking: { } thinking } && thinking.Color == color
+    private int? AttemptOf(string color) => Shown is { IsFinished: false, Thinking: { } thinking } && thinking.Color == color
         ? thinking.Attempt
         : null;
 
-    private int SecondsOf(string color) => _live is { IsFinished: false, Thinking: { } thinking } && thinking.Color == color
+    private int SecondsOf(string color) => Shown is { IsFinished: false, Thinking: { } thinking } && thinking.Color == color
         ? Math.Max(0, (int)(DateTimeOffset.UtcNow - thinking.StartedAt).TotalSeconds)
         : 0;
 
