@@ -71,6 +71,46 @@ public class StatusStripTests
         Assert.Contains(dot, cut.Find("[data-service='stockfish'] .dot").ClassList);
     }
 
+    [Theory]
+    [InlineData("available", "dot-success")]
+    [InlineData("absent", "dot-neutral")]
+    public void StockfishAvailabilitySetsItsDot(string availability, string dot)
+    {
+        var handler = new FakeHandler(_ => Canned.Json($$"""{"copilot":"Ready","copilotDetail":"signed in","database":"healthy","stockfish":"{{availability}}"}"""));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Contains(dot, cut.Find("[data-service='stockfish'] .dot").ClassList));
+        Assert.Contains($"Stockfish: {availability}", cut.Find(".status-strip").TextContent);
+    }
+
+    [Fact]
+    public void AbsentStockfishSaysThatMoveQualityIsDisabled()
+    {
+        var handler = new FakeHandler(_ => Canned.Json("""{"copilot":"Ready","copilotDetail":"signed in","database":"healthy","stockfish":"absent"}"""));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Equal("move quality disabled", cut.Find("[data-service='stockfish']").GetAttribute("title")));
+    }
+
+    [Fact]
+    public void AvailableStockfishHasNoTooltip()
+    {
+        var handler = new FakeHandler(_ => Canned.Json("""{"copilot":"Ready","copilotDetail":"signed in","database":"healthy","stockfish":"available"}"""));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Contains("Stockfish: available", cut.Find(".status-strip").TextContent));
+        Assert.False(cut.Find("[data-service='stockfish']").HasAttribute("title"));
+    }
+
     [Fact]
     public void SaysSoWhenTheApiCannotBeReached()
     {
