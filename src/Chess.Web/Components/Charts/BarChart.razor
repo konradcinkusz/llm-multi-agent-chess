@@ -7,7 +7,7 @@
     }
     else
     {
-        <svg class="chart-svg" viewBox="@_viewBox" role="img" aria-label="@Title">
+        <svg class="chart-svg" width="@Num(Width)" viewBox="@_viewBox" role="img" aria-label="@Title">
             @foreach (var tick in _ticks)
             {
                 <line class="chart-grid" x1="@Num(PlotLeft)" y1="@Num(_scale.Map(tick))" x2="@Num(PlotRight)" y2="@Num(_scale.Map(tick))" />
@@ -17,11 +17,12 @@
             @for (var i = 0; i < Items.Count; i++)
             {
                 var item = Items[i];
-                var x = PlotLeft + i * _band + Gap / 2;
+                var thickness = Math.Min(_band - Gap, MaxBarThickness);
+                var x = PlotLeft + i * _band + (_band - thickness) / 2;
                 var top = _scale.Map(item.Value);
-                var centre = x + (_band - Gap) / 2;
+                var centre = x + thickness / 2;
                 <g class="chart-bar" data-bar="@item.Label">
-                    <path d="@VerticalBar(x, top, _band - Gap, PlotBottom - top)" style="fill: @Colour">
+                    <path d="@VerticalBar(x, top, thickness, PlotBottom - top)" style="fill: @Colour">
                         <title>@item.Label: @Fixed(item.Value, ValueFormat)</title>
                     </path>
                     <ChartText class="chart-value" x="@Num(centre)" y="@Num(top - 6)" text-anchor="middle">@Fixed(item.Value, ValueFormat)</ChartText>

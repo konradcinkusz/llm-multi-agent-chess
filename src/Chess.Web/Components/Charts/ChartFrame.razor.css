@@ -1,13 +1,14 @@
 /* Chart tokens (03 §6.1). Light values are the default; dark values apply under prefers-color-scheme.
    Charts read colour only through these custom properties, so the two themes never diverge. */
 .chart-frame {
-    --chart-surface: #fcfcfb;
-    --chart-ink: #0b0b0b;
-    --chart-ink-2: #52514e;
-    --chart-muted: #898781;
-    --chart-grid: #e1e0d9;
-    --chart-baseline: #c3c2b7;
-    --chart-neutral: #898781;
+    --chart-surface: var(--surface, #ffffff);
+    --chart-border: var(--border, #dde1e7);
+    --chart-ink: var(--text, #14181f);
+    --chart-ink-2: var(--text-2, #4a5462);
+    --chart-muted: var(--text-3, #646d79);
+    --chart-grid: var(--border, #dde1e7);
+    --chart-baseline: var(--border-strong, #c3cad3);
+    --chart-neutral: var(--text-3, #646d79);
     --chart-accent: var(--chart-series-0);
     --chart-series-0: #2a78d6;
     --chart-series-1: #eb6834;
@@ -21,22 +22,30 @@
     --chart-diverge-high: #e34948;
     --chart-diverge-mid: #f0efec;
 
+    /* Card-like: inner padding keeps the labels off the edge; overflow-x scrolls a wide chart inside its frame at phone width. */
+    display: block;
+    min-width: 0;
+    max-width: 100%;
     margin: 0 0 24px;
-    padding: 0;
+    padding: var(--space-4, 16px);
+    overflow-x: auto;
+    border: 1px solid var(--chart-border);
+    border-radius: var(--radius-lg, 14px);
     background: var(--chart-surface);
     color: var(--chart-ink);
-    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 13px/1.4 var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
 }
 
 @media (prefers-color-scheme: dark) {
     .chart-frame {
-        --chart-surface: #1a1a19;
-        --chart-ink: #f0efec;
-        --chart-ink-2: #c3c2b7;
-        --chart-muted: #898781;
-        --chart-grid: #2c2c2a;
-        --chart-baseline: #383835;
-        --chart-neutral: #898781;
+        --chart-surface: var(--surface, #171a20);
+        --chart-border: var(--border, #2a2f38);
+        --chart-ink: var(--text, #e8eaee);
+        --chart-ink-2: var(--text-2, #b4bac4);
+        --chart-muted: var(--text-3, #8e95a0);
+        --chart-grid: var(--border, #2a2f38);
+        --chart-baseline: var(--border-strong, #3a414c);
+        --chart-neutral: var(--text-3, #8e95a0);
         --chart-series-0: #3987e5;
         --chart-series-1: #d95926;
         --chart-series-2: #199e70;
@@ -66,10 +75,9 @@
     color: var(--chart-ink-2);
 }
 
+/* The SVG takes its width from the width attribute (its viewBox width), so text is never scaled down. */
 .chart-frame ::deep .chart-svg {
     display: block;
-    width: 100%;
-    max-width: 720px;
     height: auto;
     overflow: visible;
 }
@@ -152,6 +160,7 @@
 
 .chart-frame ::deep .chart-swatch {
     display: inline-block;
+    flex: none;
     width: 12px;
     height: 12px;
     border-radius: 3px;
