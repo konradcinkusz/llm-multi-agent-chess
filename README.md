@@ -130,6 +130,25 @@ no configuration, no secrets, no attempts of aborted games.
 | `PublicUrl` | `https://<owner>.github.io/<repo>/`, derived from a GitHub remote | The address shown on the page. |
 | `AutoPublishMinutes` | `0` (off) | Publish every N minutes when a game has finished since the last publish. A restart does not publish by itself. |
 
+## Benchmark your own model
+
+Benchmark one model, or one model at one reasoning effort (`claude-sonnet-4.5@medium`), against every other model: 30 rated
+games against each opponent, colours alternating. The result is a Markdown report to share, and the same numbers as JSON.
+Your own model works too, behind any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio).
+
+With the fake profile running (`dotnet run --project src/Chess.AppHost --launch-profile fake`), this writes the report to
+`~/benchmarks`:
+
+```bash
+scripts/benchmark.sh --candidate fake-a@high --out-dir ~/benchmarks
+```
+
+On Windows or in PowerShell 7, use `pwsh ./scripts/benchmark.ps1 -Candidate fake-a@high -OutDir ~/benchmarks`. For Copilot models,
+run the default profile and use an id from `/api/models`. The scripts refuse to run under CI.
+
+The guide covers the cost and how to cut it, configuring a custom model and keeping its key out of files, and how to read the
+intervals: [docs/BENCHMARK.md](docs/BENCHMARK.md).
+
 ## Cost: every move is a Copilot request
 
 **Each LLM move is one Copilot request, and each rejected attempt is another.** Premium models cost more: each model has a premium multiplier, shown on the planner and tournament forms, and the estimate is shown before you save or confirm anything. Retries are not in the estimate, so a real bill can be higher.
