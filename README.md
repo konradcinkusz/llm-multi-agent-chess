@@ -103,6 +103,33 @@ The planner (`/broadcast/plan`) shows every slot and the premium-request estimat
 
 The full runbook is [docs/BROADCAST.md](docs/BROADCAST.md): planning, OBS setup, YouTube settings, keeping the machine awake, and what happens on a restart or a Copilot outage.
 
+## Public results site
+
+The results, head-to-head, games, tournaments and this one-page description can be published as a static site on
+GitHub Pages ([ADR-013](docs/architecture/05-DECISIONS.md)). The app makes a snapshot on your machine and pushes it to the
+`gh-pages` branch. Nothing runs online: no server, no database and no script on the public side, and the site lags the
+live app by at most the auto-publish interval. The live game stays on YouTube.
+
+**One-time setting.** On GitHub: Settings → Pages → Source: *Deploy from a branch*, branch `gh-pages`, folder `/ (root)`.
+The `deploy-pages` workflow no longer deploys anything; it only checks that `docs/index.html` still assembles.
+
+**Publishing.** Open `/admin/site` in the app. *Export* writes the site to `Arena:Site:ExportDirectory` (the folder is
+emptied first). *Publish* exports afresh and force-pushes the export to `gh-pages` as one commit, so the branch never
+grows a history. The app uses the `git` on your machine and its existing credentials; it stores none. A failed step is
+shown on the page with git's message, and `main` and your working tree are never touched.
+
+**What becomes public.** Everything on the site, including prompts, replies, reasoning and costs. Nothing else is sent:
+no configuration, no secrets, no attempts of aborted games.
+
+| Option (`Arena:Site:…`) | Default | Meaning |
+|---|---|---|
+| `Remote` | the `origin` of the repository the app runs from | Where to push. A local path also works. |
+| `Branch` | `gh-pages` | The branch GitHub Pages serves. |
+| `WorkDir` | a folder in the system temp directory | The publisher's own clone, deleted and recreated on each publish. Give it a folder of its own. |
+| `ExportDirectory` | a folder in the system temp directory | Where the export is written, emptied before each export. |
+| `PublicUrl` | `https://<owner>.github.io/<repo>/`, derived from a GitHub remote | The address shown on the page. |
+| `AutoPublishMinutes` | `0` (off) | Publish every N minutes when a game has finished since the last publish. A restart does not publish by itself. |
+
 ## Cost: every move is a Copilot request
 
 **Each LLM move is one Copilot request, and each rejected attempt is another.** Premium models cost more: each model has a premium multiplier, shown on the planner and tournament forms, and the estimate is shown before you save or confirm anything. Retries are not in the estimate, so a real bill can be higher.
