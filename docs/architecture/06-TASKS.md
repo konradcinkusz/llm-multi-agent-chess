@@ -809,3 +809,106 @@ strip shows `available` with a success dot and `absent` with a neutral dot and t
 **Done when:** API tests: an analyzer that is not available gives `Stockfish = "absent"`, an available one `"available"`, a
 missing check `"unknown"`; bUnit: `absent` renders a neutral dot, `available` a success dot. No contract shape changes
 (`StatusDto` keeps its four strings).
+
+## Live game transparency and cost (owner request 2026-10-25, 03 §10, ADR-012)
+
+The owner played real games and could not tell who was to move or what happened on each move, had no view of the
+models' reasoning or of the messages exchanged with the engine, got no token or dollar figures, and saw "multiplier
+unknown" for every Copilot model (cause: AI-credit billing, 03 §10). The contracts are already on `main` (03 §10.1).
+G1 and G2 run in parallel; G3 starts when U4 and G2 are merged; G4 after G3; G5 when U5 and G2 are merged; G6 last.
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| G1 | Gateway: tokens, reasoning, AI credits and model prices from the SDK | — | todo |
+| G2 | API: store and stream every attempt with usage; rejection kinds; usage endpoint; model prices | — | todo |
+| G3 | Live game page: player bars, turn, move table, engine log, game summary, model prices | U4, G2 | todo |
+| G4 | Replay page: the same move table, engine log and summary for stored games | G3 | todo |
+| G5 | Estimates in AI credits and USD on the tournament form and the broadcast planner | U5, G2 | todo |
+| G6 | Docs: README, RATING.md §8, BROADCAST.md §2, CLAUDE.md, smoke script output | G1–G5 | todo |
+
+Common **Verify** for G tasks: `dotnet build Chess.sln -warnaserror`; `E2E_CHROMIUM_PATH=<chromium> dotnet test Chess.sln`;
+for UI tasks the 07-UI-STYLE §7 screenshots.
+
+### G1 — Gateway: tokens, reasoning, AI credits and model prices from the SDK
+
+**Owns:** `src/Chess.Llm/**`, `tests/Chess.Llm.Tests/**`, `scripts/smoke-copilot.sh`.
+**Do:** in `CopilotLlmGateway`, fill `LlmModelInfo.Pricing` from `ModelInfo.Billing.TokenPrices` (keep the multiplier when
+present); per reply, sum `InputTokens`, `OutputTokens`, `ReasoningTokens`, `CacheReadTokens` and `CopilotUsage.TotalNanoAiu`
+over the reply's `AssistantUsageEvent`s (credits = nano AIU / 1e9; null when no event reported one, and when
+`AiCreditsStatus` is `unavailable`), and take the reasoning from the final `AssistantMessageData.ReasoningText`, else the
+concatenated `AssistantReasoningEvent` contents of the reply. Find out from the SDK docs and the RPC surface what unit
+`models.listTokenPriceUnits` reports and record it, with the 1 AIU = 1 credit assumption, in `src/Chess.Llm/README.md`;
+log each model's raw billing at Debug on startup. `FakeLlmGateway`: deterministic usage (input ≈ prompt length / 4, output
+≈ reply length / 4, a few reasoning tokens), a short deterministic reasoning text that names the chosen move, prices for
+`fake-a` and `fake-b` (e.g. 1.0 / 4.0 credits per 1 000 000 tokens) and `AiCredits` computed from them, so the whole cost
+path shows non-zero values on the fake profile. `scripts/smoke-copilot.sh`: also print, per attempt, the tokens, credits
+and whether reasoning was present, and the game's `/usage` (after G2; if G2 is not merged yet, print what exists and leave
+a TODO line for `/usage` in the PR).
+**Done when:** unit tests: the usage aggregation (several usage events in one reply, missing fields, unavailable credits),
+the reasoning selection (message text first, events second, none), the price mapping, and the fake's determinism and
+non-zero usage; `PublicSurfaceTests` still pass.
+
+### G2 — API: store and stream every attempt with usage; rejection kinds; usage endpoint; model prices
+
+**Owns:** `src/Chess.Api/**` except `Tournaments/**`, `Broadcast/**` and `Catalog/StatusReporter.cs`;
+`tests/Chess.Api.Tests/**` except `Tournaments/**`, `Broadcast/**` and `Catalog/StatusReporter*`.
+**Do:**
+1. `move_attempts` gets `reasoning`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `cached_input_tokens`,
+   `ai_credits`, `rejection_kind` (one EF migration). The player and the runner store them for every attempt, legal or not.
+2. Publish `AttemptRecorded` after each attempt is stored (before `MovePlayed` or `AttemptRejected`).
+3. Rejection kinds (03 §10.3) decided in the player: `unparseable`, `illegal`, `ambiguous` (add the check in the player, not
+   in `Chess.Engine`: count the legal moves whose SAN without disambiguation equals the candidate), `timeout`, `error`;
+   the `AttemptRejected.Reason` text names the kind and the candidate. Default `Players:MoveTimeoutSeconds` = 180.
+4. `GET /api/games/{id}/usage` → `GameUsageDto` per 03 §10.2, with `CostOptions` (`Arena:Cost:UsdPerAiCredit`, 0.01) and a
+   pure `GameCostCalculator` (estimate from the model's prices when no cost was reported).
+5. `GET /api/models`: `ModelDto.Pricing` in USD per 1M tokens; hide the Auto model unless `Arena:ShowAutoModel` (03 §10.2).
+6. `GET /api/attempts`: the new `AttemptDto` fields.
+**Done when:** tests for each item: an attempt row keeps all usage fields; the SSE stream of a fake game carries an
+`AttemptRecorded` for every attempt with the prompt and reply; each rejection kind (prose → `unparseable`, a legal-looking
+SAN that is not legal → `illegal`, `Rc7` with two rooks able to reach c7 → `ambiguous`, a timing-out conversation →
+`timeout`); the calculator for every cost basis (free, reported, estimated, partial, unknown) and the USD rate; `/usage` for
+a finished fake game is non-zero and its totals equal the sum of the attempts; the models endpoint maps prices and hides
+`auto`. The migration applies on the InMemory provider and `dotnet ef migrations` shows it.
+
+### G3 — Live game page: player bars, turn, move table, engine log, game summary, model prices
+
+**Owns:** `src/Chess.Web/Components/Pages/Play/**`, a new `src/Chess.Web/Components/Shared/Game/**` (reusable
+`PlayerBar`, `MoveTable`, `EngineLog`, `GameUsageSummary`), `src/Chess.Web/Components/Shared/ChessBoardSvg.razor`
+(last-move and check highlights), `src/Chess.Web/Api/ArenaApiClient.cs` (usage call), `tests/Chess.Web.Tests/Play/**`,
+`tests/Chess.Web.Tests/Components/**` for the shared components, `tests/Chess.E2E/LiveGameJourney.cs`.
+**Do:** 03 §10.4 on the live page, styled with 07-UI-STYLE classes. Read `AttemptRecorded` from the stream; load
+`/api/attempts?gameId=` and `/api/games/{id}/usage` when a page opens on a running or finished game and after
+`GameFinished`. The model pickers show the price (`$3.00 / $15.00 per 1M tokens`), not "multiplier unknown".
+**Done when:** bUnit: the side to move and "attempt n of 3" follow `MoveStarted`/`AttemptRecorded`; the move table numbers
+moves in pairs and marks retries; the log shows prompt, reply and reasoning, and the "did not expose its reasoning" text;
+each rejection kind renders its badge; the summary renders every cost basis and the rate; the picker shows prices and
+"price unknown". The E2E live-game journey also checks the turn indicator, one log entry and the summary on the fake
+profile. Screenshots of a running and a finished fake game, light, dark and phone.
+
+### G4 — Replay page: the same move table, engine log and summary for stored games
+
+**Owns:** `src/Chess.Web/Components/Pages/Games/**`, `tests/Chess.Web.Tests/Games/**`, `tests/Chess.E2E/ReplayJourney.cs`.
+**Do:** `/games/{id}` uses G3's `MoveTable`, `EngineLog` (entries of the selected ply highlighted as you step) and
+`GameUsageSummary`; the games list gets a cost column (estimated USD, "—" when unknown).
+**Done when:** bUnit for the three parts on a stored game and for the cost column; E2E replay journey checks the log and
+the summary.
+
+### G5 — Estimates in AI credits and USD on the tournament form and the broadcast planner
+
+**Owns:** `src/Chess.Api/Tournaments/**`, `src/Chess.Api/Broadcast/**` (estimate code only), `src/Chess.Web/Components/Pages/Tournaments/**`,
+`src/Chess.Web/Components/Pages/Broadcast/Plan*`, the matching tests, and additive fields on the tournament and broadcast
+estimate DTOs (API and web copies, with round-trip tests) — authorised by the supervisor for this task only.
+**Do:** estimate credits per model = expected moves × (average input and output tokens per move of that model in stored
+games, else `Arena:Cost:AssumedInputTokensPerMove` 700 and `AssumedOutputTokensPerMove` 300) × the model's prices; show
+credits and USD per model and in total, with the basis ("from N past moves" or "assumed"); keep the premium-request figure
+only for models that still report a multiplier. The model checkboxes show prices instead of "multiplier unknown".
+**Done when:** tests for the estimator (history, assumption, unknown price, multiplier model) and for both forms showing
+USD and the basis; screenshots of both forms with a priced fake model.
+
+### G6 — Docs
+
+**Owns:** `README.md`, `docs/RATING.md` (§8 wording only), `docs/BROADCAST.md` (§2), `CLAUDE.md`, `src/Chess.Llm/README.md`
+(if G1 left gaps).
+**Do:** describe the live page, the engine log, the cost model (AI credits, USD rate, basis, the unverified assumptions),
+the 180 s timeout, `/api/status` Stockfish `available | absent` (U7), `Arena:ShowAutoModel`; replace premium-request
+wording where it is now wrong; a lessons-learned entry for the multiplier. Every command shown is one that was run.

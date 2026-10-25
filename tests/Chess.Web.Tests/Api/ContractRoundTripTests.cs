@@ -79,6 +79,23 @@ public class ContractRoundTripTests
     }
 
     [Fact]
+    public void EveryUsageAndPricingContractRoundTrips()
+    {
+        AssertRoundTrip<ApiDto.ModelDto, WebDto.ModelDto>(
+            new ApiDto.ModelDto("claude-sonnet", "Claude Sonnet", null, true, new ApiDto.ModelPricingDto(3.0, 15.0, 0.3)));
+        AssertRoundTrip<ApiDto.ModelDto, WebDto.ModelDto>(
+            new ApiDto.ModelDto("mystery", "Mystery", null, true, new ApiDto.ModelPricingDto(null, null, null)));
+        AssertRoundTrip<ApiDto.AttemptDto, WebDto.AttemptDto>(
+            new ApiDto.AttemptDto(Id, 14, 1, "claude-sonnet", "Legal moves: ...", "The main line is 7...h6. h6", null, false,
+                41000, "Unparseable: the reply is not one move.", At, "Keres Attack: h6 stops g5.", 1200, 310, 240, 0.0057,
+                "unparseable"));
+        var white = new ApiDto.SideUsageDto("white", "claude-sonnet", 41, 52000, 9000, 6100, 12000, 0.31, 0.0031, "reported");
+        var black = new ApiDto.SideUsageDto("black", "random", 0, 0, 0, 0, 0, null, null, "free");
+        AssertRoundTrip<ApiDto.SideUsageDto, WebDto.SideUsageDto>(white);
+        AssertRoundTrip<ApiDto.GameUsageDto, WebDto.GameUsageDto>(new ApiDto.GameUsageDto(Id, white, black, 0.31, 0.0031, 0.01));
+    }
+
+    [Fact]
     public void TheApiSerialisesCamelCaseNames()
     {
         var json = JsonSerializer.Serialize(new ApiDto.MoveDto(1, "white", "e4", "fen", 1, 5, null, null, null, null), ApiJson);
