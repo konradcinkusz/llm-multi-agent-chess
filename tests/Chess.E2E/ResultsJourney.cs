@@ -15,6 +15,11 @@ public sealed class ResultsJourney(ArenaFixture arena)
         "big-picture", "rating-history", "head-to-head", "breakdown", "move-quality", "strength-cost", "table",
     ];
 
+    // The page loads its data in its first render, and the interactive circuit that starts after the prerendered page
+    // runs that load again: until it finishes the page shows "Loading results…" and no sections. Every assertion on
+    // the loaded page waits this long, which is what a loaded page needs on a busy machine.
+    private const float LoadTimeout = 60_000;
+
     [Fact]
     public async Task BigPictureLeadsAndNamesBothPlayers()
     {
@@ -23,26 +28,38 @@ public sealed class ResultsJourney(ArenaFixture arena)
         await using var context = await arena.NewContextAsync();
         var page = await context.NewPageAsync();
 
-        await page.GotoAsync("/results");
+        // The server prerenders the page after its data loads, so the load event waits on the same work.
+        await page.GotoAsync("/results", new() { Timeout = LoadTimeout });
 
         // The ranking covers every rated game in the database, so the leader is whoever the table ranks first.
         var leaderboard = page.GetByRole(AriaRole.Region, new() { Name = "Leaderboard table", Exact = true });
         var leader = leaderboard.GetByRole(AriaRole.Row).Nth(1).GetByRole(AriaRole.Cell).Nth(1);
-        await Expect(leader).ToHaveTextAsync(new Regex(".+"), new() { Timeout = 60_000 });
+        await Expect(leader).ToHaveTextAsync(new Regex(".+"), new() { Timeout = LoadTimeout });
         var leaderName = (await leader.TextContentAsync())!.Trim();
 
         var bigPicture = page.GetByRole(AriaRole.Region, new() { Name = "Big picture", Exact = true });
         var headline = bigPicture.GetByRole(AriaRole.Paragraph).Filter(new() { HasText = "Best overall:" });
-        await Expect(headline).ToHaveTextAsync(new Regex($@"Best overall: {Regex.Escape(leaderName)}\b"));
-        await Expect(bigPicture.GetByRole(AriaRole.Img, new() { Name = "Arena score by model", Exact = true })).ToBeVisibleAsync();
+        await Expect(headline).ToHaveTextAsync(
+            new Regex($@"Best overall: {Regex.Escape(leaderName)}\b"), new() { Timeout = LoadTimeout });
+        await Expect(bigPicture.GetByRole(AriaRole.Img, new() { Name = "Arena score by model", Exact = true }))
+            .ToBeVisibleAsync(new() { Timeout = LoadTimeout });
 
-        // The Big Picture is the first section on the page, and the sections follow in the fixed order.
-        await Expect(page.Locator("section").First).ToHaveAttributeAsync("data-section", "big-picture");
-        var sections = await page.Locator("section[data-section]")
-            .EvaluateAllAsync<string[]>("sections => sections.map(section => section.dataset.section)");
-        Assert.Equal(SectionOrder, sections);
+        // The Big Picture is the first section on the page, and the sections follow in the fixed order. These are
+        // web-first assertions: a reload can replace the sections between two reads, so a one-shot read of them can
+        // see none. Each position is retried until the loaded page shows it.
+        await Expect(page.Locator("section").First)
+            .ToHaveAttributeAsync("data-section", "big-picture", new() { Timeout = LoadTimeout });
+        var sections = page.Locator("section[data-section]");
+        await Expect(sections).ToHaveCountAsync(SectionOrder.Length, new() { Timeout = LoadTimeout });
+        for (var index = 0; index < SectionOrder.Length; index++)
+        {
+            await Expect(sections.Nth(index))
+                .ToHaveAttributeAsync("data-section", SectionOrder[index], new() { Timeout = LoadTimeout });
+        }
 
-        await Expect(leaderboard.GetByRole(AriaRole.Cell, new() { Name = Players.Random, Exact = true })).ToBeVisibleAsync();
-        await Expect(leaderboard.GetByRole(AriaRole.Cell, new() { Name = Players.FakeB, Exact = true })).ToBeVisibleAsync();
+        await Expect(leaderboard.GetByRole(AriaRole.Cell, new() { Name = Players.Random, Exact = true }))
+            .ToBeVisibleAsync(new() { Timeout = LoadTimeout });
+        await Expect(leaderboard.GetByRole(AriaRole.Cell, new() { Name = Players.FakeB, Exact = true }))
+            .ToBeVisibleAsync(new() { Timeout = LoadTimeout });
     }
 }
