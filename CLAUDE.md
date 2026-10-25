@@ -46,7 +46,7 @@ src/
                           Games, Admin, Broadcast)
 tests/
   Chess.Engine.Tests/  Chess.Rating.Tests/  Chess.Llm.Tests/  Chess.Api.Tests/  Chess.Web.Tests/
-  Chess.E2E/              Playwright harness (only the driver smoke test so far)
+  Chess.E2E/              Playwright journeys on the fake profile: live game, replay, results, tournament (CI job `e2e`)
 docs/  RATING.md, BROADCAST.md, EVALS.md (linked from the README); architecture/ (owned by the supervisor)
 scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh (owner's live run), broadcast-smoke.sh (fake profile)
 ```
@@ -82,6 +82,7 @@ These hold on `main`. The CI jobs named in brackets enforce the ones they name.
 - Results is the first item of the navigation and its Big Picture comes first on the page (03 §6.1).
 - A broadcast game is an ordinary rated game; pacing applies only to games that belong to a broadcast slot (03 §9).
 - The Copilot health check is never Unhealthy: a missing login is Degraded and the rest of the app keeps running (P8).
+- The API and the web app answer 403 to a request from another site: a foreign `Origin`, or `Sec-Fetch-Site: cross-site` (ADR-006, amended). [Tests: `Chess.Api.Tests` `OriginGuardTests.Foreign_origin_cannot_start_a_broadcast_schedule`; `Chess.Web.Tests` `OriginGuardTests.Foreign_origin_cannot_negotiate_a_blazor_circuit`]
 
 ## Working rules
 
@@ -111,3 +112,9 @@ Fixes merged to `main`, with their pull request numbers in brackets. Keep them i
   the Results verdict and the head-to-head reading use it (#53).
 - **The CI secret scan reads only commits reachable from `HEAD`.** `gitleaks` runs with `--log-opts="HEAD"`. With
   `fetch-depth: 0` it would scan every branch, so one unmerged branch could fail unrelated pull requests (see the comment in `ci.yml`).
+- **The unit job must not need a browser.** `build and test` excludes `Chess.E2E` with `--filter "FullyQualifiedName!~Chess.E2E"`,
+  and the journeys run only in the `e2e` job. `ArenaFixture` fails fast with the `E2E_CHROMIUM_PATH` instruction rather than
+  downloading a browser during a test run (#64).
+- **Broadcast is outside the Copilot cap by decision.** `Arena:MaxConcurrentGames` caps games from `POST /api/games` and
+  tournaments only. A broadcast plays one game at a time beside them (ADR-011, amended). Do not run a tournament during a
+  broadcast, or lower the tournament's concurrency. Changing this needs a new supervisor decision, not a quiet change to the runner.
