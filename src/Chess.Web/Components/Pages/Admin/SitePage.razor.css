@@ -1,0 +1,17 @@
+/* Public site page (ADR-013): facts in a definition list, actions in a card. */
+
+.site-facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 1rem;
+    margin: 0;
+}
+
+.site-facts dt {
+    color: var(--text-3);
+}
+
+.site-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
