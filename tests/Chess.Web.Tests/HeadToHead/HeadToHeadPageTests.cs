@@ -69,7 +69,7 @@ public class HeadToHeadPageTests
         var cut = ctx.Render<HeadToHeadPage>();
 
         cut.WaitForAssertion(() => Assert.Contains("gpt is slightly better than claude.", cut.Markup));
-        Assert.Contains("0.62 for gpt", cut.Markup);
+        Assert.Contains("0.62 for gpt", cut.Find(".h2h-hero").TextContent);
         Assert.Contains("(95 % interval 0.55 – 0.69)", cut.Markup);
         Assert.Contains("+82.4 Elo for gpt against claude", cut.Markup);
         Assert.Contains("2 direct games; gpt scored 0.75 per game.", cut.Markup);
@@ -84,6 +84,11 @@ public class HeadToHeadPageTests
         Assert.Equal("1-0", row.Children[3].TextContent);
         Assert.Equal("1", row.Children[5].TextContent);
         Assert.Equal("/games/11111111-1111-1111-1111-111111111111", row.Children[6].QuerySelector("a")!.GetAttribute("href"));
+
+        // The RQC is the hero number of the reading card, and the direct games sit in their own card, the table in a .table-wrap.
+        Assert.Equal("0.62", cut.Find(".h2h-rqc").TextContent);
+        Assert.Contains("card", cut.Find("section[aria-labelledby='h2h-games']").ClassName);
+        Assert.NotNull(cut.Find(".table-wrap > table.h2h-games"));
     }
 
     [Fact]
@@ -105,7 +110,7 @@ public class HeadToHeadPageTests
         cut.WaitForAssertion(() => Assert.Contains(
             "gpt is slightly better than claude. Not yet significant: too few games (need 20 rated games per model).",
             cut.Markup));
-        Assert.Contains("0.62 for gpt", cut.Markup);
+        Assert.Contains("0.62 for gpt", cut.Find(".h2h-hero").TextContent);
     }
 
     [Fact]
@@ -145,7 +150,7 @@ public class HeadToHeadPageTests
         cut.WaitForAssertion(() => Assert.Contains("gpt is slightly better than claude.", cut.Markup));
         Assert.Empty(cut.FindAll("table.h2h-games"));
         Assert.Empty(cut.FindAll("#h2h-games"));
-        Assert.Contains("0.62 for gpt", cut.Markup);
+        Assert.Contains("0.62 for gpt", cut.Find(".h2h-hero").TextContent);
     }
 
     [Fact]

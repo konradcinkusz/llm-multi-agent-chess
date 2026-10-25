@@ -8,11 +8,14 @@
 
 <PageTitle>Head-to-head · LLM Chess Arena</PageTitle>
 
-<h1>Head-to-head</h1>
+<div class="page-header">
+    <h1>Head-to-head</h1>
+    <p class="page-lede">Compare two models: how strong each is against the other, and what their direct games say.</p>
+</div>
 
 @if (models is null && modelsError is null)
 {
-    <p>Loading models…</p>
+    <p class="muted">Loading models…</p>
 }
 else if (modelsError is not null)
 {
@@ -20,115 +23,118 @@ else if (modelsError is not null)
 }
 else
 {
-    <div class="h2h-pickers">
-        <label>
-            Model A
-            <select id="model-a" @bind="a" @bind:after="CompareAsync">
-                @foreach (var model in models!)
-                {
-                    <option value="@model.Id">@Describe(model)</option>
-                }
-            </select>
-        </label>
-        <label>
-            Model B
-            <select id="model-b" @bind="b" @bind:after="CompareAsync">
-                @foreach (var model in models!)
-                {
-                    <option value="@model.Id">@Describe(model)</option>
-                }
-            </select>
-        </label>
-    </div>
+    <div class="stack-lg">
+        <div class="field-row">
+            <label class="field">
+                Model A
+                <select id="model-a" @bind="a" @bind:after="CompareAsync">
+                    @foreach (var model in models!)
+                    {
+                        <option value="@model.Id">@Describe(model)</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                Model B
+                <select id="model-b" @bind="b" @bind:after="CompareAsync">
+                    @foreach (var model in models!)
+                    {
+                        <option value="@model.Id">@Describe(model)</option>
+                    }
+                </select>
+            </label>
+        </div>
 
-    @if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
-    {
-        <p>At least two models are needed to compare.</p>
-    }
-    else if (a == b)
-    {
-        <p>Choose two different models to compare.</p>
-    }
-    else if (pairError is not null)
-    {
-        <p class="status-error" role="alert">@pairError</p>
-    }
-    else if (pair is null)
-    {
-        <p>Loading the comparison…</p>
-    }
-    else
-    {
-        <section aria-labelledby="h2h-reading">
-            <h2 id="h2h-reading">Reading</h2>
-            <p class="h2h-reading"><strong>@VerbalReading.Sentence(pair, bothEstablished)</strong></p>
-            <p class="muted">
-                The coefficient uses every game in the arena, not only the games between these two.
-                The direct record is shown next to it, never instead of it.
-            </p>
-
-            <dl class="h2h-figures">
-                <dt>Relative quality, RQC</dt>
-                <dd>
-                    @Format(pair.Rqc) for @pair.A
-                    <span class="muted">(95 % interval @Format(pair.RqcLow) – @Format(pair.RqcHigh))</span>
-                </dd>
-
-                <dt>Expected score</dt>
-                <dd>@Format(pair.ExpectedScore) for @pair.A</dd>
-
-                <dt>Quality share</dt>
-                <dd>@Format(pair.QualityShare) for @pair.A</dd>
-
-                <dt>Elo-equivalent</dt>
-                <dd>@EloText(pair)</dd>
-
-                <dt>Direct record</dt>
-                <dd>@DirectRecordText(pair)</dd>
-            </dl>
-        </section>
-
-        @if (directGames is not null)
+        @if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
         {
-            <section aria-labelledby="h2h-games">
-                <h2 id="h2h-games">Direct games</h2>
-                @if (directGames.Count == 0)
-                {
-                    <p>No games between these two models yet.</p>
-                }
-                else
-                {
-                    <table class="h2h-games">
-                        <thead>
-                            <tr>
-                                <th scope="col">Created</th>
-                                <th scope="col">White</th>
-                                <th scope="col">Black</th>
-                                <th scope="col">Result</th>
-                                <th scope="col">Rated</th>
-                                <th scope="col">@pair.A score</th>
-                                <th scope="col"><span class="visually-hidden">Game</span></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var game in directGames)
-                            {
-                                <tr>
-                                    <td>@game.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC</td>
-                                    <td>@game.White.ModelId</td>
-                                    <td>@game.Black.ModelId</td>
-                                    <td>@(game.State == "finished" ? game.Result : game.State)</td>
-                                    <td>@(game.Rated ? "yes" : "no")</td>
-                                    <td>@ScoreText(DirectGames.ScoreFor(game, pair.A))</td>
-                                    <td><a href="/games/@game.Id">Open</a></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-            </section>
+            <p class="muted">At least two models are needed to compare.</p>
         }
-    }
+        else if (a == b)
+        {
+            <p class="muted">Choose two different models to compare.</p>
+        }
+        else if (pairError is not null)
+        {
+            <p class="status-error" role="alert">@pairError</p>
+        }
+        else if (pair is null)
+        {
+            <p class="muted">Loading the comparison…</p>
+        }
+        else
+        {
+            <section class="card" aria-labelledby="h2h-reading">
+                <h2 id="h2h-reading" class="card-title">Reading</h2>
+                <p class="h2h-label muted">Relative quality, RQC</p>
+                <p class="h2h-hero">
+                    <span class="h2h-rqc">@Format(pair.Rqc)</span> <span class="h2h-for">for @pair.A</span>
+                    <span class="muted">(95 % interval @Format(pair.RqcLow) – @Format(pair.RqcHigh))</span>
+                </p>
+                <p class="h2h-reading"><strong>@VerbalReading.Sentence(pair, bothEstablished)</strong></p>
+                <p class="muted h2h-note">
+                    The coefficient uses every game in the arena, not only the games between these two.
+                    The direct record is shown next to it, never instead of it.
+                </p>
+
+                <dl class="h2h-figures">
+                    <dt>Expected score</dt>
+                    <dd>@Format(pair.ExpectedScore) for @pair.A</dd>
+
+                    <dt>Quality share</dt>
+                    <dd>@Format(pair.QualityShare) for @pair.A</dd>
+
+                    <dt>Elo-equivalent</dt>
+                    <dd>@EloText(pair)</dd>
+
+                    <dt>Direct record</dt>
+                    <dd>@DirectRecordText(pair)</dd>
+                </dl>
+            </section>
+
+            @if (directGames is not null)
+            {
+                <section class="card" aria-labelledby="h2h-games">
+                    <h2 id="h2h-games" class="card-title">Direct games</h2>
+                    @if (directGames.Count == 0)
+                    {
+                        <p class="muted">No games between these two models yet.</p>
+                    }
+                    else
+                    {
+                        <div class="table-wrap table-compact">
+                            <table class="h2h-games">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Created</th>
+                                        <th scope="col">White</th>
+                                        <th scope="col">Black</th>
+                                        <th scope="col">Result</th>
+                                        <th scope="col">Rated</th>
+                                        <th scope="col" class="num">@pair.A score</th>
+                                        <th scope="col"><span class="visually-hidden">Game</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var game in directGames)
+                                    {
+                                        <tr>
+                                            <td>@game.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC</td>
+                                            <td>@game.White.ModelId</td>
+                                            <td>@game.Black.ModelId</td>
+                                            <td>@(game.State == "finished" ? game.Result : game.State)</td>
+                                            <td>@(game.Rated ? "yes" : "no")</td>
+                                            <td class="num">@ScoreText(DirectGames.ScoreFor(game, pair.A))</td>
+                                            <td><a href="/games/@game.Id">Open</a></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+            }
+        }
+    </div>
 }
 
 @code {
