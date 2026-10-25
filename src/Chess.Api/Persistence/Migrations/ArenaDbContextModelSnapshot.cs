@@ -437,6 +437,10 @@ namespace Chess.Api.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Candidate")
+                        .HasColumnType("text")
+                        .HasColumnName("candidate");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -448,6 +452,13 @@ namespace Chess.Api.Persistence.Migrations
                     b.Property<int>("GamesPerPair")
                         .HasColumnType("integer")
                         .HasColumnName("games_per_pair");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("round_robin")
+                        .HasColumnName("kind");
 
                     b.Property<int>("MaxConcurrency")
                         .HasColumnType("integer")

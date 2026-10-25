@@ -2,6 +2,13 @@ using Chess.Api.Contracts;
 
 namespace Chess.Api.Tournaments;
 
+/// <summary>The values of <c>TournamentEntity.Kind</c>: a round robin (03 §5), or a benchmark gauntlet (03 §12.2).</summary>
+public static class TournamentKind
+{
+    public const string RoundRobin = "round_robin";
+    public const string Benchmark = "benchmark";
+}
+
 /// <summary>The values of <c>TournamentDto.Status</c> (03 §5.1).</summary>
 public static class TournamentStatus
 {

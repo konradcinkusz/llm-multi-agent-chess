@@ -1,3 +1,4 @@
+using Chess.Api.Catalog;
 using Chess.Api.Contracts;
 using Chess.Api.Games;
 using Microsoft.AspNetCore.Http;
@@ -16,6 +17,7 @@ public static class TournamentExtensions
     {
         builder.Services.AddSingleton<CostInputs>();
         builder.Services.AddSingleton<TournamentService>();
+        builder.Services.AddSingleton<Benchmarks.BenchmarkService>();
         builder.Services.AddHostedService<TournamentScheduler>();
         return builder;
     }
@@ -38,10 +40,12 @@ public static class TournamentExtensions
         endpoints.MapPost("/tournaments",async Task<Results<Created<TournamentCreatedDto>, ValidationProblem>> (
             CreateTournamentRequest request,
             TournamentService tournaments,
+            ModelCatalog catalog,
             IOptions<GameRunnerOptions> limits,
             CancellationToken ct) =>
         {
-            var errors = TournamentRules.Validate(request, limits.Value.MaxConcurrentGames);
+            var listing = await catalog.GetModelsAsync(ct);
+            var errors = TournamentRules.Validate(request, limits.Value.MaxConcurrentGames, listing);
             if (errors.Count > 0)
             {
                 return TypedResults.ValidationProblem(errors);

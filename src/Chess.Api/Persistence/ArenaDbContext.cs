@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Chess.Api.Broadcast;
+using Chess.Api.Tournaments;
 using Chess.Api.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -57,6 +58,7 @@ public sealed class ArenaDbContext(DbContextOptions<ArenaDbContext> options) : D
             e.Property(t => t.Models)
                 .HasConversion(ModelsConverter, ModelsComparer)
                 .HasColumnType("jsonb");
+            e.Property(t => t.Kind).HasDefaultValue(TournamentKind.RoundRobin);
         });
 
         modelBuilder.Entity<RatingSnapshotEntity>(e =>
