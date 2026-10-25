@@ -75,7 +75,7 @@
     color: var(--chart-ink-2);
 }
 
-/* The SVG takes its width from the width attribute (its viewBox width), so text is never scaled down. */
+/* The SVG fills its frame; its inline style keeps it between its natural width and 1.5 times it (ChartGeometry.FillStyle, U6). */
 .chart-frame ::deep .chart-svg {
     display: block;
     height: auto;

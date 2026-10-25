@@ -8,7 +8,8 @@
       "applicationUrl": "http://localhost:15070",
       "environmentVariables": {
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "fake": {
@@ -19,7 +20,8 @@
       "environmentVariables": {
         "ARENA_FAKE": "1",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

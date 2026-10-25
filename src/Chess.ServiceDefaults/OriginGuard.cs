@@ -21,6 +21,8 @@ public static class OriginGuard
 
     private const string OriginHeader = "Origin";
     private const string SecFetchSiteHeader = "Sec-Fetch-Site";
+    private const string SecFetchModeHeader = "Sec-Fetch-Mode";
+    private const string SecFetchDestHeader = "Sec-Fetch-Dest";
     private const string CrossSite = "cross-site";
     private static readonly string[] Hosts = ["localhost", "127.0.0.1", "[::1]"];
 
@@ -78,6 +80,14 @@ public static class OriginGuard
             return true;
         }
 
-        return string.Equals(request.Headers[SecFetchSiteHeader], CrossSite, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(request.Headers[SecFetchSiteHeader], CrossSite, StringComparison.OrdinalIgnoreCase)
+            && !IsTopLevelNavigation(request);
     }
+
+    // Following a link from another site (the Aspire dashboard is https, the web app http, which browsers call
+    // cross-site) is a plain page load. It changes nothing and the other site cannot read the response.
+    private static bool IsTopLevelNavigation(HttpRequest request) =>
+        (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
+        && string.Equals(request.Headers[SecFetchModeHeader], "navigate", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(request.Headers[SecFetchDestHeader], "document", StringComparison.OrdinalIgnoreCase);
 }

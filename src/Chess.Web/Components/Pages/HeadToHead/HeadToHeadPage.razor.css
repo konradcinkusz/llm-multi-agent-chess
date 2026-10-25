@@ -1,28 +1,53 @@
-.h2h-pickers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 16px;
+/* Head-to-head page (07 §6). The reading is a card: the RQC is the hero number, the verbal reading and the figures follow,
+   and the direct games are a second card. Colour comes from the tokens in app.css only. */
+
+.card-title {
+    margin-bottom: var(--space-3);
 }
 
-.h2h-pickers label {
+.h2h-label {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.h2h-hero {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 220px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+    margin: var(--space-1) 0 var(--space-3);
+    font-size: var(--text-lg);
+    color: var(--text-2);
+}
+
+.h2h-rqc {
+    color: var(--text);
+    font-size: var(--text-3xl);
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
 }
 
 .h2h-reading {
-    font-size: 1.125rem;
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-lg);
+}
+
+.h2h-note {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
 }
 
 .h2h-figures {
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 8px 24px;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-6);
+    margin: 0;
 }
 
 .h2h-figures dt {
+    color: var(--text-2);
     font-weight: 600;
 }
 
@@ -30,21 +55,21 @@
     margin: 0;
 }
 
+@media (max-width: 599.98px) {
+    .h2h-figures {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .h2h-figures dt {
+        margin-top: var(--space-3);
+    }
+}
+
+/* The table is the containing block of its visually hidden header, so that label stays inside the .table-wrap scroll box. */
 .h2h-games {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.h2h-games th,
-.h2h-games td {
-    padding: 6px 8px;
-    text-align: left;
-    border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
-}
-
-.muted {
-    opacity: 0.75;
-    font-size: 0.875rem;
+    position: relative;
+    font-size: var(--text-sm);
 }
 
 .visually-hidden {

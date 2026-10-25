@@ -105,7 +105,7 @@ are 36 px tall with `--radius-sm` corners and `--border-strong` borders.
 | `.empty-state` | centred muted message with an optional action link |
 | `.muted` | `--text-3` |
 | `.error-text` | `--danger` (the existing `.status-error` stays as an alias) |
-| `.progress` | 8 px track (`--surface-2`) with an `.progress-bar` fill (`--accent`; `--success` when finished) |
+| `.progress` | 8 px track (`--surface-2`) with an `.progress-bar` fill (`--accent`); add `.progress-bar-success` when finished (`--success`) |
 
 ## 5. App shell (owned by U1)
 

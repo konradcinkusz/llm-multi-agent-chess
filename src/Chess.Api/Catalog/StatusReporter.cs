@@ -12,6 +12,9 @@ namespace Chess.Api.Catalog;
 public sealed class StatusReporter(HealthCheckService health, ILlmGateway gateway)
 {
     private const string Unknown = "unknown";
+    private const string Healthy = "healthy";
+    private const string StockfishAvailable = "available";
+    private const string StockfishAbsent = "absent";
 
     public async Task<StatusDto> GetStatusAsync(CancellationToken ct)
     {
@@ -22,7 +25,24 @@ public sealed class StatusReporter(HealthCheckService health, ILlmGateway gatewa
             Copilot: gatewayStatus.State.ToString(),
             CopilotDetail: gatewayStatus.Detail,
             Database: Find(report, "database").Status,
-            Stockfish: Find(report, "stockfish").Status);
+            Stockfish: Stockfish(Find(report, "stockfish")));
+    }
+
+    // Absent Stockfish is Healthy (optional, not broken), so the verdict cannot tell it from available. The check's
+    // description can: "available" or "absent — move quality disabled" (03 §8). Any other verdict passes through.
+    private static string Stockfish((string Status, string Detail) entry)
+    {
+        if (entry.Status != Healthy)
+        {
+            return entry.Status;
+        }
+
+        if (entry.Detail == StockfishAvailable)
+        {
+            return StockfishAvailable;
+        }
+
+        return entry.Detail.StartsWith(StockfishAbsent, StringComparison.Ordinal) ? StockfishAbsent : entry.Status;
     }
 
     private static (string Status, string Detail) Find(HealthReport report, string name) =>
