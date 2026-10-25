@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
 namespace Chess.Api.Catalog;
@@ -7,7 +8,9 @@ public static class CatalogExtensions
 {
     public static IHostApplicationBuilder AddCatalog(this IHostApplicationBuilder builder)
     {
-        builder.Services.AddOptions<CatalogOptions>().BindConfiguration("Catalog");
+        builder.Services.AddOptions<CatalogOptions>()
+            .BindConfiguration("Catalog")
+            .Configure<IConfiguration>((options, configuration) => configuration.GetSection("Arena").Bind(options));
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<ModelCatalog>();
         builder.Services.AddSingleton<StatusReporter>();
