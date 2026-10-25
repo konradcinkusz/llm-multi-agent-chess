@@ -78,7 +78,8 @@ internal sealed class TournamentHarness : IAsyncDisposable
         Clock = new ManualClock();
         var gateway = new StubGateway(new LlmGatewayStatus(state, "test"), models);
         Catalog = new ModelCatalog(gateway, new MemoryCache(new MemoryCacheOptions()), Options.Create(new CatalogOptions()));
-        Tournaments = new TournamentService(Factory, Runner, Events, Catalog, Clock);
+        Costs = new CostInputs(Factory, Options.Create(new CatalogOptions()));
+        Tournaments = new TournamentService(Factory, Runner, Events, Catalog, Costs, Clock);
     }
 
     public IDbContextFactory<ArenaDbContext> Factory { get; }
@@ -90,6 +91,8 @@ internal sealed class TournamentHarness : IAsyncDisposable
     public ManualClock Clock { get; }
 
     public ModelCatalog Catalog { get; }
+
+    public CostInputs Costs { get; }
 
     public TournamentService Tournaments { get; }
 

@@ -39,7 +39,7 @@ internal static class Fixtures
 {
     public const string Models = """
         [
-          {"id":"gpt","displayName":"GPT","premiumMultiplier":1,"enabled":true},
+          {"id":"gpt","displayName":"GPT","premiumMultiplier":1,"enabled":true,"pricing":{"inputUsdPerMillionTokens":3,"outputUsdPerMillionTokens":15,"cachedInputUsdPerMillionTokens":0.3}},
           {"id":"claude","displayName":"Claude","premiumMultiplier":1.5,"enabled":true},
           {"id":"random","displayName":"Random","premiumMultiplier":null,"enabled":true},
           {"id":"retired","displayName":"Retired","premiumMultiplier":1,"enabled":false}

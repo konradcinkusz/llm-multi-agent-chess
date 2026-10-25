@@ -125,6 +125,21 @@ public class TournamentEndpointTests
     }
 
     [Fact]
+    public async Task CostInputsGivesTheRateAndTheAssumedTokensAndNoModelsBeforeAnyMoveIsStored()
+    {
+        await using var app = new TournamentApp();
+        using var client = app.CreateClient();
+
+        var inputs = await client.GetFromJsonAsync<CostInputsDto>("/api/cost/inputs", Json);
+
+        Assert.NotNull(inputs);
+        Assert.Equal(0.01, inputs.UsdPerAiCredit);
+        Assert.Equal(700, inputs.AssumedInputTokensPerMove);
+        Assert.Equal(300, inputs.AssumedOutputTokensPerMove);
+        Assert.Empty(inputs.Models);
+    }
+
+    [Fact]
     public async Task AnUnknownTournamentIsNotFound()
     {
         using var app = new TournamentApp();

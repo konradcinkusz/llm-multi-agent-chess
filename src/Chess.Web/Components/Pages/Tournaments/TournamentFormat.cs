@@ -1,4 +1,5 @@
 using System.Globalization;
+using Chess.Web.Api;
 
 namespace Chess.Web.Components.Pages.Tournaments;
 
@@ -29,6 +30,57 @@ public static class TournamentFormat
     /// <summary>A premium-request figure; "unknown" when the model's multiplier is not known, as the API reports it.</summary>
     public static string Requests(double? value) =>
         value is { } requests ? requests.ToString("#,##0.#", CultureInfo.InvariantCulture) : "unknown";
+
+    /// <summary>A model's token prices as the forms show them (03 §10): "$3.00 / $15.00 per 1M tokens", or "price unknown".</summary>
+    public static string Price(ModelPricingDto? pricing) =>
+        pricing is { InputUsdPerMillionTokens: { } input, OutputUsdPerMillionTokens: { } output }
+            ? $"{Money(input)} / {Money(output)} per 1M tokens"
+            : "price unknown";
+
+    /// <summary>
+    /// A model's checkbox label: its token price when the API lists one, else its premium multiplier, else "price unknown".
+    /// The random player is free.
+    /// </summary>
+    public static string Cost(ModelDto model)
+    {
+        if (model.Id == RandomModelId)
+        {
+            return "free";
+        }
+
+        if (model.Pricing is { InputUsdPerMillionTokens: not null, OutputUsdPerMillionTokens: not null })
+        {
+            return Price(model.Pricing);
+        }
+
+        return model.PremiumMultiplier is { } multiplier
+            ? "×" + multiplier.ToString("0.##", CultureInfo.InvariantCulture) + " premium requests"
+            : "price unknown";
+    }
+
+    /// <summary>An AI-credit figure: "24.5 credits", or "unknown" when the prices are not known.</summary>
+    public static string Credits(double? value) =>
+        value is { } credits ? credits.ToString("#,##0.#", CultureInfo.InvariantCulture) + " credits" : "unknown";
+
+    /// <summary>A USD estimate: "$0.24", or "unknown". Sub-cent amounts keep four decimals so they do not read as $0.00.</summary>
+    public static string Usd(double? value) => value is { } usd ? Money(usd) : "unknown";
+
+    /// <summary>Where a model's tokens per move came from, in words: "from 12 past moves", "assumed tokens per move", ...</summary>
+    public static string Basis(string? basis, int? sampleMoves) => basis switch
+    {
+        "history" => $"from {(sampleMoves ?? 0).ToString("#,##0", CultureInfo.InvariantCulture)} past moves",
+        "assumed" => "assumed tokens per move",
+        "free" => "free",
+        "unknown" => "price unknown",
+        _ => "",
+    };
+
+    public const string RandomModelId = "random";
+
+    private static string Money(double value) =>
+        value is > 0 and < 0.01
+            ? value.ToString("$0.0000", CultureInfo.InvariantCulture)
+            : value.ToString("$0.00", CultureInfo.InvariantCulture);
 
     public static string Multiplier(double? value) =>
         value is { } multiplier ? "×" + multiplier.ToString("0.##", CultureInfo.InvariantCulture) : "multiplier unknown";
