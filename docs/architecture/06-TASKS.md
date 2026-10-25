@@ -988,3 +988,71 @@ wider interval → lower bound); §7 gets test vectors.
 equal point scores the model with more games ranks first in the conservative order; same seed → identical intervals (V6
 style); `score` order unchanged from today (existing vectors pass untouched). API test for the parameter and the 400. bUnit:
 the control switches the order and the headline names it. E2E `ResultsJourney` still passes.
+
+## Benchmark (owner request 2026-10-25, 03 §12, ADR-014)
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| B1 | Gateway: reasoning effort, effort lists, custom models via the SDK provider config | — | todo |
+| B2 | API: variants (`model@effort`), benchmark runs, report (JSON + Markdown) | G2, G5, B1 contracts | todo |
+| B3 | UI: `/benchmark` (create, progress, report, downloads) | B2 | todo |
+| B4 | `scripts/benchmark.sh` + `.ps1`, `docs/BENCHMARK.md`, README section | B2 | todo |
+| M1 | Model map (bubble chart of two chosen coefficients) on the Results page | G2, R1, F8 | todo |
+
+### B1 — Gateway: reasoning effort, effort lists, custom models
+
+**Owns:** `src/Chess.Llm/**`, `tests/Chess.Llm.Tests/**`.
+**Do:** 03 §12.1: pass `LlmConversationOptions.ReasoningEffort` to `SessionConfig.ReasoningEffort`; fill
+`LlmModelInfo.ReasoningEfforts` / `DefaultReasoningEffort` from `ModelInfo`; `Arena:CustomModels` (options class in
+Chess.Llm, bound by its registration) listed with `Custom = true` and started with `SessionConfig.Provider`
+(`ProviderConfig.Type`, `BaseUrl`, `ApiKey`, `WireApi`, model name); id validation (no `@`, no clash with a Copilot id);
+FakeLlmGateway: `fake-a` and `fake-b` support `low|medium|high`, and a configured custom model is served by the fake under
+the fake profile so the whole path runs offline. The API key is never logged.
+**Done when:** unit tests: the session config built for a variant carries the effort; for a custom model it carries the
+provider fields and no Copilot model id; invalid ids rejected at startup with a clear message; the key does not appear in
+`ToString()` or logs; the fake lists efforts and serves a custom model. `PublicSurfaceTests` pass.
+
+### B2 — API: variants, benchmark runs, report
+
+**Owns:** `src/Chess.Api/Benchmarks/**` (new), `src/Chess.Api/Tournaments/**`, `src/Chess.Api/Players/ChessPlayerFactory.cs`,
+`src/Chess.Api/Catalog/ModelCatalog.cs`, `src/Chess.Api/Persistence/**` (one migration: tournament kind and candidate),
+`src/Chess.Api/Program.cs` (one registration line), `tests/Chess.Api.Tests/Benchmarks/**`, `tests/Chess.Api.Tests/Tournaments/**`.
+**Do:** 03 §12.1 (parse `model@effort` in the player factory; validate the effort against the model's list; ModelDto efforts)
+and §12.2 (gauntlet schedule with alternating colours, the endpoints, the report with per-opponent bootstrap intervals, the
+Markdown rendering, the fingerprint; app version from the assembly informational version).
+**Done when:** tests: the schedule (counts, colours, opponents default to all enabled except candidate and Auto); a fake
+benchmark of 2 opponents × 4 games finishes and its report's totals equal its games; the Elo difference for a 75 % score is
+~+191 with an interval that contains it; Markdown contains the fingerprint and the table; an unknown effort → 400; cancel.
+
+### B3 — UI: `/benchmark`
+
+**Owns:** `src/Chess.Web/Components/Pages/Benchmark/**` (new), `src/Chess.Web/Api/ArenaApiClient.cs` (benchmark calls),
+`src/Chess.Web/Components/Layout/NavMenu.razor` (one item), `tests/Chess.Web.Tests/Benchmark/**`, a new E2E journey
+`tests/Chess.E2E/BenchmarkJourney.cs`.
+**Do:** 03 §12.3 UI, styled by 07-UI-STYLE; the effort picker appears only for models that list efforts; the estimate
+before start (G5's cost inputs); report page with a ranked bar chart of score per opponent (Charts components) and downloads.
+**Done when:** bUnit for the form (effort list, opponents, estimate), progress and report; the E2E journey runs a tiny fake
+benchmark (2 opponents × 2 games) to its report.
+
+### B4 — Headless scripts and docs
+
+**Owns:** `scripts/benchmark.sh`, `scripts/benchmark.ps1`, `docs/BENCHMARK.md`, `README.md` (a "Benchmark your own model"
+section only).
+**Do:** 03 §12.3; shellcheck-clean bash, the PowerShell twin; both run end to end against the fake profile.
+**Done when:** a recorded run of both scripts against the fake profile (output in the PR); `shellcheck -S warning` clean;
+every command in the docs was run.
+
+### M1 — Model map on the Results page
+
+**Owns:** `src/Chess.Web/Components/Charts/ModelMap*` (new component and its pure geometry/model classes),
+`tests/Chess.Web.Tests/Charts/ModelMap*`, `src/Chess.Api/Results/**`, `tests/Chess.Api.Tests/Results/**`, the two additive
+`ModelResultsDto` fields of 03 §13 (API and web copy, round-trip test); after R1 and F8 are merged:
+`src/Chess.Web/Components/Pages/Results/**`, `tests/Chess.Web.Tests/Results/**`, `tests/Chess.E2E/ResultsJourney.cs` (the
+section order now has `model-map` second).
+**Depends on:** G2 (cost data), R1 and F8 (same page and journey).
+**Do:** 03 §13. Build and test the component with canned data first; integrate into the Results page when R1 and F8 are on
+`main`.
+**Done when:** unit tests: axis choice and scales (log when range > 10×), bubble area ∝ games, the median guides and quadrant
+names follow each axis's better direction, a degenerate axis (all equal) still plots, labels never leave the plot; API test
+for the two new fields; bUnit: the axis pickers re-render the map, section order with `model-map` second; E2E
+`ResultsJourney` updated and passing; screenshots light, dark and phone.

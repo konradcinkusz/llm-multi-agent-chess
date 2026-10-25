@@ -331,7 +331,8 @@ and there is no CORS — without a second stack:
 
 ### 6.1 The Results page (`/results`) — "who is best" before any scrolling
 
-Order on the page is fixed; everything renders top to bottom in one column:
+Order on the page is fixed; everything renders top to bottom in one column (amended 2026-10-25: the **model map** of §13
+is section 2, between the Big Picture and Rating over time):
 
 1. **Big Picture** (above the fold, full width). A headline sentence —
    *"Best overall: **{model}** — arena score {AS}, rating {R} ± {CI}"* plus *"significantly
@@ -615,3 +616,96 @@ publish. One-time owner step: Settings → Pages → Source: *Deploy from a bran
 
 **What becomes public:** everything on those pages, including prompts, replies, reasoning and costs. Nothing else (no
 configuration, no secrets, no attempts of aborted games).
+
+## 12. Benchmark: one candidate against the field (owner request 2026-10-25, ADR-014)
+
+The owner wants to pick one model in one configuration (e.g. a Claude model at medium reasoning effort), play it a fixed
+number of games against every other available model, and get a report, so that anyone can clone the repository and test
+a model of their own locally, including a newly trained one that Copilot does not offer.
+
+### 12.1 Player variants and custom models
+
+- **Reasoning effort.** A player id may carry an effort suffix: `<model>@<effort>` (e.g. `claude-sonnet-5.5@medium`). The
+  suffix is part of the player's identity everywhere (games, ratings, results), so each configuration is ranked as its own
+  player; `<model>` alone means the model's default effort. The gateway passes it as `SessionConfig.ReasoningEffort`; the
+  model list exposes `ModelInfo.SupportedReasoningEfforts` and `DefaultReasoningEffort`. Model ids may not contain `@`.
+- **Custom models (bring your own endpoint).** `Arena:CustomModels` lists models served by an OpenAI-compatible or Azure
+  endpoint (vLLM, Ollama, LM Studio, a fine-tuned deployment): `Id`, `DisplayName`, `ProviderType` (`openai` | `azure`),
+  `BaseUrl`, `Model`, `WireApi` (default `chat-completions`), optional prices (credits or USD per 1M tokens), and the API key
+  from an AppHost secret parameter or user secrets (never in a file, a log or the database). The gateway lists them next to
+  the Copilot models and starts their sessions with `SessionConfig.Provider` (the SDK's bring-your-own-key provider), so the
+  Copilot SDK stays the only LLM gateway (ADR-004). Whether a provider session needs a Copilot sign-in is not verified; if it
+  does, the docs say so.
+
+```csharp
+// Chess.Llm, additive (frozen 2026-10-25)
+public sealed record LlmConversationOptions(string ModelId, string SystemPrompt, TimeSpan Timeout, string? ReasoningEffort = null);
+public sealed record LlmModelInfo(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, LlmTokenPrices? Pricing = null,
+    IReadOnlyList<string>? ReasoningEfforts = null, string? DefaultReasoningEffort = null, bool Custom = false);
+// Chess.Api ModelDto (and web copy), additive
+public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null,
+    IReadOnlyList<string>? ReasoningEfforts = null, string? DefaultReasoningEffort = null, bool Custom = false);
+```
+
+### 12.2 Benchmark runs
+
+A benchmark is a gauntlet: the **candidate** plays `GamesPerOpponent` rated games (default 30, colours alternating, so 15
+with White) against each opponent. Opponents are a chosen list, or every enabled model except the candidate and Auto when the
+list is empty. Its games are ordinary rated games: they enter the global ranking, and a candidate with 30 games against each
+of several opponents is no longer provisional. It runs on the tournament machinery (concurrency cap included) and is stored
+as a tournament of kind `benchmark` with its candidate.
+
+```csharp
+// Chess.Api (frozen 2026-10-25); web copies identical
+public sealed record CreateBenchmarkRequest(string Name, string Candidate, IReadOnlyList<string>? Opponents,
+    int GamesPerOpponent = 30, int MaxConcurrency = 2);
+public sealed record BenchmarkDto(Guid Id, string Name, string Candidate, IReadOnlyList<string> Opponents, int GamesPerOpponent,
+    string Status, int GamesTotal, int GamesFinished, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt);   // Status as tournaments
+public sealed record BenchmarkOpponentDto(string Opponent, int Games, int Wins, int Draws, int Losses, int ForfeitLosses,
+    double Score, double? EloDiff, double? EloDiffLow, double? EloDiffHigh, double? Rqc, double? RqcLow, double? RqcHigh,
+    double CandidateFirstAttemptLegalRate, double? CandidateEstimatedUsd);
+public sealed record BenchmarkSummaryDto(int Games, double Score, double? Rating, double? RatingLow, double? RatingHigh,
+    double? ArenaScore, bool Provisional, long CandidateTokens, double? CandidateEstimatedUsd, double? TotalEstimatedUsd);
+public sealed record BenchmarkFingerprintDto(string AppVersion, string FormulaVersion, string PromptVersion, DateTimeOffset GeneratedAt);
+public sealed record BenchmarkReportDto(BenchmarkDto Benchmark, IReadOnlyList<BenchmarkOpponentDto> Opponents,
+    BenchmarkSummaryDto Summary, BenchmarkFingerprintDto Fingerprint);
+```
+
+Endpoints: `POST /api/benchmarks` → 201 `BenchmarkDto` plus the cost estimate (as tournaments); `GET /api/benchmarks`;
+`GET /api/benchmarks/{id}`; `GET /api/benchmarks/{id}/report` (JSON) and `?format=md` (a Markdown report to share);
+`POST /api/benchmarks/{id}/cancel`. The Elo difference per opponent is computed from the candidate's score against it with a
+bootstrap interval; the summary's rating and arena score come from the global fit (RATING.md). The fingerprint names what a
+reader needs to compare two reports: the app version (git commit when known), the RATING formula version and the rated prompt
+version.
+
+### 12.3 UI and headless run
+
+- `/benchmark`: candidate picker with effort, opponents (all / chosen), games per opponent, concurrency, the cost estimate
+  before start; a list of runs with progress; a report page (per-opponent table and chart, summary, fingerprint, "Download
+  Markdown", "Download JSON").
+- `scripts/benchmark.sh` and `scripts/benchmark.ps1`: run against a running app (`ARENA_API_URL`), create the run, follow its
+  progress, and write `benchmark-<name>.md` and `.json`. They refuse to run under CI.
+- `docs/BENCHMARK.md`: how to benchmark a Copilot model, a variant with an effort, and your own model through a custom
+  endpoint; the cost and how to cut it (a reference panel of opponents; fewer games per opponent); how to read the report,
+  including how wide an interval 30 games give.
+
+## 13. Model map (owner request 2026-10-25)
+
+The owner wants one chart that places every model on two chosen coefficients at once, a map rather than a ranking. It
+becomes **section 2 of the Results page** (after the Big Picture, before Rating over time; 03 §6.1 is amended accordingly):
+
+- **Bubble scatter, one bubble per model** (rated players, variants included), labelled directly with the model name; the
+  colour is the model's series colour (03 §6.1 slot rule), the area is proportional to the rated games played, and
+  provisional models are hatched like in the Big Picture.
+- **Axes chosen on the page** from: rating (with its 95 % interval as whiskers), arena score (with its interval when R1 has
+  landed), first-attempt legality, move quality (only when Stockfish data exists), average latency per move, average tokens
+  per move, average estimated cost per game in USD, forfeit-loss rate. Defaults: **x = average cost per game, y = rating**
+  ("who is strong for the money"). Latency, tokens and cost use a log scale when their range exceeds 10×.
+- **Quadrant guides:** dashed lines at the median of each axis, with the four quadrants named from the axes' "better"
+  directions (e.g. "strong and cheap", "strong but expensive", "weak and expensive", "weak but cheap"); a note says which
+  direction is better on each axis.
+- Hover (`<title>`) gives every coefficient of the model; the table view lists them all.
+- The static site (03 §11) renders three preset maps: rating × cost, rating × legality, rating × latency.
+
+Data: `ModelResultsDto` gains `double? AvgEstimatedUsdPerGame = null` and `double? ForfeitRate = null` (additive, API and
+web copy), computed from the stored attempts with the cost calculator of 03 §10.2.

@@ -17,7 +17,8 @@ public sealed record TournamentDto(Guid Id, string Name, IReadOnlyList<string> M
     int GamesTotal, int GamesFinished, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt);  // Status: running | finished | cancelled
 public sealed record TournamentCreatedDto(TournamentDto Tournament, IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
 public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests);  // null: multiplier unknown
-public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null);
+public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null,
+    IReadOnlyList<string>? ReasoningEfforts = null, string? DefaultReasoningEffort = null, bool Custom = false);   // 03 §12.1
 public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
     double? CachedInputUsdPerMillionTokens);
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);

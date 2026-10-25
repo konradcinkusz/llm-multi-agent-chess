@@ -220,3 +220,19 @@ YouTube; the site lags by at most the auto-publish interval.
 **Consequences.** No server, no database online, no cost. Everything the site shows is public by design. Pages' source
 moves from GitHub Actions to the `gh-pages` branch (one owner setting). The site is plain HTML and SVG, so it has no search
 or filtering; the JSON files are there for anyone who wants to analyse the data.
+
+## ADR-014 — Benchmark runs, player variants and custom models
+
+**Status:** Accepted (2026-10-25).
+
+**Context.** The owner wants anyone who clones the repository to benchmark one model configuration, including their own
+newly trained model, against the other models, with a shareable report.
+**Decision.** (1) A player id may carry a reasoning-effort suffix (`model@effort`), and each variant is ranked as its own
+player. (2) Custom models are served through the Copilot SDK's bring-your-own-key provider configuration
+(`SessionConfig.Provider`, OpenAI-compatible or Azure), so ADR-004 holds. (3) A benchmark is a gauntlet stored as a
+tournament of kind `benchmark`; its games are ordinary rated games. (4) Reports carry a fingerprint (app version, formula
+version, prompt version) so two reports can be compared honestly.
+**Consequences.** Cost scales with opponents × games: 30 games against 12 opponents is 360 games (about 14 000 candidate
+moves and as many opponent moves); the estimate is shown before start and the docs recommend a reference panel. A custom
+model's API key is a secret parameter. Early stopping (SPRT, as chess-engine testing uses) is a possible follow-up, not part
+of this decision.
