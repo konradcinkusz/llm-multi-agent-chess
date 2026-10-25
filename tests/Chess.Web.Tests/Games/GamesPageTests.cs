@@ -35,6 +35,11 @@ public class GamesPageTests
         Assert.Equal("gpt", rows[0].Children[1].TextContent);
         Assert.Equal("claude", rows[0].Children[2].TextContent);
         Assert.Equal("1-0", rows[0].Children[3].TextContent);
+        Assert.True(rows[0].Children[3].QuerySelector(".badge")!.ClassList.Contains("badge-success"));
+        Assert.True(rows[1].Children[3].QuerySelector(".badge")!.ClassList.Contains("badge-neutral"));
+        Assert.NotNull(cut.Find("[data-testid=games-table]").Closest(".table-wrap"));
+        Assert.NotNull(cut.Find("[data-testid=games-filter-model]").Closest(".field-row"));
+        Assert.True(rows[0].Children[5].ClassList.Contains("num"));
         Assert.Equal("checkmate", rows[0].Children[4].TextContent);
         Assert.Equal("Finished", rows[0].Children[6].TextContent);
         Assert.Equal("Running", rows[1].Children[6].TextContent);

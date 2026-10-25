@@ -39,6 +39,10 @@ public static class PlayChoices
             ? outcome.Result
             : $"{outcome.Result} · {Termination(outcome.Termination)}";
 
+    /// <summary>The badge style of a result: a decisive game is a success, a draw is neutral (07 §6).</summary>
+    public static string OutcomeTone(GameOutcome outcome) =>
+        outcome.Result == "1/2-1/2" ? "badge-neutral" : "badge-success";
+
     public static string Termination(string termination) => termination switch
     {
         "checkmate" => "checkmate",

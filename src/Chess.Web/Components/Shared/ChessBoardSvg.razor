@@ -40,6 +40,8 @@
 </svg>
 
 @code {
+    // The board keeps a fixed wood palette, the piece ink and the last-move highlight (07 §1, documented exception for U4):
+    // a board is drawn in wood in both themes, so these are not page tokens.
     private const string LightSquare = "#f0d9b5";
     private const string DarkSquare = "#b58863";
 

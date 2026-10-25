@@ -76,4 +76,12 @@ public class PlayChoicesTests
         Assert.Null(PlayChoices.ForfeitNotice("checkmate"));
         Assert.StartsWith("Black forfeited:", PlayChoices.ForfeitNotice("forfeit-black"));
     }
+
+    [Fact]
+    public void ADecisiveResultIsASuccessBadgeAndADrawIsNeutral()
+    {
+        Assert.Equal("badge-success", PlayChoices.OutcomeTone(new GameOutcome("1-0", "checkmate")));
+        Assert.Equal("badge-success", PlayChoices.OutcomeTone(new GameOutcome("0-1", "forfeit-white")));
+        Assert.Equal("badge-neutral", PlayChoices.OutcomeTone(new GameOutcome("1/2-1/2", "fifty-move")));
+    }
 }

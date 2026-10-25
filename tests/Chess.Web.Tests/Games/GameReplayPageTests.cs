@@ -35,6 +35,20 @@ public class GameReplayPageTests
         cut.Find("[data-testid='replay-board']").KeyDown(new KeyboardEventArgs { Key = key });
 
     [Fact]
+    public void TheStepButtonsFormOneGroupAndTheBoardAndMovesSitInCards()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, FinishedGame(), Fixtures.FinishedId);
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid='replay-board']")));
+        Assert.Equal(4, cut.FindAll(".replay-buttons[role=group] button").Count);
+        Assert.True(cut.Find("[data-testid='replay-next']").ClassList.Contains("btn"));
+        Assert.NotNull(cut.Find("[data-testid='replay-board']").Closest(".card"));
+        Assert.NotNull(cut.Find("[data-testid='moves-table']").Closest(".table-wrap"));
+        Assert.True(cut.Find("[data-testid='move-details']").ClassList.Contains("card"));
+    }
+
+    [Fact]
     public void StepsForwardAndBackAndHighlightsTheMoveOnTheBoard()
     {
         using var ctx = new BunitContext();
