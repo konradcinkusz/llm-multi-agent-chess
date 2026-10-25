@@ -912,3 +912,147 @@ USD and the basis; screenshots of both forms with a priced fake model.
 **Do:** describe the live page, the engine log, the cost model (AI credits, USD rate, basis, the unverified assumptions),
 the 180 s timeout, `/api/status` Stockfish `available | absent` (U7), `Arena:ShowAutoModel`; replace premium-request
 wording where it is now wrong; a lessons-learned entry for the multiplier. Every command shown is one that was run.
+
+## Public results site and viewer pace (owner decision 2026-10-25, 03 §10.5 and §11, ADR-013)
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| S1 | Static export: results, head-to-head, games list, tournaments, about, JSON | — | todo |
+| S2 | Static export: one page per game with boards, move table, engine log, usage, PGN | S1, G3, G4 | todo |
+| S3 | Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README | — | todo |
+| P1 | Viewer pace on the live page | G3 | todo |
+| R1 | Conservative ranking order (lower bound of the arena score) | — | todo |
+
+### S1 — Static export: results, head-to-head, games list, tournaments, about, JSON
+
+**Owns:** `src/Chess.Web/Site/**` except `Site/Publishing/**`, `src/Chess.Web/Components/Site/**`, `src/Chess.Web/Program.cs`
+(one registration line), `tests/Chess.Web.Tests/Site/**`.
+**Do:** implement `ISiteExporter` (03 §11) with `HtmlRenderer`: static components for every path in the table except
+`games/<id>/` (S2), reusing the chart components and `ResultsModel`, never editing the interactive pages; copy the assets;
+write `data/*.json` and `.nojekyll`; relative links only; snapshot time, rated-game count, "Watch live" and support links in
+a shared static layout. `SiteOptions` binds `Arena:Site`.
+**Done when:** tests export a fake data set (canned `ArenaApiClient` responses) into a temp folder and check: every page
+exists; the index starts with the Big Picture; no link is absolute or points outside the export (a link checker over all
+`href`/`src`); no `<script>` and no `blazor` reference in any page; JSON parses; the support and YouTube links render only
+when configured. A real export from the fake profile opened with Playwright from `file://` and from a local static server
+under a sub-path (`/llm-multi-agent-chess/`), screenshots light, dark and phone.
+
+### S2 — Static export: one page per game
+
+**Owns:** `src/Chess.Web/Components/Site/Game/**`, `src/Chess.Web/Site/Game/**`, `tests/Chess.Web.Tests/Site/Game/**`.
+**Do:** `games/<id>/index.html` per finished game with G3's shared `MoveTable`, `EngineLog` and `GameUsageSummary`, a board per
+ply reachable by `#ply-<n>` anchors (CSS `:target`, no script; first/prev/next/last as links), and `game.pgn`; the engine log
+only for the newest `FullLogGames` games.
+**Done when:** tests for the anchors and links of a short game, the log cut-off, the PGN; screenshots of a stored fake game.
+
+### S3 — Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README
+
+**Owns:** `src/Chess.Web/Site/Publishing/**`, `src/Chess.Web/Components/Pages/Admin/Site*` (new page `/admin/site`),
+`src/Chess.Web/Components/Layout/NavMenu.razor` (one item after Attempts), `tests/Chess.Web.Tests/Site/Publishing/**`,
+`.github/workflows/deploy-pages.yml`, `README.md` (a "Public results site" section only).
+**Do:** `GitSitePublisher` per 03 §11 (own clone in `WorkDir`, orphan commit, force-push to `Branch`, `.nojekyll`, a clear
+`Detail` on every failure: no git, no remote, push refused); the remote defaults to the `origin` of the repository the app
+runs from. A hosted service for auto-publish. The `/admin/site` page: export, publish, last result, the site URL. The
+workflow only verifies the one-pager assembles (no deploy). README: the one-time Pages setting and the options.
+**Done when:** tests against a local bare repository as the remote: first publish creates `gh-pages` with one commit; a second
+publish still leaves one commit and replaces the content; the owner's working tree and `main` are untouched; failures are
+reported, never thrown; auto-publish runs only when a game finished since the last publish (fake clock).
+
+### P1 — Viewer pace on the live page
+
+**Owns:** `src/Chess.Web/Components/Pages/Play/**`, `tests/Chess.Web.Tests/Play/**`.
+**Do:** 03 §10.5 with a pure, unit-tested pacer (queue + `TimeProvider`).
+**Done when:** unit tests: moves are released no faster than the pause; "Live" releases at once; attempts and log entries of a
+ply come with or before its move; "behind" count and "Catch up"; a page opened mid-game shows the current position at once.
+bUnit for the selector; the E2E live journey still passes (it may select "Live").
+
+### R1 — Conservative ranking order (lower bound of the arena score)
+
+**Why:** the owner asked that the number of games played weigh in the ranking. The fit already shrinks ratings of models
+with few games (prior), marks them provisional and refuses significance below 20 games each (RATING.md §3, §6), but the order
+among established models is by the point arena score. The owner chose (2026-10-25) to add a conservative order as an option.
+**Owns:** `src/Chess.Rating/**`, `tests/Chess.Rating.Tests/**`, `docs/RATING.md` (§6 and §7), `src/Chess.Api/Ratings/**`,
+`tests/Chess.Api.Tests/Ratings/**`, `src/Chess.Web/Components/Pages/Results/**`, `src/Chess.Web/Components/Charts/RankedBarChart.razor`,
+`tests/Chess.Web.Tests/Results/**`, `tests/Chess.Web.Tests/Charts/RankedBarChart*`; and, authorised for R1 only, two additive
+fields on `ModelRating` (03 §3.4) and its web copy: `double? ArenaScoreLow = null, double? ArenaScoreHigh = null`, with the
+round-trip test.
+**Do:** in the bootstrap, compute the arena score of every model on every sample and report its 2.5 / 97.5 percentiles as
+`ArenaScoreLow` / `ArenaScoreHigh` (RATING.md §6). Add a pure ordering option: `score` (today's order, the default) and
+`conservative` (non-provisional first, then by `ArenaScoreLow` descending, then arena score, then rating, then name).
+`GET /api/ratings?order=score|conservative` (anything else → 400 problem). The Results page gets an "Order" control (Arena
+score / Conservative) next to the tournament filter; the Big Picture headline and the chart follow the chosen order and the
+headline says which order is used. The ranked bar chart's whiskers use the real `ArenaScoreLow`/`High` when present (they
+approximate it from the pairwise intervals today). RATING.md §6 documents the conservative order and why (fewer games →
+wider interval → lower bound); §7 gets test vectors.
+**Done when:** Rating tests: the interval contains the point score; a model with fewer games has a wider interval; with
+equal point scores the model with more games ranks first in the conservative order; same seed → identical intervals (V6
+style); `score` order unchanged from today (existing vectors pass untouched). API test for the parameter and the 400. bUnit:
+the control switches the order and the headline names it. E2E `ResultsJourney` still passes.
+
+## Benchmark (owner request 2026-10-25, 03 §12, ADR-014)
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| B1 | Gateway: reasoning effort, effort lists, custom models via the SDK provider config | — | todo |
+| B2 | API: variants (`model@effort`), benchmark runs, report (JSON + Markdown) | G2, G5, B1 contracts | todo |
+| B3 | UI: `/benchmark` (create, progress, report, downloads) | B2 | todo |
+| B4 | `scripts/benchmark.sh` + `.ps1`, `docs/BENCHMARK.md`, README section | B2 | todo |
+| M1 | Model map (bubble chart of two chosen coefficients) on the Results page | G2, R1, F8 | todo |
+
+### B1 — Gateway: reasoning effort, effort lists, custom models
+
+**Owns:** `src/Chess.Llm/**`, `tests/Chess.Llm.Tests/**`.
+**Do:** 03 §12.1: pass `LlmConversationOptions.ReasoningEffort` to `SessionConfig.ReasoningEffort`; fill
+`LlmModelInfo.ReasoningEfforts` / `DefaultReasoningEffort` from `ModelInfo`; `Arena:CustomModels` (options class in
+Chess.Llm, bound by its registration) listed with `Custom = true` and started with `SessionConfig.Provider`
+(`ProviderConfig.Type`, `BaseUrl`, `ApiKey`, `WireApi`, model name); id validation (no `@`, no clash with a Copilot id);
+FakeLlmGateway: `fake-a` and `fake-b` support `low|medium|high`, and a configured custom model is served by the fake under
+the fake profile so the whole path runs offline. The API key is never logged.
+**Done when:** unit tests: the session config built for a variant carries the effort; for a custom model it carries the
+provider fields and no Copilot model id; invalid ids rejected at startup with a clear message; the key does not appear in
+`ToString()` or logs; the fake lists efforts and serves a custom model. `PublicSurfaceTests` pass.
+
+### B2 — API: variants, benchmark runs, report
+
+**Owns:** `src/Chess.Api/Benchmarks/**` (new), `src/Chess.Api/Tournaments/**`, `src/Chess.Api/Players/ChessPlayerFactory.cs`,
+`src/Chess.Api/Catalog/ModelCatalog.cs`, `src/Chess.Api/Persistence/**` (one migration: tournament kind and candidate),
+`src/Chess.Api/Program.cs` (one registration line), `tests/Chess.Api.Tests/Benchmarks/**`, `tests/Chess.Api.Tests/Tournaments/**`.
+**Do:** 03 §12.1 (parse `model@effort` in the player factory; validate the effort against the model's list; ModelDto efforts)
+and §12.2 (gauntlet schedule with alternating colours, the endpoints, the report with per-opponent bootstrap intervals, the
+Markdown rendering, the fingerprint; app version from the assembly informational version).
+**Done when:** tests: the schedule (counts, colours, opponents default to all enabled except candidate and Auto); a fake
+benchmark of 2 opponents × 4 games finishes and its report's totals equal its games; the Elo difference for a 75 % score is
+~+191 with an interval that contains it; Markdown contains the fingerprint and the table; an unknown effort → 400; cancel.
+
+### B3 — UI: `/benchmark`
+
+**Owns:** `src/Chess.Web/Components/Pages/Benchmark/**` (new), `src/Chess.Web/Api/ArenaApiClient.cs` (benchmark calls),
+`src/Chess.Web/Components/Layout/NavMenu.razor` (one item), `tests/Chess.Web.Tests/Benchmark/**`, a new E2E journey
+`tests/Chess.E2E/BenchmarkJourney.cs`.
+**Do:** 03 §12.3 UI, styled by 07-UI-STYLE; the effort picker appears only for models that list efforts; the estimate
+before start (G5's cost inputs); report page with a ranked bar chart of score per opponent (Charts components) and downloads.
+**Done when:** bUnit for the form (effort list, opponents, estimate), progress and report; the E2E journey runs a tiny fake
+benchmark (2 opponents × 2 games) to its report.
+
+### B4 — Headless scripts and docs
+
+**Owns:** `scripts/benchmark.sh`, `scripts/benchmark.ps1`, `docs/BENCHMARK.md`, `README.md` (a "Benchmark your own model"
+section only).
+**Do:** 03 §12.3; shellcheck-clean bash, the PowerShell twin; both run end to end against the fake profile.
+**Done when:** a recorded run of both scripts against the fake profile (output in the PR); `shellcheck -S warning` clean;
+every command in the docs was run.
+
+### M1 — Model map on the Results page
+
+**Owns:** `src/Chess.Web/Components/Charts/ModelMap*` (new component and its pure geometry/model classes),
+`tests/Chess.Web.Tests/Charts/ModelMap*`, `src/Chess.Api/Results/**`, `tests/Chess.Api.Tests/Results/**`, the two additive
+`ModelResultsDto` fields of 03 §13 (API and web copy, round-trip test); after R1 and F8 are merged:
+`src/Chess.Web/Components/Pages/Results/**`, `tests/Chess.Web.Tests/Results/**`, `tests/Chess.E2E/ResultsJourney.cs` (the
+section order now has `model-map` second).
+**Depends on:** G2 (cost data), R1 and F8 (same page and journey).
+**Do:** 03 §13. Build and test the component with canned data first; integrate into the Results page when R1 and F8 are on
+`main`.
+**Done when:** unit tests: axis choice and scales (log when range > 10×), bubble area ∝ games, the median guides and quadrant
+names follow each axis's better direction, a degenerate axis (all equal) still plots, labels never leave the plot; API test
+for the two new fields; bUnit: the axis pickers re-render the map, section order with `model-map` second; E2E
+`ResultsJourney` updated and passing; screenshots light, dark and phone.
