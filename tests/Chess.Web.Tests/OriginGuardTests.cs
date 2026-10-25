@@ -53,6 +53,20 @@ public class OriginGuardTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Following_a_link_from_another_site_loads_the_page()
+    {
+        await using var app = new WebApp();
+        var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        request.Headers.Add("Sec-Fetch-Site", "cross-site");
+        request.Headers.Add("Sec-Fetch-Mode", "navigate");
+        request.Headers.Add("Sec-Fetch-Dest", "document");
+
+        var response = await app.CreateClient().SendAsync(request);
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     [Theory]
     [InlineData("http://localhost:5070")]
     [InlineData("http://127.0.0.1:5070")]
