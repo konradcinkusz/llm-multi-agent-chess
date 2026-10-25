@@ -1,0 +1,46 @@
+@using Chess.Web.Components.Shared
+
+@* The parts every board of a game page shares, written once per page: the checkerboard and one symbol per piece. A board then
+   only places its pieces and highlights (SiteBoard), which keeps a board per ply small (03 §11). *@
+<svg class="site-defs" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <pattern id="site-checker" width="200" height="200" patternUnits="userSpaceOnUse">
+            <rect width="200" height="200" fill="@LightSquare" />
+            <rect x="100" width="100" height="100" fill="@DarkSquare" />
+            <rect y="100" width="100" height="100" fill="@DarkSquare" />
+        </pattern>
+        @foreach (var piece in Pieces)
+        {
+            <symbol id="@SiteBoardDefs.PieceId(piece)" viewBox="0 0 100 100">
+                @Glyph(FenBoard.Symbol(piece))
+            </symbol>
+        }
+    </defs>
+</svg>
+
+@code {
+    /// <summary>The wood palette of the boards, as ChessBoardSvg draws them (07 §1, a documented exception).</summary>
+    public const string LightSquare = "#f0d9b5";
+
+    public const string DarkSquare = "#b58863";
+
+    /// <summary>The FEN letters of the pieces: white upper case, black lower case.</summary>
+    private const string Pieces = "KQRBNPkqrbnp";
+
+    /// <summary>The id of a piece's symbol, which a board references with <c>&lt;use href&gt;</c>.</summary>
+    public static string PieceId(char piece) => "site-piece-" + piece;
+
+    private static RenderFragment Glyph(string symbol) => builder =>
+    {
+        // Razor reserves the <text> tag, so the SVG text element is built directly, as ChessBoardSvg does.
+        builder.OpenElement(0, "text");
+        builder.AddAttribute(1, "x", 50);
+        builder.AddAttribute(2, "y", 50);
+        builder.AddAttribute(3, "text-anchor", "middle");
+        builder.AddAttribute(4, "dominant-baseline", "central");
+        builder.AddAttribute(5, "font-size", 80);
+        builder.AddAttribute(6, "fill", "#1a1a1a");
+        builder.AddContent(7, symbol);
+        builder.CloseElement();
+    };
+}

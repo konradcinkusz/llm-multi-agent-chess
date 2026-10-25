@@ -2,13 +2,14 @@ using Chess.Web.Api;
 using Chess.Web.Components.Pages.Games;
 using Chess.Web.Components.Pages.Results;
 using Chess.Web.Components.Site;
+using Chess.Web.Site.Game;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Chess.Web.Site;
 
 /// <summary>
-/// Renders the public results site (03 §11, ADR-013) as static files: every page but the per-game pages (S2), the assets,
+/// Renders the public results site (03 §11, ADR-013) as static files: every page, including the per-game pages, the assets,
 /// the JSON data and <c>.nojekyll</c>. It reads through the API like the interactive pages do, and writes nothing else.
 /// </summary>
 public sealed class SiteExporter(
@@ -59,6 +60,7 @@ public sealed class SiteExporter(
 
         await WriteGamesAsync(output, renderer, frame, snapshot, ct);
         await WriteTournamentsAsync(output, renderer, frame, snapshot, ct);
+        await new SiteGamePages(api).WriteAsync(output, renderer, frame, snapshot, options.Value.FullLogGames, ct);
 
         await output.WritePageAsync(SitePaths.About, await renderer.RenderAsync<SiteAboutPage>(("Frame", frame(1))), ct);
 

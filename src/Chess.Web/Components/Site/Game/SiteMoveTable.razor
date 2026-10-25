@@ -1,0 +1,45 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Site.Game
+
+@* The move list of a finished game: "1. e4 e5", each move a link to its board. The same rows as the game page's
+   MoveTable (G3), without its buttons, since a static page cannot select a move. *@
+<ol class="move-table" data-section="move-list" aria-label="Moves">
+    @foreach (var row in Rows)
+    {
+        <li class="move-row">
+            <span class="move-number" aria-hidden="true">@row.Number.</span>
+            @foreach (var move in new[] { row.White, row.Black })
+            {
+                @if (move is null)
+                {
+                    <span class="move-cell move-empty" aria-hidden="true"></span>
+                }
+                else
+                {
+                    <a class="move-cell" href="@SitePlies.Href(move.Ply)" data-ply="@move.Ply"
+                       aria-label="@GameFormat.Side(move.Color) @move.San">
+                        @move.San
+                        @if (move.Attempts > 1)
+                        {
+                            <span class="badge badge-warning move-retries" title="@move.Attempts attempts: @(move.Attempts - 1) rejected">@move.Attempts tries</span>
+                        }
+                    </a>
+                }
+            }
+        </li>
+    }
+</ol>
+
+@code {
+    /// <summary>The moves in ply order. Ply 1 is White's first move.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MoveDto> Moves { get; set; } = [];
+
+    /// <summary>Two plies to a row. A game starts with White, so a row is a White move and, when it was played, Black's reply.</summary>
+    private IReadOnlyList<MoveRow> Rows => Moves.Chunk(2)
+        .Select((pair, index) => new MoveRow(index + 1, pair[0], pair.Length > 1 ? pair[1] : null))
+        .ToList();
+
+    private sealed record MoveRow(int Number, MoveDto? White, MoveDto? Black);
+}

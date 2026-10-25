@@ -1,0 +1,33 @@
+/* Only one board shows at a time: the one the address names (#ply-n), or the start position when the address names none. */
+.ply-board {
+    display: none;
+    width: 100%;
+    max-width: 480px;
+    margin: 0;
+    /* A #ply-n jump lands below the sticky header, not under it. */
+    scroll-margin-top: 5rem;
+}
+
+.ply-board:target,
+.ply-start {
+    display: block;
+}
+
+.ply-board:target ~ .ply-start {
+    display: none;
+}
+
+.ply-caption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+.ply-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}

@@ -1,0 +1,69 @@
+@using Chess.Web.Components.Shared.Game
+
+@* The engine log of a finished game as a static page shows it: one expandable entry per attempt, newest first. The same
+   entries, verdicts and figures as the game page's EngineLog (G3); its filters need a script, so they are not rendered. *@
+@if (Entries.Count == 0)
+{
+    <p class="muted empty-state" data-testid="log-empty">No attempts were recorded for this game.</p>
+}
+
+<ol class="engine-entries" data-section="log-entries" aria-label="Engine log, newest first">
+    @foreach (var entry in Ordered)
+    {
+        <li class="engine-entry" data-ply="@entry.Ply" data-color="@entry.Color" data-attempt="@entry.Attempt"
+            data-legal="@(entry.Legal ? "true" : "false")">
+            <details>
+                <summary class="engine-summary">
+                    <span class="engine-where"><strong>@entry.Color</strong> · ply @entry.Ply</span>
+                    <span class="engine-model">@entry.ModelId</span>
+                    <span class="muted engine-attempt">attempt @entry.Attempt of @EngineEntry.MaxAttempts</span>
+                    <span class="badge @EngineVerdict.Tone(entry)" data-testid="verdict">@EngineVerdict.Label(entry)</span>
+                    @if (entry.ParsedSan is not null && entry.Legal)
+                    {
+                        <code class="engine-san">@entry.ParsedSan</code>
+                    }
+                    <span class="engine-figures num muted">
+                        @GameFigures.Latency(entry.LatencyMs) · @GameFigures.Tokens(entry.InputTokens) in / @GameFigures.Tokens(entry.OutputTokens) out · @GameFigures.Credits(entry.AiCredits)
+                    </span>
+                </summary>
+
+                <div class="engine-body">
+                    <h3 class="engine-heading">Prompt sent</h3>
+                    <pre class="engine-text" data-testid="entry-prompt">@entry.Prompt</pre>
+
+                    <h3 class="engine-heading">Reply</h3>
+                    @if (entry.RawReply is null)
+                    {
+                        <p class="muted" data-testid="entry-no-reply">No reply (the model did not answer in time).</p>
+                    }
+                    else
+                    {
+                        <pre class="engine-text" data-testid="entry-reply">@entry.RawReply</pre>
+                    }
+
+                    <h3 class="engine-heading">Reasoning</h3>
+                    @if (string.IsNullOrWhiteSpace(entry.Reasoning))
+                    {
+                        <p class="muted" data-testid="entry-no-reasoning">This model did not expose its reasoning.</p>
+                    }
+                    else
+                    {
+                        <pre class="engine-text" data-testid="entry-reasoning">@entry.Reasoning</pre>
+                    }
+                </div>
+            </details>
+        </li>
+    }
+</ol>
+
+@code {
+    /// <summary>Every attempt of the game, in any order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<EngineEntry> Entries { get; set; } = [];
+
+    /// <summary>Newest first: the later ply first, and the later attempt of a ply first.</summary>
+    private IReadOnlyList<EngineEntry> Ordered => Entries
+        .OrderByDescending(entry => entry.Ply)
+        .ThenByDescending(entry => entry.Attempt)
+        .ToArray();
+}

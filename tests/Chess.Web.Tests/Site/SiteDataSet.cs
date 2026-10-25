@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using System.Web;
 using Chess.Web.Api;
+using Chess.Web.Tests.Site.Game;
 using Chess.Web.Tests.Support;
 
 namespace Chess.Web.Tests.Site;
@@ -48,7 +49,7 @@ internal static class SiteDataSet
             "/api/games" => Body(GamesPage(empty, int.Parse(query["page"]!, System.Globalization.CultureInfo.InvariantCulture))),
             _ when path.StartsWith("/api/games/", StringComparison.Ordinal) && path.EndsWith("/usage", StringComparison.Ordinal) =>
                 Body(Usage(Guid.Parse(path.Split('/')[3]))),
-            _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            _ => SiteGameDataSet.Respond(path, query, empty ? [] : Games()) ?? new HttpResponseMessage(HttpStatusCode.NotFound),
         };
     }
 

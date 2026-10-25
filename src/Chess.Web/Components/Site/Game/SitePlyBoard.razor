@@ -1,0 +1,38 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Components.Shared.Game
+@using Chess.Web.Site.Game
+
+@* The board of one ply. It is shown only when its anchor is in the address, or, with no anchor, when it is the start position. *@
+<figure id="@SitePlies.Anchor(Ply)" class="ply-board @(Ply == 0 ? "ply-start" : null)" data-ply="@Ply">
+    <SiteBoard Fen="@Replay.FenAt(Game, Ply)" LastMove="@Replay.LastMove(Game, Ply)" Label="@Caption" />
+    <figcaption class="ply-caption">
+        <span data-section="caption">@Caption</span>
+        <nav class="ply-links" aria-label="Moves">
+            @Step("First", Plies.First)
+            @Step("Previous", Plies.Previous)
+            @Step("Next", Plies.Next)
+            @Step("Last", Plies.Last)
+        </nav>
+    </figcaption>
+</figure>
+
+@code {
+    [Parameter, EditorRequired]
+    public GameDetailDto Game { get; set; } = null!;
+
+    /// <summary>0 for the start position; n for the position after the n-th move.</summary>
+    [Parameter, EditorRequired]
+    public int Ply { get; set; }
+
+    private SitePlies Plies => new(Ply, Game.Moves.Count);
+
+    private string Caption => Ply == 0
+        ? "Start position"
+        : $"Ply {Ply} of {Game.Moves.Count} · {GameFormat.Side(Game.Moves[Ply - 1].Color)} {Game.Moves[Ply - 1].San}";
+
+    /// <summary>A link to another ply, or the same words shown disabled where there is no such ply.</summary>
+    private RenderFragment Step(string label, int? target) => target is { } ply
+        ? @<a class="btn btn-sm" href="@SitePlies.Href(ply)">@label</a>
+        : @<span class="btn btn-sm" aria-disabled="true">@label</span>;
+}
