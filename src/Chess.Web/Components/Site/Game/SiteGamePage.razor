@@ -1,0 +1,94 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Components.Shared.Game
+@using Chess.Web.Site
+@using Chess.Web.Site.Game
+
+@* One finished game of the public site (03 §11): its position at every ply, the move list, the usage and the engine log.
+   Nothing here runs a script; the boards are picked by their #ply-n anchors (SitePlyBoard). *@
+<SiteLayout Title="@Matchup" Frame="Frame" Active="games">
+    <p class="back"><a href="@Frame.Link(SitePaths.Games)">← All games</a></p>
+
+    <div class="page-header">
+        <h1>@Matchup</h1>
+        <p class="page-lede" data-section="summary">
+            @GameFormat.State(Summary.State) · result @Summary.Result · @GameFormat.Termination(Summary.Termination) ·
+            @Game.Moves.Count plies · @GameFormat.When(Summary.CreatedAt)
+            @if (Summary.TournamentId is { } tournamentId)
+            {
+                <span> · <a href="@Frame.Link(SitePaths.Tournament(tournamentId))">Tournament</a></span>
+            }
+        </p>
+    </div>
+
+    <section class="card stack" data-section="position" aria-labelledby="position-heading">
+        <div class="card-header">
+            <h2 id="position-heading" class="card-title">Position</h2>
+            <span class="muted">One board per ply. The links under each board step through the game.</span>
+        </div>
+        <SiteBoardDefs />
+        <div class="site-boards">
+            @for (var ply = 1; ply <= Game.Moves.Count; ply++)
+            {
+                <SitePlyBoard Game="Game" Ply="ply" />
+            }
+            <SitePlyBoard Game="Game" Ply="0" />
+        </div>
+    </section>
+
+    <section class="card stack" data-section="moves" aria-labelledby="moves-heading">
+        <div class="card-header">
+            <h2 id="moves-heading" class="card-title">Moves</h2>
+            <a class="btn btn-sm" href="@SiteGameRules.PgnFileName" download data-section="pgn">Download PGN</a>
+        </div>
+        <SiteMoveTable Moves="Game.Moves" />
+    </section>
+
+    <section class="card stack" data-section="usage" aria-labelledby="usage-heading">
+        <div class="card-header">
+            <h2 id="usage-heading" class="card-title">Game summary</h2>
+            <span class="muted">Tokens and estimated cost, per side</span>
+        </div>
+        <GameUsageSummary Usage="Usage" />
+    </section>
+
+    <section class="card stack" data-section="log" aria-labelledby="log-heading">
+        <div class="card-header">
+            <h2 id="log-heading" class="card-title">Engine log</h2>
+            <span class="muted">Every reply the models sent to the engine, newest first</span>
+        </div>
+        @if (KeepsLog)
+        {
+            <SiteEngineLog Entries="Attempts" />
+        }
+        else
+        {
+            <p class="muted" data-section="log-omitted">The engine log is kept for the newest games only, to keep the export small.</p>
+        }
+    </section>
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    /// <summary>The game: its summary and every move, from the API.</summary>
+    [Parameter, EditorRequired]
+    public GameDetailDto Game { get; set; } = null!;
+
+    /// <summary>The game's usage, or null when it was not read.</summary>
+    [Parameter]
+    public GameUsageDto? Usage { get; set; }
+
+    /// <summary>Every attempt of the game, in any order. Empty when the game does not keep its engine log.</summary>
+    [Parameter]
+    public IReadOnlyList<EngineEntry> Attempts { get; set; } = [];
+
+    /// <summary>False for the games older than the <c>Arena:Site:FullLogGames</c> newest: the page says so instead of a log.</summary>
+    [Parameter]
+    public bool KeepsLog { get; set; } = true;
+
+    private GameSummaryDto Summary => Game.Summary;
+
+    private string Matchup => GameFormat.Matchup(Summary);
+}

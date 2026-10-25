@@ -1,0 +1,64 @@
+@using Chess.Web.Components.Shared
+
+@* The board after one ply: the same squares, palette, last-move highlight and labels as ChessBoardSvg (G3), drawn with the
+   shared pattern and symbols of SiteBoardDefs. *@
+<svg class="chess-board site-board" viewBox="0 0 800 800" role="img" aria-label="@Label" xmlns="http://www.w3.org/2000/svg">
+    <rect width="800" height="800" fill="url(#site-checker)" />
+
+    @if (LastMove is { } move)
+    {
+        @foreach (var square in new[] { move.From, move.To })
+        {
+            var (x, y) = Origin(square);
+            <rect data-highlight="@square" class="last-move" x="@x" y="@y" width="100" height="100" fill="#f6f669" fill-opacity="0.6" />
+        }
+    }
+
+    @foreach (var (square, piece) in Pieces)
+    {
+        var (x, y) = Origin(square);
+        <use data-piece="@piece" href="#@SiteBoardDefs.PieceId(piece)" x="@x" y="@y" width="100" height="100" />
+    }
+
+    @for (var row = 0; row < 8; row++)
+    {
+        var rank = 7 - row;
+        var isDark = rank % 2 == 0;
+        @CoordinateText(new() { ["class"] = "coord", ["x"] = 6, ["y"] = row * 100 + 18, ["font-size"] = 16, ["fill"] = isDark ? SiteBoardDefs.LightSquare : SiteBoardDefs.DarkSquare },
+            (rank + 1).ToString())
+    }
+
+    @for (var file = 0; file < 8; file++)
+    {
+        var isDark = (file + 0) % 2 == 0;
+        @CoordinateText(new() { ["class"] = "coord", ["x"] = file * 100 + 94, ["y"] = 794, ["text-anchor"] = "end", ["font-size"] = 16, ["fill"] = isDark ? SiteBoardDefs.LightSquare : SiteBoardDefs.DarkSquare },
+            ((char)('a' + file)).ToString())
+    }
+</svg>
+
+@code {
+    /// <summary>FEN of the position to draw. Only the piece-placement field is used.</summary>
+    [Parameter, EditorRequired]
+    public string Fen { get; set; } = "";
+
+    /// <summary>The last move, highlighted on its two squares. Null draws no highlight.</summary>
+    [Parameter]
+    public BoardMove? LastMove { get; set; }
+
+    /// <summary>What the board shows, for screen readers.</summary>
+    [Parameter]
+    public string Label { get; set; } = "Chess board";
+
+    private IReadOnlyDictionary<string, char> Pieces => FenBoard.Parse(Fen);
+
+    /// <summary>The top-left corner of a square in the 800 × 800 view box. Rank 8 is the top row, as on a printed board.</summary>
+    private static (int X, int Y) Origin(string square) => ((square[0] - 'a') * 100, (7 - (square[1] - '1')) * 100);
+
+    private static RenderFragment CoordinateText(Dictionary<string, object> attributes, string content) => builder =>
+    {
+        builder.OpenElement(0, "text");
+        builder.AddMultipleAttributes(1, attributes);
+        builder.AddContent(2, content);
+        builder.CloseElement();
+    };
+}

@@ -1,0 +1,7 @@
+/* The boards of a game (03 §11) are laid out by the page; each board's own rules are in SitePlyBoard.razor.css. */
+.site-boards {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-4);
+    min-width: 0;
+}

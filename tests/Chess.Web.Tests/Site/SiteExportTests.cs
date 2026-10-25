@@ -24,6 +24,10 @@ public class SiteExportTests(SiteExportFixture site) : IClassFixture<SiteExportF
         "about/index.html",
     ];
 
+    /// <summary>One page per finished game (S2), in the order the archive lists them.</summary>
+    private static readonly string[] GamePages =
+        Enumerable.Range(0, SiteDataSet.FinishedGames).Select(i => SitePaths.Game(SiteDataSet.GameId(i))).ToArray();
+
     private static readonly string[] ExpectedData =
     [
         "data/snapshot.json", "data/leaderboard.json", "data/matrix.json", "data/history.json", "data/breakdown.json",
@@ -42,7 +46,7 @@ public class SiteExportTests(SiteExportFixture site) : IClassFixture<SiteExportF
     [Fact]
     public void Every_page_of_the_export_exists()
     {
-        var missing = ExpectedPages.Concat(ExpectedData).Concat(ExpectedAssets)
+        var missing = ExpectedPages.Concat(GamePages).Concat(ExpectedData).Concat(ExpectedAssets)
             .Where(path => !File.Exists(Path.Combine(Site.Directory, path.Replace('/', Path.DirectorySeparatorChar))))
             .ToArray();
 
@@ -57,7 +61,7 @@ public class SiteExportTests(SiteExportFixture site) : IClassFixture<SiteExportF
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(ExpectedPages.OrderBy(p => p, StringComparer.Ordinal), pages);
+        Assert.Equal(ExpectedPages.Concat(GamePages).OrderBy(p => p, StringComparer.Ordinal), pages);
     }
 
     [Fact]
@@ -65,7 +69,7 @@ public class SiteExportTests(SiteExportFixture site) : IClassFixture<SiteExportF
     {
         var files = Directory.EnumerateFiles(Site.Directory, "*", SearchOption.AllDirectories).ToArray();
 
-        Assert.Equal(ExpectedPages.Length, Site.Result.Pages);
+        Assert.Equal(ExpectedPages.Length + GamePages.Length, Site.Result.Pages);
         Assert.Equal(SiteDataSet.FinishedGames, Site.Result.Games);
         Assert.Equal(files.Sum(file => new FileInfo(file).Length), Site.Result.Bytes);
         Assert.Equal(SiteDataSet.Now, Site.Result.TakenAt);

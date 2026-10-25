@@ -1,0 +1,62 @@
+/* The move list (03 §10.4) as a static page shows it: numbered rows, one link per ply. Its look follows MoveTable.razor.css. */
+
+.move-table {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.move-row {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0 var(--space-2);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+}
+
+.move-row:nth-child(odd) {
+    background: var(--surface-2);
+}
+
+.move-number {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.move-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 30px;
+    padding: 0 var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+a.move-cell:hover {
+    background: var(--surface);
+}
+
+a.move-cell:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.move-empty {
+    visibility: hidden;
+}
+
+.move-retries {
+    margin-left: auto;
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
+}
