@@ -912,3 +912,55 @@ USD and the basis; screenshots of both forms with a priced fake model.
 **Do:** describe the live page, the engine log, the cost model (AI credits, USD rate, basis, the unverified assumptions),
 the 180 s timeout, `/api/status` Stockfish `available | absent` (U7), `Arena:ShowAutoModel`; replace premium-request
 wording where it is now wrong; a lessons-learned entry for the multiplier. Every command shown is one that was run.
+
+## Public results site and viewer pace (owner decision 2026-10-25, 03 §10.5 and §11, ADR-013)
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| S1 | Static export: results, head-to-head, games list, tournaments, about, JSON | — | todo |
+| S2 | Static export: one page per game with boards, move table, engine log, usage, PGN | S1, G3, G4 | todo |
+| S3 | Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README | — | todo |
+| P1 | Viewer pace on the live page | G3 | todo |
+
+### S1 — Static export: results, head-to-head, games list, tournaments, about, JSON
+
+**Owns:** `src/Chess.Web/Site/**` except `Site/Publishing/**`, `src/Chess.Web/Components/Site/**`, `src/Chess.Web/Program.cs`
+(one registration line), `tests/Chess.Web.Tests/Site/**`.
+**Do:** implement `ISiteExporter` (03 §11) with `HtmlRenderer`: static components for every path in the table except
+`games/<id>/` (S2), reusing the chart components and `ResultsModel`, never editing the interactive pages; copy the assets;
+write `data/*.json` and `.nojekyll`; relative links only; snapshot time, rated-game count, "Watch live" and support links in
+a shared static layout. `SiteOptions` binds `Arena:Site`.
+**Done when:** tests export a fake data set (canned `ArenaApiClient` responses) into a temp folder and check: every page
+exists; the index starts with the Big Picture; no link is absolute or points outside the export (a link checker over all
+`href`/`src`); no `<script>` and no `blazor` reference in any page; JSON parses; the support and YouTube links render only
+when configured. A real export from the fake profile opened with Playwright from `file://` and from a local static server
+under a sub-path (`/llm-multi-agent-chess/`), screenshots light, dark and phone.
+
+### S2 — Static export: one page per game
+
+**Owns:** `src/Chess.Web/Components/Site/Game/**`, `src/Chess.Web/Site/Game/**`, `tests/Chess.Web.Tests/Site/Game/**`.
+**Do:** `games/<id>/index.html` per finished game with G3's shared `MoveTable`, `EngineLog` and `GameUsageSummary`, a board per
+ply reachable by `#ply-<n>` anchors (CSS `:target`, no script; first/prev/next/last as links), and `game.pgn`; the engine log
+only for the newest `FullLogGames` games.
+**Done when:** tests for the anchors and links of a short game, the log cut-off, the PGN; screenshots of a stored fake game.
+
+### S3 — Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README
+
+**Owns:** `src/Chess.Web/Site/Publishing/**`, `src/Chess.Web/Components/Pages/Admin/Site*` (new page `/admin/site`),
+`src/Chess.Web/Components/Layout/NavMenu.razor` (one item after Attempts), `tests/Chess.Web.Tests/Site/Publishing/**`,
+`.github/workflows/deploy-pages.yml`, `README.md` (a "Public results site" section only).
+**Do:** `GitSitePublisher` per 03 §11 (own clone in `WorkDir`, orphan commit, force-push to `Branch`, `.nojekyll`, a clear
+`Detail` on every failure: no git, no remote, push refused); the remote defaults to the `origin` of the repository the app
+runs from. A hosted service for auto-publish. The `/admin/site` page: export, publish, last result, the site URL. The
+workflow only verifies the one-pager assembles (no deploy). README: the one-time Pages setting and the options.
+**Done when:** tests against a local bare repository as the remote: first publish creates `gh-pages` with one commit; a second
+publish still leaves one commit and replaces the content; the owner's working tree and `main` are untouched; failures are
+reported, never thrown; auto-publish runs only when a game finished since the last publish (fake clock).
+
+### P1 — Viewer pace on the live page
+
+**Owns:** `src/Chess.Web/Components/Pages/Play/**`, `tests/Chess.Web.Tests/Play/**`.
+**Do:** 03 §10.5 with a pure, unit-tested pacer (queue + `TimeProvider`).
+**Done when:** unit tests: moves are released no faster than the pause; "Live" releases at once; attempts and log entries of a
+ply come with or before its move; "behind" count and "Catch up"; a page opened mid-game shows the current position at once.
+bUnit for the selector; the E2E live journey still passes (it may select "Live").

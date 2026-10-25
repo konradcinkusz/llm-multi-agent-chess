@@ -553,3 +553,65 @@ default move timeout rises from 60 s to **180 s**, because reasoning models rout
 - **Game summary** when the game ends: per side and in total, requests, input, output, reasoning and cached tokens, AI
   credits and the estimated USD cost with its basis and rate.
 - The finished-game replay (`/games/{id}`) shows the same move table, log and summary for any stored game.
+
+**Addition (2026-10-25, G5):** `GET /api/cost/inputs` → `CostInputsDto(double UsdPerAiCredit, int AssumedInputTokensPerMove,
+int AssumedOutputTokensPerMove, IReadOnlyList<ModelTokenAverageDto> Models)` with `ModelTokenAverageDto(string ModelId,
+int Moves, double? AverageInputTokens, double? AverageOutputTokens)`, so the tournament form and the broadcast planner can
+show credits and USD before saving. Both estimates use 40 moves per side per game (03 §9.1).
+
+### 10.5 Viewer pace on the live page (owner request 2026-10-25)
+
+Some moves arrive faster than a person can follow. The live page gets a **viewer pace**: a minimum time between two moves
+*as shown*, chosen on the page (Live, 1 s, 2 s, 3 s, 5 s; default `Arena:Viewer:MinMovePauseSeconds` = 2). It is display
+only: the server plays at full speed, latency and ratings are unaffected, and the broadcast keeps its own server-side pacing
+(03 §9). The page queues incoming events and shows each move at least the pause after the previous one, with its attempts
+and log entries; it says how many moves it is behind and offers "Catch up". Opening a page on a running game shows the
+current position at once; only new moves are paced.
+
+## 11. Public results site: a static export on GitHub Pages (owner decision 2026-10-25, ADR-013)
+
+The owner wants a public page with all the results and charts, without exposing the app or a database. The local app
+renders a **static snapshot** of everything public and pushes it to the repository's `gh-pages` branch; GitHub Pages serves
+that branch. No server, no database and no script runs on the public side.
+
+**What the site holds** (relative links only, so it works under `https://<owner>.github.io/<repo>/`):
+
+| Path | Content |
+|---|---|
+| `index.html` | the Results page: Big Picture first, then every chart and the leaderboard table (03 §6.1) |
+| `head-to-head/index.html`, `head-to-head/<a>--<b>/index.html` | the RQC matrix, and one page per pair (RQC, interval, reading, direct record, games) |
+| `games/index.html`, `games/page-<n>/index.html` | every finished game, newest first, with result, termination, plies and estimated cost |
+| `games/<id>/index.html`, `games/<id>/game.pgn` | one game: players, result, the numbered move table, a board for every ply (CSS `:target`, no script), the engine log (prompt, reply, reasoning, verdict, tokens, credits) and the usage summary |
+| `tournaments/index.html`, `tournaments/<id>/index.html` | tournaments with their leaderboard and games |
+| `about/index.html` | the project one-pager (today `docs/index.html`) |
+| `data/*.json` | the same snapshot as JSON: leaderboard, matrix, history, breakdown, games, usage |
+| `assets/` | `app.css`, the scoped styles bundle, the favicon; `.nojekyll` at the root |
+
+Every page carries the snapshot time (UTC), the number of rated games, a "Watch live" link (`Arena:Site:YouTubeUrl`) and the
+support links (`Arena:Site:SupportLinks`, label + URL each). Interactive controls (filters, start, cancel, pickers) are not
+rendered. Older games keep their moves and summary but drop the engine log after the newest `Arena:Site:FullLogGames`
+(default 300) to bound the size.
+
+**How it is made.** `Chess.Web` renders static components under `Components/Site/` with Blazor's `HtmlRenderer`, reusing the
+chart components (`Components/Charts`), `ResultsModel` and the shared game components from G3 (`Components/Shared/Game`), and
+reading the data through `ArenaApiClient`, so the site shows exactly what the app shows.
+
+```csharp
+namespace Chess.Web.Site;   // frozen 2026-10-25
+public interface ISiteExporter { Task<SiteExportResult> ExportAsync(string outputDirectory, CancellationToken ct); }
+public sealed record SiteExportResult(int Pages, int Games, long Bytes, DateTimeOffset TakenAt);
+public interface ISitePublisher { Task<SitePublishResult> PublishAsync(string siteDirectory, CancellationToken ct); }
+public sealed record SitePublishResult(bool Published, string? Commit, string Detail, DateTimeOffset At);
+```
+
+**How it is published.** `GitSitePublisher` keeps its own clone in `Arena:Site:WorkDir` (never the owner's working tree),
+replaces the content of the `gh-pages` branch with the export as **one orphan commit** and force-pushes it, so the branch
+never grows a history and `main` is never touched. It uses the `git` on the owner's machine and its existing credentials;
+nothing is stored by the app. Triggers: "Export" and "Publish" on `/admin/site` (status, last result, size, link to the
+site), and automatically every `Arena:Site:AutoPublishMinutes` (default 0 = off) when a game has finished since the last
+publish. One-time owner step: Settings → Pages → Source: *Deploy from a branch*, `gh-pages`, `/ (root)`. The
+`deploy-pages` workflow stops deploying (the one-pager moves into the export as `about/`) and only checks that
+`docs/index.html` still assembles.
+
+**What becomes public:** everything on those pages, including prompts, replies, reasoning and costs. Nothing else (no
+configuration, no secrets, no attempts of aborted games).

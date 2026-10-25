@@ -206,3 +206,17 @@ reported. Prices replace the multiplier in the UI. Copilot's Auto model is hidde
 machine, P5 unaffected). The 1 AI unit = 1 AI credit assumption and the price unit are unverified until the owner's live
 smoke run; both are isolated in one place each so a correction is one line. The multiplier-based estimates in the
 tournament form and the broadcast planner are replaced by AI-credit estimates (G5).
+
+## ADR-013 — The public results site is a static export on the `gh-pages` branch
+
+**Status:** Accepted (2026-10-25).
+
+**Context.** The owner wants a public page with every result and chart. Deploying the web app read-only (Fly.io, a hosted
+Postgres, a read-only mode, a SELECT-only role, caching of the on-read rating) was analysed and costs about 40 USD a month
+plus a new attack surface; the live game stream would not reach it anyway, because it lives in the local process.
+**Decision.** The local app exports a static snapshot (03 §11) and force-pushes it as one orphan commit to `gh-pages`;
+GitHub Pages serves the branch. ADR-002 holds: nothing runs anywhere but the owner's machine. The live view stays on
+YouTube; the site lags by at most the auto-publish interval.
+**Consequences.** No server, no database online, no cost. Everything the site shows is public by design. Pages' source
+moves from GitHub Actions to the `gh-pages` branch (one owner setting). The site is plain HTML and SVG, so it has no search
+or filtering; the JSON files are there for anyone who wants to analyse the data.
