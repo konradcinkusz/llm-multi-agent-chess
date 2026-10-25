@@ -1,0 +1,52 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Tournaments
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Site
+
+<SiteLayout Title="Tournaments" Frame="Frame" Active="tournaments">
+    <div class="page-header">
+        <h1>Tournaments</h1>
+        <p class="page-lede">Every tournament, newest first, with its own leaderboard and games.</p>
+    </div>
+
+    @if (Tournaments.Count == 0)
+    {
+        <p class="empty-state" data-section="empty">No tournaments yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table-compact" data-section="tournaments">
+                <thead>
+                    <tr>
+                        <th scope="col">Tournament</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Models</th>
+                        <th scope="col" class="num">Games</th>
+                        <th scope="col">Created (UTC)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var tournament in Tournaments)
+                    {
+                        <tr>
+                            <td><a href="@Frame.Link(SitePaths.Tournament(tournament.Id))">@tournament.Name</a></td>
+                            <td><span class="badge @TournamentFormat.StatusBadge(tournament.Status)">@TournamentFormat.Status(tournament.Status)</span></td>
+                            <td>@string.Join(", ", tournament.Models)</td>
+                            <td class="num">@tournament.GamesFinished / @tournament.GamesTotal</td>
+                            <td>@GameFormat.Compact(tournament.CreatedAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<TournamentDto> Tournaments { get; set; } = [];
+}

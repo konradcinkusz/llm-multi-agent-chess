@@ -26,6 +26,31 @@ public class ResultsModelTests
     }
 
     [Fact]
+    public void TheApiBoundsAreTheWhiskerWhenTheyArePresent()
+    {
+        var approximation = new Dictionary<string, (double Low, double High)>(StringComparer.Ordinal) { ["alpha"] = (40, 80) };
+        var sent = new ModelRating("alpha", 100, 90, 110, 30, 0.7, 1, null, 1, 66, false, 61.25, 70.5);
+
+        var whisker = ResultsModel.Whisker(sent, approximation);
+
+        Assert.Equal(61.25, whisker!.Value.Low);
+        Assert.Equal(70.5, whisker.Value.High);
+    }
+
+    [Fact]
+    public void WithoutTheBoundsTheWhiskerFallsBackToThePairwiseApproximation()
+    {
+        var approximation = new Dictionary<string, (double Low, double High)>(StringComparer.Ordinal) { ["alpha"] = (40, 80) };
+        var old = new ModelRating("alpha", 100, 90, 110, 30, 0.7, 1, null, 1, 66, false);
+
+        var whisker = ResultsModel.Whisker(old, approximation);
+
+        Assert.Equal(40, whisker!.Value.Low);
+        Assert.Equal(80, whisker.Value.High);
+        Assert.Null(ResultsModel.Whisker(old with { Model = "beta" }, approximation));
+    }
+
+    [Fact]
     public void TheVerdictIsNotSignificantWhenTheIntervalContainsOneHalf()
     {
         var verdict = ResultsModel.Verdict(Pair("alpha", "beta", 0.58, 0.45, 0.70), "beta", bothEstablished: true);

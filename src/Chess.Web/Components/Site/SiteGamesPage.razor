@@ -1,0 +1,91 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Components.Shared.Game
+@using Chess.Web.Site
+
+<SiteLayout Title="Games" Frame="Frame" Active="games">
+    <div class="page-header">
+        <h1>Games</h1>
+        <p class="page-lede">Every finished game the arena has played, newest first. Costs are estimates.</p>
+    </div>
+
+    @if (Rows.Count == 0)
+    {
+        <p class="empty-state" data-section="empty">No finished games yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table-compact games-table" data-section="games">
+                <thead>
+                    <tr>
+                        <th scope="col">Played (UTC)</th>
+                        <th scope="col">White</th>
+                        <th scope="col">Black</th>
+                        <th scope="col">Result</th>
+                        <th scope="col">Termination</th>
+                        <th scope="col" class="num">Plies</th>
+                        <th scope="col" class="num">AI credits</th>
+                        <th scope="col" class="num">Est. cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Rows)
+                    {
+                        var game = row.Game;
+                        <tr>
+                            <td><a href="@Frame.Link(SitePaths.Game(game.Id))" title="@GameFormat.When(game.CreatedAt)">@GameFormat.Compact(game.CreatedAt)</a></td>
+                            <td>@game.White.ModelId</td>
+                            <td>@game.Black.ModelId</td>
+                            <td><span class="badge @GameFormat.ResultTone(game.Result)" title="@GameFormat.ResultMeaning(game.Result)">@game.Result</span></td>
+                            <td>@GameFormat.Termination(game.Termination)</td>
+                            <td class="num">@game.PlyCount</td>
+                            <td class="num">@GameFigures.Credits(row.Usage?.TotalAiCredits)</td>
+                            <td class="num">@GameFigures.Usd(row.Usage?.TotalEstimatedUsd)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <nav class="cluster games-pager" aria-label="Pages of games">
+            @if (Page > 1)
+            {
+                <a class="btn btn-sm" href="@Frame.Link(SitePaths.GamesPage(Page - 1))">Previous</a>
+            }
+            else
+            {
+                <span class="btn btn-sm" aria-disabled="true">Previous</span>
+            }
+            <span>Page @Page of @PageCount · @Total @(Total == 1 ? "game" : "games")</span>
+            @if (Page < PageCount)
+            {
+                <a class="btn btn-sm" href="@Frame.Link(SitePaths.GamesPage(Page + 1))">Next</a>
+            }
+            else
+            {
+                <span class="btn btn-sm" aria-disabled="true">Next</span>
+            }
+        </nav>
+    }
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    /// <summary>The games on this page, each with its usage when it was read.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SiteGameRow> Rows { get; set; } = [];
+
+    /// <summary>1-based number of this page.</summary>
+    [Parameter, EditorRequired]
+    public int Page { get; set; }
+
+    [Parameter, EditorRequired]
+    public int PageCount { get; set; }
+
+    /// <summary>Finished games in the whole archive, not on this page.</summary>
+    [Parameter, EditorRequired]
+    public int Total { get; set; }
+}

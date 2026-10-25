@@ -12,14 +12,17 @@ namespace Chess.Llm;
 /// <see cref="StartAsync"/> (called from the hosted service) and never throws out of it: a runtime that
 /// cannot start, is not signed in or lists no models is reported through <see cref="Status"/>.
 /// </summary>
-public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, ILogger<CopilotLlmGateway> logger) : ILlmGateway
+public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions<ArenaOptions> arena, ILogger<CopilotLlmGateway> logger) : ILlmGateway
 {
     private static readonly ActivitySource ActivitySource = new("Chess.Llm");
 
     private readonly CopilotOptions _options = options.Value;
+    private readonly ArenaOptions _arena = arena.Value;
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private volatile LlmGatewayStatus _status = new(LlmGatewayState.Unavailable, "Copilot runtime not started");
     private CopilotClient? _client;
+    // The custom models that may be listed and served. Set once the runtime has listed the Copilot models (ADR-014).
+    private IReadOnlyList<CustomModelOptions> _customModels = [];
 
     public LlmGatewayStatus Status => _status;
 
@@ -55,6 +58,7 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, ILogger<
                     logger.LogDebug("Model {ModelId} billing: {Billing}", model.Id, DescribeBilling(model));
                 }
 
+                _customModels = ActiveCustomModels(models.Select(m => m.Id));
                 _status = new LlmGatewayStatus(LlmGatewayState.Ready, $"Signed in as {auth.Login}; {models.Count} models.");
                 logger.LogInformation("Copilot runtime ready with {ModelCount} models", models.Count);
             }
@@ -91,7 +95,7 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, ILogger<
         var models = await client.ListModelsAsync(ct);
         var priceUnits = await ListPriceUnitsAsync(client, ct);
 
-        return models
+        var copilot = models
             .Select(m => new LlmModelInfo(m.Id, m.Name, m.Billing?.Multiplier, !IsDisabled(m.Policy),
                 TokenPriceMapping.Map(
                     m.Billing?.TokenPrices?.BatchSize,
@@ -99,8 +103,37 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, ILogger<
                     m.Billing?.TokenPrices?.OutputPrice,
                     m.Billing?.TokenPrices?.CacheReadPrice,
                     m.Billing?.TokenPrices?.CachePrice,
-                    priceUnits.TryGetValue(m.Id, out var nanoAiu) ? nanoAiu : null)))
+                    priceUnits.TryGetValue(m.Id, out var nanoAiu) ? nanoAiu : null),
+                CopilotSessionSettings.ListedEfforts(m.SupportedReasoningEfforts),
+                m.DefaultReasoningEffort))
             .ToList();
+
+        copilot.AddRange(_customModels.Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true, Custom: true)));
+        return copilot;
+    }
+
+    /// <summary>
+    /// The custom models that may be listed. A custom id that a Copilot model already uses is refused and logged: the
+    /// Copilot id would otherwise be ambiguous (ADR-014).
+    /// </summary>
+    private IReadOnlyList<CustomModelOptions> ActiveCustomModels(IEnumerable<string> copilotIds)
+    {
+        var taken = copilotIds.ToHashSet(StringComparer.Ordinal);
+        var active = new List<CustomModelOptions>();
+        foreach (var custom in _arena.CustomModels)
+        {
+            if (taken.Contains(custom.Id))
+            {
+                logger.LogError("Custom model {ModelId} is not listed: a Copilot model has the same id. Rename it under Arena:CustomModels.", custom.Id);
+            }
+            else
+            {
+                active.Add(custom);
+            }
+        }
+
+        logger.LogInformation("{CustomModelCount} custom models listed", active.Count);
+        return active;
     }
 
     /// <summary>
@@ -143,23 +176,14 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, ILogger<
     public async Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct)
     {
         var client = RequireReady();
-        var session = await client.CreateSessionAsync(new SessionConfig
-        {
-            Model = options.ModelId,
-            SystemMessage = new SystemMessageConfig { Mode = SystemMessageMode.Replace, Content = options.SystemPrompt },
-            // No tools: an empty allow-list, and every permission request is rejected as a second guard.
-            AvailableTools = [],
-            Streaming = false,
-            OnPermissionRequest = RejectAllPermissions,
-        }, ct);
+        var custom = _customModels.FirstOrDefault(c => string.Equals(c.Id, options.ModelId, StringComparison.Ordinal));
+        var config = custom is null
+            ? CopilotSessionSettings.ForCopilotModel(options)
+            : CopilotSessionSettings.ForCustomModel(options, custom);
 
+        var session = await client.CreateSessionAsync(config, ct);
         return new CopilotConversation(session, options, logger);
     }
-
-#pragma warning disable GHCP001 // The SDK marks its permission decision type experimental; it is the only way to reject a request.
-    private static Task<PermissionDecision> RejectAllPermissions(PermissionRequest request, PermissionInvocation invocation) =>
-        Task.FromResult(PermissionDecision.Reject("Chess arena: this session has no tools."));
-#pragma warning restore GHCP001
 
     // The wire value of Rpc.ModelPolicyState.Disabled; the SDK type itself is experimental.
     private static bool IsDisabled(GitHub.Copilot.ModelPolicy? policy) =>

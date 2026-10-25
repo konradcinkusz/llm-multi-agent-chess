@@ -1,0 +1,160 @@
+@using Chess.Web.Api
+@using Chess.Web.Components.Charts
+@using Chess.Web.Components.Pages.Results
+@using Chess.Web.Site
+
+@* The Results page as a snapshot (03 §6.1): the same sections in the same order as /results, without its filter. *@
+<SiteLayout Title="Results" Frame="Frame" Active="results">
+    <div class="page-header">
+        <h1>Results</h1>
+        <p class="page-lede">How the models rank across every rated game, with the charts and the table behind the ranking.</p>
+    </div>
+
+    @if (Report.Ranking.Count == 0)
+    {
+        <section class="card empty-state" data-section="empty" aria-labelledby="empty-heading">
+            <h2 id="empty-heading" class="card-title">No rated games yet</h2>
+            <p>The rankings appear here once the first rated game has finished.</p>
+        </section>
+    }
+    else
+    {
+        var leader = Report.Ranking[0];
+
+        <div class="stack-lg">
+            @* 1. Big Picture: the first thing on the page. *@
+            <section class="card results-card big-picture" data-section="big-picture" aria-labelledby="big-picture-heading">
+                <h2 id="big-picture-heading" class="card-title">Big picture</h2>
+                <p class="headline">
+                    <span class="hero-label">Best overall:</span> <strong class="hero-leader">@leader.Model</strong>
+                    <span class="hero-stats">arena score @ResultsModel.Number(leader.ArenaScore, "0.0"), rating @ResultsModel.Number(leader.Rating, "0") ± @ResultsModel.Number(ResultsModel.HalfWidth(leader.CiLow, leader.CiHigh), "0")
+                        @if (leader.Provisional)
+                        {
+                            <span class="badge badge-warning">Provisional</span>
+                        }
+                    </span>
+                </p>
+                @if (Report.Verdict is { } verdict)
+                {
+                    <p class="callout callout-info verdict">@verdict</p>
+                }
+                <RankedBarChart Title="Arena score by model"
+                                Description="Arena score is 100 × the mean RQC against every other model; 50 is the average of the field. Whiskers approximate the 95 % interval from the pairwise RQC intervals."
+                                Items="Report.Bars" Min="0" Max="100" ValueFormat="0.0" />
+            </section>
+
+            @* 2. Rating over time. *@
+            <section class="card results-card" data-section="rating-history" aria-labelledby="rating-history-heading">
+                <h2 id="rating-history-heading" class="card-title">Rating over time</h2>
+                <LineChart Title="Rating by rated games played"
+                           Description="Every rated game, all tournaments."
+                           XTitle="Rated games played" YTitle="Rating" Series="Report.Lines" />
+                @if (Report.Folded.Count > 0)
+                {
+                    <p class="muted results-folded">
+                        Not drawn, because the palette has eight colours: @string.Join(", ", Report.Folded). Their ratings are in the table below.
+                    </p>
+                }
+            </section>
+
+            @* 3. Head-to-head matrix. *@
+            <section class="card results-card" data-section="head-to-head" aria-labelledby="head-to-head-heading">
+                <h2 id="head-to-head-heading" class="card-title">Head-to-head matrix</h2>
+                <Heatmap Title="RQC for every pairing"
+                         Description="Row model against column model. Above 0.50 the row model is stronger. Muted cells have an interval that includes 0.50, so the difference is not significant. Each pair has its own page under Head-to-head."
+                         Labels="Report.HeatLabels" Cells="Report.Heat" Midpoint="0.5" Min="0" Max="1" ValueFormat="0.00" />
+            </section>
+
+            @* 4. Results breakdown. *@
+            <section class="card results-card" data-section="breakdown" aria-labelledby="breakdown-heading">
+                <h2 id="breakdown-heading" class="card-title">Results breakdown</h2>
+                <StackedBar100 Title="Outcomes per model" Description="Share of each model's rated games: wins, draws, losses and forfeit losses." Rows="Report.Outcomes" />
+            </section>
+
+            @* 5. Move quality: two separate bar charts, never a dual axis. *@
+            <section class="card results-card" data-section="move-quality" aria-labelledby="move-quality-heading">
+                <h2 id="move-quality-heading" class="card-title">Move quality</h2>
+                <div class="move-quality">
+                    <BarChart Title="First-attempt legality"
+                              Description="Share of moves that were legal on the first attempt."
+                              Items="Report.Legality" Max="100" ValueFormat="0" Colour="@ChartPalette.Neutral" />
+                    @if (Report.Acpl is { } acpl)
+                    {
+                        <BarChart Title="Average centipawn loss"
+                                  Description="Lower is better. Measured by Stockfish, so shown only where engine data exists."
+                                  Items="acpl" ValueFormat="0" Colour="@ChartPalette.Neutral" />
+                    }
+                </div>
+            </section>
+
+            @* 6. Strength vs cost. *@
+            <section class="card results-card" data-section="strength-cost" aria-labelledby="strength-cost-heading">
+                <h2 id="strength-cost-heading" class="card-title">Strength vs cost</h2>
+                <ScatterPlot Title="Rating against latency"
+                             Description="Latency and cost are shown here, not in the rating: a fast model that plays badly does not gain from being fast."
+                             XTitle="Average latency per move (s)" YTitle="Rating" Points="Report.Scatter" />
+            </section>
+
+            @* 7. Full table: the accessible view of the same numbers. *@
+            <section class="card" data-section="table" aria-labelledby="table-heading">
+                <h2 id="table-heading" class="card-title">Leaderboard table</h2>
+                <p class="muted results-note">
+                    White advantage: @ResultsModel.Number(Board.WhiteAdvantage, "0") rating points over @Board.Games rated games.
+                    Ranked by arena score, then rating; provisional models sort after the others.
+                </p>
+                <div class="table-wrap table-compact">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Model</th>
+                                <th scope="col" class="num">Arena score</th>
+                                <th scope="col" class="num">Rating</th>
+                                <th scope="col" class="num">95 % interval</th>
+                                <th scope="col" class="num">Games</th>
+                                <th scope="col" class="num">Legality</th>
+                                <th scope="col" class="num">Move quality</th>
+                                <th scope="col" class="num">Quality</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < Report.Ranking.Count; i++)
+                            {
+                                var row = Report.Ranking[i];
+                                <tr>
+                                    <td class="num">@(i + 1)</td>
+                                    <td>@row.Model</td>
+                                    <td class="num">@ResultsModel.Number(row.ArenaScore, "0.0")</td>
+                                    <td class="num">@ResultsModel.Number(row.Rating, "0")</td>
+                                    <td class="num">@ResultsModel.Number(row.CiLow, "0") to @ResultsModel.Number(row.CiHigh, "0")</td>
+                                    <td class="num">@row.Games</td>
+                                    <td class="num">@Percent(row.Legality)</td>
+                                    <td class="num">@(row.MoveQuality is { } mq ? Percent(mq) : "—")</td>
+                                    <td class="num">@ResultsModel.Number(row.Quality, "0.00")</td>
+                                    <td><span class="badge @(row.Provisional ? "badge-warning" : "badge-success")">@(row.Provisional ? "Provisional" : "Established")</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    }
+</SiteLayout>
+
+@code {
+    /// <summary>The snapshot's frame: depth 0, the snapshot time and the configured links.</summary>
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    /// <summary>The unscoped leaderboard: the numbers of the table and the headline.</summary>
+    [Parameter, EditorRequired]
+    public LeaderboardDto Board { get; set; } = null!;
+
+    /// <summary>The chart inputs and sentences, from <see cref="ResultsModel.Build"/>.</summary>
+    [Parameter, EditorRequired]
+    public ResultsReport Report { get; set; } = null!;
+
+    private static string Percent(double fraction) => ResultsModel.Number(100 * fraction, "0") + "%";
+}

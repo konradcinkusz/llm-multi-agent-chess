@@ -1,0 +1,70 @@
+@using Chess.Web.Components.Charts
+@using Chess.Web.Components.Pages.Results
+@using Chess.Web.Site
+
+<SiteLayout Title="Head-to-head" Frame="Frame" Active="head-to-head">
+    <div class="page-header">
+        <h1>Head-to-head</h1>
+        <p class="page-lede">How strongly each pair of models stands against each other. Each pair has its own page with its games and its reading.</p>
+    </div>
+
+    @if (Report.Ranking.Count < 2)
+    {
+        <p class="muted">At least two rated models are needed to compare.</p>
+    }
+    else
+    {
+        <div class="stack-lg">
+            <section class="card" data-section="matrix" aria-labelledby="matrix-heading">
+                <h2 id="matrix-heading" class="card-title">RQC matrix</h2>
+                <Heatmap Title="RQC for every pairing"
+                         Description="Row model against column model. Above 0.50 the row model is stronger. Muted cells have an interval that includes 0.50, so the difference is not significant."
+                         Labels="Report.HeatLabels" Cells="Report.Heat" Midpoint="0.5" Min="0" Max="1" ValueFormat="0.00" />
+            </section>
+
+            <section class="card" data-section="pairs" aria-labelledby="pairs-heading">
+                <h2 id="pairs-heading" class="card-title">Every pair</h2>
+                <p class="muted">RQC is for the first model of each pair. The interval is the 95 % interval of that RQC.</p>
+                <div class="table-wrap table-compact">
+                    <table class="h2h-pairs">
+                        <thead>
+                            <tr>
+                                <th scope="col">Pair</th>
+                                <th scope="col" class="num">RQC</th>
+                                <th scope="col" class="num">95 % interval</th>
+                                <th scope="col">Reading</th>
+                                <th scope="col" class="num">Direct games</th>
+                                <th scope="col"><span class="visually-hidden">Details</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pair in Pairs)
+                            {
+                                <tr>
+                                    <td>@pair.A vs @pair.B</td>
+                                    <td class="num">@ResultsModel.Number(pair.Cell.Rqc, "0.00")</td>
+                                    <td class="num">@ResultsModel.Number(pair.Cell.RqcLow, "0.00") to @ResultsModel.Number(pair.Cell.RqcHigh, "0.00")</td>
+                                    <td><span class="badge @(pair.Significant ? "badge-success" : "badge-neutral")">@(pair.Significant ? "Significant" : "Not significant")</span></td>
+                                    <td class="num">@pair.Games.Count</td>
+                                    <td><a href="@Frame.Link(pair.SitePath)">Details</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    }
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    /// <summary>The matrix chart inputs, from <see cref="ResultsModel.Build"/>.</summary>
+    [Parameter, EditorRequired]
+    public ResultsReport Report { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SitePair> Pairs { get; set; } = [];
+}
