@@ -37,12 +37,15 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null) : ILl
         }
     }
 
+    /// <summary>Prices of both fake models: 1.0 and 4.0 AI credits per 1 000 000 input and output tokens.</summary>
+    private static readonly LlmTokenPrices FakePrices = new(1_000_000, 1.0, 4.0, null);
+
     public Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(CancellationToken ct)
     {
         IReadOnlyList<LlmModelInfo> models =
         [
-            new LlmModelInfo("fake-a", "Fake A", 0, true),
-            new LlmModelInfo("fake-b", "Fake B", 0, true),
+            new LlmModelInfo("fake-a", "Fake A", 0, true, FakePrices),
+            new LlmModelInfo("fake-b", "Fake B", 0, true, FakePrices),
         ];
         return Task.FromResult(models);
     }
@@ -89,14 +92,24 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null) : ILl
         public async Task<LlmReply> AskAsync(string prompt, CancellationToken ct)
         {
             var text = gateway.NextReply(ModelId, prompt, ct);
+            var reasoning = $"The legal moves are listed in the prompt. I choose {text}.";
             if (gateway._latency > TimeSpan.Zero)
             {
                 await Task.Delay(gateway._latency, ct);
             }
 
-            return new LlmReply(text, gateway._latency, null, null);
+            // Usage is approximated from the text (about four characters per token). Reasoning tokens are part of the output.
+            var reasoningTokens = ApproximateTokens(reasoning);
+            var inputTokens = ApproximateTokens(prompt);
+            var outputTokens = ApproximateTokens(text) + reasoningTokens;
+            var aiCredits = (inputTokens * FakePrices.InputCredits + outputTokens * FakePrices.OutputCredits) / FakePrices.BatchSize;
+
+            return new LlmReply(text, gateway._latency, inputTokens, outputTokens,
+                reasoning, reasoningTokens, CachedInputTokens: null, aiCredits);
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        private static int ApproximateTokens(string text) => text.Length / 4;
     }
 }
