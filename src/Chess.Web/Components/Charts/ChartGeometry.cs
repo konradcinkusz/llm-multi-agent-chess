@@ -20,8 +20,24 @@ internal static class ChartGeometry
     /// <summary>Radius of the rounded data end in pixels (03 §6.1: 4 px).</summary>
     public const double CornerRadius = 4;
 
-    /// <summary>Thickest bar a bar chart draws, in pixels (07 §6: bar thickness ≤ 48 px).</summary>
-    public const double MaxBarThickness = 48;
+    /// <summary>
+    /// Thickest bar a bar chart draws in its viewBox, in pixels. At the 1.5× cap of <see cref="MaxScale"/> a bar is
+    /// at most 48 px on screen (07 §6: bar thickness ≤ 48 px).
+    /// </summary>
+    public const double MaxBarThickness = 32;
+
+    /// <summary>A chart on a wide screen grows to at most this multiple of its natural (viewBox) width (U6).</summary>
+    public const double MaxScale = 1.5;
+
+    /// <summary>Drawn width of one character of 12 px chart text, about 0.6 em. Unit tests cannot measure text, so labels are sized with this.</summary>
+    public const double LabelCharWidth = 7.2;
+
+    /// <summary>
+    /// Inline style of a chart's SVG. It fills the width of its card, is never drawn smaller than its natural width
+    /// (at phone width it scrolls inside its frame instead) and never larger than <see cref="MaxScale"/> times it.
+    /// </summary>
+    public static string FillStyle(double naturalWidth) =>
+        $"width: 100%; min-width: {Num(naturalWidth)}px; max-width: {Num(naturalWidth * MaxScale)}px";
 
     public static string Num(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
