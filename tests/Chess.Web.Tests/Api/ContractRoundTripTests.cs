@@ -44,6 +44,16 @@ public class ContractRoundTripTests
             new ApiTournaments.ModelPremiumEstimateDto("gpt-5", 960));
         AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
             new ApiTournaments.ModelPremiumEstimateDto("random", null));
+        AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
+            new ApiTournaments.ModelPremiumEstimateDto("gpt-5", 960, 24.5, 0.245, "history", 12));
+        AssertRoundTrip<ApiTournaments.ModelPremiumEstimateDto, WebDto.ModelPremiumEstimateDto>(
+            new ApiTournaments.ModelPremiumEstimateDto("claude", null, 26.4, 0.264, "assumed"));
+        // 03 §10 (G5): GET /api/cost/inputs.
+        AssertRoundTrip<ApiTournaments.CostInputsDto, WebDto.CostInputsDto>(
+            new ApiTournaments.CostInputsDto(0.01, 700, 300,
+                [new ApiTournaments.ModelTokenAverageDto("gpt-5", 12, 1000.5, 200.25), new ApiTournaments.ModelTokenAverageDto("claude", 0, null, null)]));
+        AssertRoundTrip<ApiTournaments.CostInputsDto, WebDto.CostInputsDto>(
+            new ApiTournaments.CostInputsDto(0.02, 700, 300, []));
         AssertRoundTrip<ApiTournaments.TournamentCreatedDto, WebDto.TournamentCreatedDto>(
             new ApiTournaments.TournamentCreatedDto(
                 new ApiDto.TournamentDto(Id, "Spring", ["a", "b"], 2, "running", 2, 0, At, null),
@@ -71,9 +81,9 @@ public class ContractRoundTripTests
     public void EveryResultsAndAttemptContractRoundTrips()
     {
         AssertRoundTrip<ApiDto.ModelResultsDto, WebDto.ModelResultsDto>(
-            new ApiDto.ModelResultsDto("gpt-5", 10, 6, 2, 2, 1, 410, 0.97, 1500.5, 800.0, 45.5, 22.1));
+            new ApiDto.ModelResultsDto("gpt-5", 10, 6, 2, 2, 1, 410, 0.97, 1500.5, 800.0, 45.5, 22.1, 0.0105, 0.1));
         AssertRoundTrip<ApiDto.ModelResultsDto, WebDto.ModelResultsDto>(
-            new ApiDto.ModelResultsDto("random", 10, 2, 0, 8, 0, 300, 0.2, 0, null, null, null));
+            new ApiDto.ModelResultsDto("random", 10, 2, 0, 8, 0, 300, 0.2, 0, null, null, null, null, 0));
         AssertRoundTrip<ApiDto.AttemptDto, WebDto.AttemptDto>(
             new ApiDto.AttemptDto(Id, 3, 1, "gpt-5", "Legal moves: ...", "Nf3", "Nf3", true, 1200, null, At));
     }

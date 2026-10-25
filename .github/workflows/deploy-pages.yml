@@ -1,14 +1,13 @@
 name: deploy-pages
 
-# Publishes the one-page site to GitHub Pages.
+# Checks that the one-page site (docs/index.html) still assembles. It deploys nothing.
 #
-# Requires a one-time repository setting: Settings → Pages → Build and deployment →
-# Source: "GitHub Actions". Without it, configure-pages fails with a 404 and there is
-# nothing in the workflow to fix.
+# Since ADR-013 the public results site is the static export that the app publishes to the gh-pages branch
+# (README: "Public results site"). The one-pager moves into that export as about/, so this job only proves the
+# page and its assets still collect into a folder that holds nothing but the page.
 #
-# docs/ holds the standards as markdown as well as the page, and serving those raw
-# would put unrendered .md files on a public URL. So the job assembles a _site/ that
-# contains only the page and its assets rather than uploading docs/ wholesale.
+# docs/ holds the standards as markdown as well as the page, and serving those raw would put unrendered .md files
+# on a public URL. So the job collects a _site/ that contains only the page and its assets rather than copying docs/.
 
 on:
   push:
@@ -22,14 +21,9 @@ on:
 permissions:
   contents: read
 
-# Never cancel a running deployment: a half-published site is worse than a late one.
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
-  build:
-    name: Assemble the site
+  assemble:
+    name: Assemble the one-pager
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -39,27 +33,13 @@ jobs:
           mkdir -p _site/assets
           cp docs/index.html _site/
           # The logo is optional (generate-github-page §5): with no docs/assets/*.svg the glob matches nothing
-          # and a bare cp fails the whole deploy. This repo has no logo.
+          # and a bare cp fails the job. This repo has no logo.
           if compgen -G 'docs/assets/*.svg' > /dev/null; then
             cp docs/assets/*.svg _site/assets/
           fi
 
-      - uses: actions/configure-pages@v6
-
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: _site
-
-  deploy:
-    name: Deploy to Pages
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Check that the page assembled
+        run: |
+          test -s _site/index.html
+          grep -q '<html' _site/index.html
+          find _site -type f | sort

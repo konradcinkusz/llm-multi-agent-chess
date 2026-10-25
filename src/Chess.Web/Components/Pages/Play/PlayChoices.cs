@@ -6,10 +6,32 @@ namespace Chess.Web.Components.Pages.Play;
 /// <summary>A model in a player picker. Without a Copilot login only Random can be picked.</summary>
 public sealed record ModelChoice(ModelDto Model, bool Selectable);
 
+/// <summary>A viewer pace in the picker: its label and the minimum time between two moves as shown (zero is Live).</summary>
+public sealed record PaceOption(string Label, TimeSpan Pause);
+
 /// <summary>What the live page offers and how it words it. Pure, so the rules can be tested without a page.</summary>
 public static class PlayChoices
 {
     public const string Random = "random";
+
+    /// <summary>The viewer paces (03 §10.5). Live shows every move as it is played.</summary>
+    public static IReadOnlyList<PaceOption> Paces { get; } =
+    [
+        new("Live", TimeSpan.Zero),
+        new("1 s", TimeSpan.FromSeconds(1)),
+        new("2 s", TimeSpan.FromSeconds(2)),
+        new("3 s", TimeSpan.FromSeconds(3)),
+        new("5 s", TimeSpan.FromSeconds(5)),
+    ];
+
+    /// <summary>The pace a page starts at: <c>Arena:Viewer:MinMovePauseSeconds</c>, which must be one of <see cref="Paces"/>; 2 s otherwise.</summary>
+    public static TimeSpan DefaultPace(string? configuredSeconds) =>
+        int.TryParse(configuredSeconds, out var seconds) && Paces.Any(pace => pace.Pause == TimeSpan.FromSeconds(seconds))
+            ? TimeSpan.FromSeconds(seconds)
+            : TimeSpan.FromSeconds(2);
+
+    /// <summary>The move wording for the pace picker: "1 move behind the game" or "3 moves behind the game".</summary>
+    public static string Behind(int moves) => moves == 1 ? "1 move behind the game" : $"{moves} moves behind the game";
 
     /// <summary>Copilot is Ready when signed in, and Fake when the fake gateway runs (development and E2E).</summary>
     public static bool GatewayReady(StatusDto? status) => status?.Copilot is "Ready" or "Fake";

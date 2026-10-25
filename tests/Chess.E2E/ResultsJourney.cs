@@ -12,7 +12,7 @@ public sealed class ResultsJourney(ArenaFixture arena)
     // 03 §6.1: the order of the sections on the page is fixed.
     private static readonly string[] SectionOrder =
     [
-        "big-picture", "rating-history", "head-to-head", "breakdown", "move-quality", "strength-cost", "table",
+        "big-picture", "model-map", "rating-history", "head-to-head", "breakdown", "move-quality", "strength-cost", "table",
     ];
 
     // The page loads its data in its first render, and the interactive circuit that starts after the prerendered page

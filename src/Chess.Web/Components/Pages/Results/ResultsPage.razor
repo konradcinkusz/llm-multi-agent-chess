@@ -77,7 +77,15 @@ else
                             Items="_report.Bars" KeepOrder="true" Min="0" Max="100" ValueFormat="0.0" />
         </section>
 
-        @* 2. Rating over time. *@
+        @* 2. Model map: every model on two coefficients the reader picks (03 §13). *@
+        <section class="card results-card model-map-section" data-section="model-map" aria-labelledby="model-map-heading">
+            <h2 id="model-map-heading" class="card-title">Model map</h2>
+            <ModelMap Title="Two coefficients for every model"
+                      Description="Each bubble is one model, placed by its values on the two axes you choose; its area is its rated games. Dashed lines mark the median of each axis, and the corners name the quadrants by the better direction of each axis. Hatched bubbles are provisional. Hover a bubble for all its coefficients."
+                      Models="_report.MapModels" MoveQualityAvailable="_board!.MoveQualityAvailable" />
+        </section>
+
+        @* 3. Rating over time. *@
         <section class="card results-card" data-section="rating-history" aria-labelledby="rating-history-heading">
             <h2 id="rating-history-heading" class="card-title">Rating over time</h2>
             <LineChart Title="Rating by rated games played"
@@ -97,7 +105,7 @@ else
             }
         </section>
 
-        @* 3. Head-to-head matrix. *@
+        @* 4. Head-to-head matrix. *@
         <section class="card results-card" data-section="head-to-head" aria-labelledby="head-to-head-heading">
             <h2 id="head-to-head-heading" class="card-title">Head-to-head matrix</h2>
             <Heatmap Title="RQC for every pairing"
@@ -105,13 +113,13 @@ else
                      Labels="_report.HeatLabels" Cells="_report.Heat" Midpoint="0.5" Min="0" Max="1" ValueFormat="0.00" />
         </section>
 
-        @* 4. Results breakdown. *@
+        @* 5. Results breakdown. *@
         <section class="card results-card" data-section="breakdown" aria-labelledby="breakdown-heading">
             <h2 id="breakdown-heading" class="card-title">Results breakdown</h2>
             <StackedBar100 Title="Outcomes per model" Description="Share of each model's rated games: wins, draws, losses and forfeit losses." Rows="_report.Outcomes" />
         </section>
 
-        @* 5. Move quality: two separate bar charts, never a dual axis. *@
+        @* 6. Move quality: two separate bar charts, never a dual axis. *@
         <section class="card results-card" data-section="move-quality" aria-labelledby="move-quality-heading">
             <h2 id="move-quality-heading" class="card-title">Move quality</h2>
             <div class="move-quality">
@@ -127,7 +135,7 @@ else
             </div>
         </section>
 
-        @* 6. Strength vs cost. *@
+        @* 7. Strength vs cost. *@
         <section class="card results-card" data-section="strength-cost" aria-labelledby="strength-cost-heading">
             <h2 id="strength-cost-heading" class="card-title">Strength vs cost</h2>
             <ScatterPlot Title="Rating against latency"
@@ -135,7 +143,7 @@ else
                          XTitle="Average latency per move (s)" YTitle="Rating" Points="_report.Scatter" />
         </section>
 
-        @* 7. Full table: the leaderboard as a table, the accessible view of the same numbers. *@
+        @* 8. Full table: the leaderboard as a table, the accessible view of the same numbers. *@
         <section class="card" data-section="table" aria-labelledby="table-heading">
             <h2 id="table-heading" class="card-title">Leaderboard table</h2>
             <p class="muted results-note">

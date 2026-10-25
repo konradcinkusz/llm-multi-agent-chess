@@ -2,6 +2,7 @@ using Chess.ServiceDefaults;
 using Chess.Web.Api;
 using Chess.Web.Components;
 using Chess.Web.Site;
+using Chess.Web.Site.Publishing;
 using Microsoft.Extensions.ServiceDiscovery;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,7 @@ builder.AddServiceDefaults();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddServiceDiscovery();
 builder.Services.AddSiteExport(builder.Configuration);
+builder.Services.AddSitePublishing(builder.Configuration, builder.Environment);
 
 // Chess.Api is resolved by service discovery (AppHost resource "api"). ServiceDefaults adds the standard resilience
 // handler to every client, so no client adds another: each handler multiplies the attempts. The handler's timeouts

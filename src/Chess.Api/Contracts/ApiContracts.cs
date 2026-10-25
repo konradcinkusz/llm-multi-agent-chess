@@ -21,9 +21,11 @@ public sealed record LeaderboardDto(IReadOnlyList<Chess.Rating.ModelRating> Mode
 public sealed record MatrixDto(IReadOnlyList<string> Models, IReadOnlyList<Chess.Rating.PairwiseCoefficient> Cells);
 public sealed record RatingHistoryPointDto(DateTimeOffset TakenAt, int RatedGames, string Model, double Rating,
     double CiLow, double CiHigh, double ArenaScore, bool Provisional);
+// M1 (03 §13): AvgEstimatedUsdPerGame averages the estimated cost of each game the model played as an LLM side with a
+// known cost; null when none has one (the random player is free and has no replies). ForfeitRate is forfeit losses / games.
 public sealed record ModelResultsDto(string Model, int Games, int Wins, int Draws, int Losses, int ForfeitLosses,
     int Moves, double FirstAttemptLegalRate, double AvgLatencyMs, double? AvgInputTokens, double? AvgOutputTokens,
-    double? AverageCentipawnLoss);
+    double? AverageCentipawnLoss, double? AvgEstimatedUsdPerGame = null, double? ForfeitRate = null);
 public sealed record AttemptDto(Guid GameId, int Ply, int Number, string ModelId, string Prompt, string? RawReply,
     string? ParsedSan, bool Legal, long LatencyMs, string? Error, DateTimeOffset CreatedAt,
     string? Reasoning = null, int? InputTokens = null, int? OutputTokens = null, int? ReasoningTokens = null,

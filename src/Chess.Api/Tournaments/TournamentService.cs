@@ -19,10 +19,14 @@ public sealed class TournamentService(
     IGameRunner runner,
     IGameEventStream events,
     ModelCatalog catalog,
+    CostInputs costs,
     TimeProvider clock)
 {
-    /// <summary>Premium requests a game is expected to cost for each model (ADR-004: about 80 moves a game).</summary>
-    public const int EstimatedRequestsPerGame = 80;
+    /// <summary>
+    /// Premium requests a model is expected to make in one game: its moves on one side (40, 03 §9.1), the same convention
+    /// as the credit estimate and the broadcast planner.
+    /// </summary>
+    public const int EstimatedRequestsPerGame = 40;
 
     // Serialises dispatch and cancel, so a game is never handed to the runner after its tournament was cancelled.
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -239,10 +243,17 @@ public sealed class TournamentService(
     private async Task<IReadOnlyList<ModelPremiumEstimateDto>> EstimateAsync(IReadOnlyList<string> models, int gamesPerPair, CancellationToken ct)
     {
         var listing = await catalog.GetModelsAsync(ct);
+        var inputs = await costs.ForAsync(listing, ct);
         // Each model plays every other model gamesPerPair times.
         var gamesPerModel = (models.Count - 1) * gamesPerPair;
         return models
-            .Select(id => new ModelPremiumEstimateDto(id, Estimate(listing, id, gamesPerModel)))
+            .Select(id =>
+            {
+                var cost = CostEstimator.Estimate(id, gamesPerModel * CostEstimator.MovesPerSidePerGame,
+                    inputs.GetValueOrDefault(id), costs.UsdPerAiCredit);
+                return new ModelPremiumEstimateDto(id, Estimate(listing, id, gamesPerModel),
+                    cost.AiCredits, cost.Usd, cost.Basis, cost.SampleMoves);
+            })
             .ToArray();
     }
 

@@ -16,7 +16,10 @@ public sealed record CreateTournamentRequest(string Name, IReadOnlyList<string> 
 public sealed record TournamentDto(Guid Id, string Name, IReadOnlyList<string> Models, int GamesPerPair, string Status,
     int GamesTotal, int GamesFinished, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt);  // Status: running | finished | cancelled
 public sealed record TournamentCreatedDto(TournamentDto Tournament, IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
-public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests);  // null: multiplier unknown
+// Premium requests are null when the multiplier is unknown; the credit and USD estimates are null when the prices are.
+// TokenBasis: history | assumed | free | unknown (03 §10.2); SampleMoves is set for history.
+public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests,
+    double? EstimatedAiCredits = null, double? EstimatedUsd = null, string? TokenBasis = null, int? SampleMoves = null);
 public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null,
     IReadOnlyList<string>? ReasoningEfforts = null, string? DefaultReasoningEffort = null, bool Custom = false);   // 03 §12.1
 public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
@@ -34,9 +37,10 @@ public sealed record LeaderboardDto(IReadOnlyList<ModelRating> Models, double Wh
 public sealed record MatrixDto(IReadOnlyList<string> Models, IReadOnlyList<PairwiseCoefficient> Cells);
 public sealed record RatingHistoryPointDto(DateTimeOffset TakenAt, int RatedGames, string Model, double Rating,
     double CiLow, double CiHigh, double ArenaScore, bool Provisional);
+// M1 (03 §13): the two cost and forfeit coefficients of the model map; null when the API has none.
 public sealed record ModelResultsDto(string Model, int Games, int Wins, int Draws, int Losses, int ForfeitLosses,
     int Moves, double FirstAttemptLegalRate, double AvgLatencyMs, double? AvgInputTokens, double? AvgOutputTokens,
-    double? AverageCentipawnLoss);
+    double? AverageCentipawnLoss, double? AvgEstimatedUsdPerGame = null, double? ForfeitRate = null);
 public sealed record AttemptDto(Guid GameId, int Ply, int Number, string ModelId, string Prompt, string? RawReply,
     string? ParsedSan, bool Legal, long LatencyMs, string? Error, DateTimeOffset CreatedAt,
     string? Reasoning = null, int? InputTokens = null, int? OutputTokens = null, int? ReasoningTokens = null,
@@ -47,3 +51,8 @@ public sealed record SideUsageDto(string Color, string ModelId, int Requests, lo
     long ReasoningTokens, long CachedInputTokens, double? AiCredits, double? EstimatedUsd, string CostBasis);
 public sealed record GameUsageDto(Guid GameId, SideUsageDto White, SideUsageDto Black, double? TotalAiCredits,
     double? TotalEstimatedUsd, double UsdPerAiCredit);
+
+// 03 §10 (G5): GET /api/cost/inputs. Models lists the models with stored moves; the rest are assumed.
+public sealed record CostInputsDto(double UsdPerAiCredit, int AssumedInputTokensPerMove, int AssumedOutputTokensPerMove,
+    IReadOnlyList<ModelTokenAverageDto> Models);
+public sealed record ModelTokenAverageDto(string ModelId, int Moves, double? AverageInputTokens, double? AverageOutputTokens);

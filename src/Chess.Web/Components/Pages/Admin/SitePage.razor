@@ -1,0 +1,150 @@
+@page "/admin/site"
+@using Chess.Web.Site.Publishing
+@using Microsoft.Extensions.Options
+@inject SiteExportCoordinator Site
+@inject IOptions<SitePublishingOptions> Options
+@implements IDisposable
+
+<PageTitle>Public site · LLM Chess Arena</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Public results site</h1>
+        <p class="page-lede">A static copy of the results, games and tournaments, published to the <code>@Options.Value.Branch</code> branch</p>
+    </div>
+
+    <section class="card stack" aria-labelledby="site-actions">
+        <h2 id="site-actions">Publish</h2>
+        <p class="muted">
+            Publishing replaces the whole site with a fresh export. Everything on it is public, including prompts, replies,
+            reasoning and costs. Nothing else (no configuration, no secrets, no aborted games) is sent.
+        </p>
+        <div class="cluster">
+            <button type="button" class="btn" @onclick="ExportAsync" disabled="@_busy">Export</button>
+            <button type="button" class="btn-primary" @onclick="PublishAsync" disabled="@_busy">Publish</button>
+        </div>
+        @if (_busy)
+        {
+            <p class="loading-msg muted" role="status">Working...</p>
+        }
+        @if (_error is not null)
+        {
+            <p class="error-msg callout callout-danger" role="alert">@_error</p>
+        }
+    </section>
+
+    <section class="card stack" aria-labelledby="site-last-publish">
+        <h2 id="site-last-publish">Last publish</h2>
+        @if (Site.LastPublish is { } publish)
+        {
+            <p class="@(publish.Published ? "callout callout-info" : "callout callout-danger")" role="status">
+                @(publish.Published ? "Published" : "Not published") at @SiteFormat.Stamp(publish.At)
+            </p>
+            <p id="site-publish-detail">@publish.Detail</p>
+        }
+        else
+        {
+            <p class="muted">Never published since the app started.</p>
+        }
+    </section>
+
+    <section class="card stack" aria-labelledby="site-last-export">
+        <h2 id="site-last-export">Last export</h2>
+        @if (Site.LastExport is { } export)
+        {
+            <dl class="site-facts">
+                <dt>Pages</dt><dd id="site-pages">@export.Pages</dd>
+                <dt>Finished games</dt><dd>@export.Games</dd>
+                <dt>Size</dt><dd>@SiteFormat.Size(export.Bytes)</dd>
+                <dt>Taken</dt><dd>@SiteFormat.Stamp(export.TakenAt)</dd>
+                <dt>Folder</dt><dd><code>@Site.ExportDirectory</code></dd>
+            </dl>
+        }
+        else
+        {
+            <p class="muted">Not exported since the app started.</p>
+        }
+    </section>
+
+    <section class="card stack" aria-labelledby="site-address">
+        <h2 id="site-address">Site</h2>
+        @if (_location.Url is { } url)
+        {
+            <p>Public address: <a id="site-url" href="@url" target="_blank" rel="noopener">@url</a></p>
+        }
+        else
+        {
+            <p class="muted">No public address yet. @(_location.Problem ?? "Set Arena:Site:PublicUrl to show one.")</p>
+        }
+        @if (_location.Remote is { } remote)
+        {
+            <p class="muted">Publishes to <code>@remote</code>.</p>
+        }
+        <p class="muted">Auto-publish: @SiteFormat.AutoPublish(Options.Value.AutoPublishMinutes)</p>
+        <p class="muted">
+            One-time owner step: on GitHub, Settings → Pages → Source: <em>Deploy from a branch</em>, branch
+            <code>@Options.Value.Branch</code>, folder <code>/ (root)</code>.
+        </p>
+    </section>
+</div>
+
+@code {
+    private SiteLocation _location = new(null, null, null);
+    private string? _error;
+    private bool _busy;
+    private readonly CancellationTokenSource _stop = new();
+    private Task? _refresh;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _location = await Site.LocateAsync(_stop.Token);
+        // Auto-publish runs in the background; the page shows its results as they arrive (07 §5, lesson on background refresh).
+        _refresh = RefreshAsync();
+    }
+
+    private async Task ExportAsync()
+    {
+        await RunAsync(async () => { await Site.ExportAsync(_stop.Token); });
+    }
+
+    private async Task PublishAsync()
+    {
+        await RunAsync(async () => { await Site.PublishAsync(_stop.Token); });
+    }
+
+    private async Task RunAsync(Func<Task> work)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await work();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = $"The site could not be exported or published: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page closed.
+        }
+    }
+
+    public void Dispose() => _stop.Cancel();
+}

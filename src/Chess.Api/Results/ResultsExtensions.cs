@@ -1,8 +1,10 @@
+using Chess.Api.Catalog;
 using Chess.Api.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Chess.Api.Results;
 
@@ -31,7 +33,11 @@ public static class ResultsExtensions
     }
 
     private static async Task<IResult> ResultsBreakdownHandler(
-        Guid? tournamentId, IDbContextFactory<ArenaDbContext> factory, CancellationToken ct)
+        Guid? tournamentId,
+        IDbContextFactory<ArenaDbContext> factory,
+        ModelCatalog catalog,
+        IOptions<CatalogOptions> options,
+        CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         if (tournamentId is { } id && !await db.Tournaments.AnyAsync(t => t.Id == id, ct))
@@ -42,6 +48,9 @@ public static class ResultsExtensions
                 statusCode: StatusCodes.Status404NotFound);
         }
 
-        return TypedResults.Ok(await ResultsBreakdown.ReadAsync(db, tournamentId, ct));
+        // The catalog's prices turn tokens into an estimated cost (03 §10.2); without a ready gateway no model has a price.
+        var listing = await catalog.GetModelsAsync(ct);
+        return TypedResults.Ok(await ResultsBreakdown.ReadAsync(db, tournamentId, listing.Models,
+            options.Value.Cost.UsdPerAiCredit, ct));
     }
 }

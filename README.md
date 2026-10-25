@@ -73,7 +73,7 @@ The navigation lists them in this order:
 | Page | Route | What it shows |
 |---|---|---|
 | **Results** | `/results` | The ranking. The **Big picture** comes first: a headline naming the best model, with its arena score and rating, then a ranked bar chart with 95 % intervals. Below it: rating over time, head-to-head matrix, results breakdown, move quality, strength against cost, and a full table. A tournament filter and an **Order** control sit above the Big picture. The order is **Arena score** (the default) or **Conservative**, which ranks by the lower bound of the arena score, so a model with more games outranks one with the same score and fewer (RATING.md §6). |
-| Live game | `/` | Pick a model for each side (or `random`), start a game and watch the board, the moves, and rejected attempts as they happen. |
+| Live game | `/` | Pick a model for each side (or `random`), start a game and watch the board, the moves, and rejected attempts. The Pace control shows moves at least 1, 2, 3 or 5 seconds apart (or Live, as they happen); the game itself is not slowed. Catch up shows every move at once. Default 2 s, set by `Arena:Viewer:MinMovePauseSeconds`. |
 | Head-to-head | `/head-to-head` | Two models: relative coefficient with its interval, a plain-language reading, expected score, direct record and direct games. |
 | Tournaments | `/tournaments`, `/tournaments/{id}` | Round-robin creation with the premium-request estimate shown before you confirm, progress, a per-tournament leaderboard, and cancel. |
 | Games | `/games`, `/games/{id}` | Paged archive. Replay steps through the moves, with per-move attempts, latency, centipawn loss and best move, and a PGN download. |
@@ -102,6 +102,33 @@ Broadcast mode plans a day of games in advance, plays them one at a time with pa
 The planner (`/broadcast/plan`) shows every slot and the premium-request estimate before anything is saved. Start the day once, and it plays through its slots in order, one game at a time. A restart resumes the day at its next unfinished slot.
 
 The full runbook is [docs/BROADCAST.md](docs/BROADCAST.md): planning, OBS setup, YouTube settings, keeping the machine awake, and what happens on a restart or a Copilot outage.
+
+## Public results site
+
+The results, head-to-head, games, tournaments and this one-page description can be published as a static site on
+GitHub Pages ([ADR-013](docs/architecture/05-DECISIONS.md)). The app makes a snapshot on your machine and pushes it to the
+`gh-pages` branch. Nothing runs online: no server, no database and no script on the public side, and the site lags the
+live app by at most the auto-publish interval. The live game stays on YouTube.
+
+**One-time setting.** On GitHub: Settings → Pages → Source: *Deploy from a branch*, branch `gh-pages`, folder `/ (root)`.
+The `deploy-pages` workflow no longer deploys anything; it only checks that `docs/index.html` still assembles.
+
+**Publishing.** Open `/admin/site` in the app. *Export* writes the site to `Arena:Site:ExportDirectory` (the folder is
+emptied first). *Publish* exports afresh and force-pushes the export to `gh-pages` as one commit, so the branch never
+grows a history. The app uses the `git` on your machine and its existing credentials; it stores none. A failed step is
+shown on the page with git's message, and `main` and your working tree are never touched.
+
+**What becomes public.** Everything on the site, including prompts, replies, reasoning and costs. Nothing else is sent:
+no configuration, no secrets, no attempts of aborted games.
+
+| Option (`Arena:Site:…`) | Default | Meaning |
+|---|---|---|
+| `Remote` | the `origin` of the repository the app runs from | Where to push. A local path also works. |
+| `Branch` | `gh-pages` | The branch GitHub Pages serves. |
+| `WorkDir` | a folder in the system temp directory | The publisher's own clone, deleted and recreated on each publish. Give it a folder of its own. |
+| `ExportDirectory` | a folder in the system temp directory | Where the export is written, emptied before each export. |
+| `PublicUrl` | `https://<owner>.github.io/<repo>/`, derived from a GitHub remote | The address shown on the page. |
+| `AutoPublishMinutes` | `0` (off) | Publish every N minutes when a game has finished since the last publish. A restart does not publish by itself. |
 
 ## Cost: every move is a Copilot request
 

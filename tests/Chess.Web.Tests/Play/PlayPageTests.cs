@@ -4,6 +4,8 @@ using Bunit;
 using Chess.Web.Api;
 using Chess.Web.Components.Pages.Play;
 using Chess.Web.Tests.Support;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -254,17 +256,105 @@ public class PlayPageTests
         server.EndStream();
     }
 
+    [Fact]
+    public void ThePaceStartsAtTwoSecondsAndOffersLiveAndFourMorePauses()
+    {
+        var server = new PlayServer();
+        using var ctx = new BunitContext();
+        Wire(ctx, server);
+
+        var cut = ctx.Render<PlayPage>();
+
+        cut.WaitForAssertion(() => Assert.Equal(5, cut.FindAll("[data-testid=pace-option]").Count));
+        Assert.Equal(["Live", "1 s", "2 s", "3 s", "5 s"],
+            cut.FindAll("[data-testid=pace-option]").Select(option => option.ParentElement!.TextContent.Trim()).ToArray());
+        Assert.True(cut.Find("[data-testid=pace-option][value='2']").HasAttribute("checked"));
+        Assert.Empty(cut.FindAll("[data-testid=pace-behind]"));
+    }
+
+    [Fact]
+    public void APageOpenedOnAGameInProgressShowsItsCurrentPositionAtOnce()
+    {
+        var server = new PlayServer
+        {
+            GameDetail = PlayFixtures.Detail("running", "*", null, ("White", "e4", PlayFixtures.AfterE4), ("Black", "e5", PlayFixtures.AfterE5)),
+        };
+        using var ctx = new BunitContext();
+        Wire(ctx, server);
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo($"/?game={PlayServer.GameId}");
+
+        var cut = ctx.Render<PlayPage>();
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=move-cell]").Count));
+        Assert.Equal("Move 2 · White to move", cut.Find("[data-testid=game-status]").TextContent);
+        Assert.Empty(cut.FindAll("[data-testid=pace-behind]"));
+        server.EndStream();
+    }
+
+    [Fact]
+    public async Task MovesAreShownNoFasterThanThePaceAndTheBehindCountSaysHowFarTheViewerIs()
+    {
+        var clock = new ManualClock(DateTimeOffset.Parse("2026-10-25T10:00:00Z"));
+        var server = new PlayServer();
+        using var ctx = new BunitContext();
+        Wire(ctx, server);
+        var cut = ctx.Render<PlayPage>(parameters => parameters.Add(page => page.Clock, clock));
+        StartWhenReady(cut, pace: 1);
+        cut.WaitForAssertion(() => Assert.True(server.StreamOpen));
+
+        // The first move of a page is shown at once; the second waits for one second on the pace.
+        await server.SendAsync("MovePlayed", PlayFixtures.MovePlayed(1, "White", "e4", PlayFixtures.AfterE4));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=move-cell]")));
+        await server.SendAsync("MovePlayed", PlayFixtures.MovePlayed(2, "Black", "e5", PlayFixtures.AfterE5));
+        cut.WaitForAssertion(() => Assert.Equal("1 move behind the game", cut.Find("[data-testid=pace-behind] span").TextContent));
+        Assert.Single(cut.FindAll("[data-testid=move-cell]"));
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=move-cell]").Count));
+        Assert.Empty(cut.FindAll("[data-testid=pace-behind]"));
+        server.EndStream();
+    }
+
+    [Fact]
+    public async Task CatchUpShowsEveryMoveTheGameHasPlayedAtOnce()
+    {
+        var clock = new ManualClock(DateTimeOffset.Parse("2026-10-25T10:00:00Z"));
+        var server = new PlayServer();
+        using var ctx = new BunitContext();
+        Wire(ctx, server);
+        var cut = ctx.Render<PlayPage>(parameters => parameters.Add(page => page.Clock, clock));
+        StartWhenReady(cut, pace: 5);
+        cut.WaitForAssertion(() => Assert.True(server.StreamOpen));
+
+        await server.SendAsync("MovePlayed", PlayFixtures.MovePlayed(1, "White", "e4", PlayFixtures.AfterE4));
+        await server.SendAsync("MovePlayed", PlayFixtures.MovePlayed(2, "Black", "e5", PlayFixtures.AfterE5));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=catch-up]")));
+
+        cut.Find("[data-testid=catch-up]").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=move-cell]").Count));
+        Assert.Empty(cut.FindAll("[data-testid=pace-behind]"));
+        Assert.Equal("Move 2 · White to move", cut.Find("[data-testid=game-status]").TextContent);
+        server.EndStream();
+    }
+
     private static void Wire(BunitContext ctx, PlayServer server)
     {
         var client = Canned.Client(server.Handler);
         ctx.Services.AddSingleton(new ArenaApiClient(client));
         ctx.Services.AddSingleton(new GameEventsClient(client));
+        ctx.Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
     }
 
-    /// <summary>Waits until the models have loaded and the Start button can be pressed, then starts the game.</summary>
-    private static void StartWhenReady(IRenderedComponent<PlayPage> cut, bool rated = true)
+    /// <summary>
+    /// Waits until the models have loaded and the Start button can be pressed, then starts the game. The pace is Live unless a
+    /// test says otherwise: the journey tests check each move as it lands, and only the pace tests wait for a pause.
+    /// </summary>
+    private static void StartWhenReady(IRenderedComponent<PlayPage> cut, bool rated = true, int pace = 0)
     {
         cut.WaitForAssertion(() => Assert.False(cut.Find("[data-testid=start-game]").HasAttribute("disabled")));
+        cut.Find($"[data-testid=pace-option][value='{pace}']").Change(true);
         if (!rated)
         {
             cut.Find("[data-testid=rated-toggle]").Change(false);

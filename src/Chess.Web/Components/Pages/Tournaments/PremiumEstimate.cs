@@ -8,8 +8,8 @@ namespace Chess.Web.Components.Pages.Tournaments;
 /// </summary>
 public static class PremiumEstimate
 {
-    /// <summary>Premium requests one game is expected to cost for each model (ADR-004: about 80 moves a game).</summary>
-    public const int RequestsPerGame = 80;
+    /// <summary>Premium requests a model is expected to make in one game: its moves on one side (40, 03 §9.1; ADR-004).</summary>
+    public const int RequestsPerGame = 40;
 
     /// <summary>One model's estimate. <see cref="Requests"/> is null when its premium multiplier is not known.</summary>
     public sealed record ModelEstimate(string ModelId, double? Requests);

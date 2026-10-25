@@ -1,18 +1,22 @@
 using Chess.Api.Contracts;
 using Chess.Api.Persistence;
+using Chess.Api.Usage;
 using Microsoft.EntityFrameworkCore;
 
 namespace Chess.Api.Results;
 
 /// <summary>
-/// Per-model results over decided games (03 §5.1): W/D/L, forfeit losses, and move statistics over every
-/// side a model played, random included.
+/// Per-model results over decided games (03 §5.1): W/D/L, forfeit losses, move statistics over every
+/// side a model played, random included, and the estimated cost of its LLM sides (03 §10.2, 03 §13).
 /// </summary>
 public static class ResultsBreakdown
 {
     /// <param name="tournamentId">Only that tournament's games, or every decided game when null.</param>
+    /// <param name="models">The catalog's players, which carry the prices the cost is estimated from.</param>
+    /// <param name="usdPerAiCredit">The dollar value of one AI credit (<c>Arena:Cost:UsdPerAiCredit</c>).</param>
     /// <returns>One row per model, ordered by model id.</returns>
-    public static async Task<List<ModelResultsDto>> ReadAsync(ArenaDbContext db, Guid? tournamentId, CancellationToken ct)
+    public static async Task<List<ModelResultsDto>> ReadAsync(
+        ArenaDbContext db, Guid? tournamentId, IReadOnlyList<ModelDto> models, double usdPerAiCredit, CancellationToken ct)
     {
         var games = ResultsGames.Decided(db);
         if (tournamentId is { } id)
@@ -22,6 +26,9 @@ public static class ResultsBreakdown
 
         var scored = await games.Select(ResultsGames.Project).ToListAsync(ct);
         var moves = await ResultsGames.MovesOf(db, games).ToListAsync(ct);
+        var replies = (await ResultsGames.RepliesOf(db, games).ToListAsync(ct))
+            .GroupBy(r => r.GameId)
+            .ToDictionary(group => group.Key, group => group.ToList());
         var byId = scored.ToDictionary(g => g.Id);
 
         var totals = new Dictionary<string, Totals>(StringComparer.Ordinal);
@@ -30,6 +37,12 @@ public static class ResultsBreakdown
             var white = ResultsGames.WhiteScore(game.Result);
             Credit(totals, game.WhiteModel, white, game.Termination == ResultsGames.ForfeitWhite);
             Credit(totals, game.BlackModel, 1 - white, game.Termination == ResultsGames.ForfeitBlack);
+
+            var gameReplies = replies.GetValueOrDefault(game.Id) ?? [];
+            CostOf(totals, models, usdPerAiCredit, game.WhiteKind, game.WhiteModel, "white",
+                gameReplies.Where(r => r.Ply % 2 == 1));
+            CostOf(totals, models, usdPerAiCredit, game.BlackKind, game.BlackModel, "black",
+                gameReplies.Where(r => r.Ply % 2 == 0));
         }
 
         foreach (var move in moves)
@@ -71,6 +84,29 @@ public static class ResultsBreakdown
         }
     }
 
+    /// <summary>
+    /// The estimated cost of one side of a game, counted for its model when it is an LLM with a known cost. A side with
+    /// some replies unpriced still counts, over the replies that have a cost.
+    /// </summary>
+    private static void CostOf(Dictionary<string, Totals> totals, IReadOnlyList<ModelDto> models, double usdPerAiCredit,
+        string kind, string model, string color, IEnumerable<ReplyRow> sideReplies)
+    {
+        if (kind != ResultsGames.LlmKind)
+        {
+            return;
+        }
+
+        var prices = models.FirstOrDefault(m => m.Id == model)?.Pricing;
+        var usage = GameCostCalculator.ForSide(color, model, isLlm: true,
+            sideReplies.Select(r => new GameCostCalculator.ReplyUsage(r.InputTokens, r.OutputTokens, r.ReasoningTokens,
+                r.CachedInputTokens, r.AiCredits)).ToList(),
+            prices, usdPerAiCredit);
+        if (usage.EstimatedUsd is { } usd)
+        {
+            Of(totals, model).AddCost(usd);
+        }
+    }
+
     private static Totals Of(Dictionary<string, Totals> totals, string model)
     {
         if (!totals.TryGetValue(model, out var entry))
@@ -96,6 +132,8 @@ public static class ResultsBreakdown
         public int OutputTokensCount;
         public long CentipawnLossSum;
         public int CentipawnLossCount;
+        public double CostUsdSum;
+        public int CostUsdCount;
 
         public void AddMove(MoveRow move)
         {
@@ -125,18 +163,30 @@ public static class ResultsBreakdown
             }
         }
 
-        public ModelResultsDto ToDto(string model) => new(
-            model,
-            Wins + Draws + Losses,
-            Wins,
-            Draws,
-            Losses,
-            ForfeitLosses,
-            Moves,
-            Moves == 0 ? 0 : (double)FirstAttemptLegal / Moves,
-            Moves == 0 ? 0 : (double)LatencyMsSum / Moves,
-            InputTokensCount == 0 ? null : (double)InputTokensSum / InputTokensCount,
-            OutputTokensCount == 0 ? null : (double)OutputTokensSum / OutputTokensCount,
-            CentipawnLossCount == 0 ? null : (double)CentipawnLossSum / CentipawnLossCount);
+        public void AddCost(double usd)
+        {
+            CostUsdSum += usd;
+            CostUsdCount++;
+        }
+
+        public ModelResultsDto ToDto(string model)
+        {
+            var games = Wins + Draws + Losses;
+            return new ModelResultsDto(
+                model,
+                games,
+                Wins,
+                Draws,
+                Losses,
+                ForfeitLosses,
+                Moves,
+                Moves == 0 ? 0 : (double)FirstAttemptLegal / Moves,
+                Moves == 0 ? 0 : (double)LatencyMsSum / Moves,
+                InputTokensCount == 0 ? null : (double)InputTokensSum / InputTokensCount,
+                OutputTokensCount == 0 ? null : (double)OutputTokensSum / OutputTokensCount,
+                CentipawnLossCount == 0 ? null : (double)CentipawnLossSum / CentipawnLossCount,
+                CostUsdCount == 0 ? null : CostUsdSum / CostUsdCount,
+                games == 0 ? null : (double)ForfeitLosses / games);
+        }
     }
 }

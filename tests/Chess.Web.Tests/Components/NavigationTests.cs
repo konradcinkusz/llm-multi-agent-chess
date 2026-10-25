@@ -17,6 +17,8 @@ public class NavigationTests
     [
         "/results", "/", "/head-to-head", "/tournaments", "/tournaments/{Id:guid}",
         "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan",
+        // Not in 03 §6: the public-site admin page (ADR-013, Site/Publishing), listed here so the route set stays exact.
+        "/admin/site",
     ];
 
     // "/broadcast" is the chrome-less OBS page (03 §9.4): a route, but deliberately NOT in the navigation.
@@ -24,7 +26,7 @@ public class NavigationTests
 
     // The navigation shows the top-level routes, Results first; the detail routes are reached from their lists.
     private static readonly string[] NavHrefs =
-        ["/results", "/", "/head-to-head", "/tournaments", "/broadcast/plan", "/games", "/admin/attempts"];
+        ["/results", "/", "/head-to-head", "/tournaments", "/broadcast/plan", "/games", "/admin/attempts", "/admin/site"];
 
     [Fact]
     public void EveryRouteOfSection6IsServedByAPlaceholderPage()

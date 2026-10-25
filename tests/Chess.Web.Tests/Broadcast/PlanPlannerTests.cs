@@ -2,6 +2,7 @@ using Chess.Web.Api;
 using Chess.Web.Components.Pages.Broadcast;
 using Xunit;
 using ApiBroadcast = Chess.Api.Broadcast;
+using ApiTournaments = Chess.Api.Tournaments;
 
 namespace Chess.Web.Tests.Broadcast;
 
@@ -36,7 +37,8 @@ public class PlanPlannerTests
                 new ApiBroadcast.PacingProfile(moveDelay, gap), seed, 80, latency);
 
             var expected = ApiBroadcast.BroadcastPlanner.Plan(apiRequest,
-                new Dictionary<string, double?>(Multipliers, StringComparer.Ordinal));
+                Multipliers.ToDictionary(m => m.Key, m => new ApiTournaments.ModelCostInputs(m.Value, null, null), StringComparer.Ordinal),
+                0.01);
             var actual = PlanPlanner.Plan(request);
 
             Assert.Equal(expected.Slots.Count, actual.Count);

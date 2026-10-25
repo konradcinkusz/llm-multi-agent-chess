@@ -1,0 +1,179 @@
+@using static Chess.Web.Components.Charts.ChartGeometry
+@using Microsoft.AspNetCore.Components
+
+<ChartFrame Title="@Title" Description="@Description">
+    <div class="model-map-controls">
+        <div class="field">
+            <label for="model-map-x">Horizontal axis</label>
+            <select id="model-map-x" @onchange="OnXChanged">
+                @foreach (var coefficient in _choices)
+                {
+                    <option value="@coefficient" selected="@(coefficient == _x)">@MapAxes.Of(coefficient).Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="model-map-y">Vertical axis</label>
+            <select id="model-map-y" @onchange="OnYChanged">
+                @foreach (var coefficient in _choices)
+                {
+                    <option value="@coefficient" selected="@(coefficient == _y)">@MapAxes.Of(coefficient).Name</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (_view.Marks.Count == 0)
+    {
+        <p class="chart-empty">No model has both of these coefficients yet.</p>
+    }
+    else
+    {
+        <svg class="chart-svg model-map-svg" width="@Num(ModelMapGeometry.Width)" style="@FillStyle(ModelMapGeometry.Width)"
+             viewBox="0 0 @Num(ModelMapGeometry.Width) @Num(ModelMapGeometry.Height)" role="img" aria-label="@Title">
+            <defs>
+                @foreach (var slot in _hatchSlots)
+                {
+                    <pattern id="@HatchId(slot)" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="6" stroke-width="2" style="stroke: @Colour(slot)" />
+                    </pattern>
+                }
+            </defs>
+
+            @foreach (var tick in _view.XTicks)
+            {
+                <line class="chart-grid" x1="@Num(tick.Position)" y1="@Num(PlotTop)" x2="@Num(tick.Position)" y2="@Num(PlotBottom)" />
+                <ChartText class="chart-tick" x="@Num(tick.Position)" y="@Num(PlotBottom + 16)" text-anchor="middle">@tick.Text</ChartText>
+            }
+            @foreach (var tick in _view.YTicks)
+            {
+                <line class="chart-grid" x1="@Num(PlotLeft)" y1="@Num(tick.Position)" x2="@Num(PlotRight)" y2="@Num(tick.Position)" />
+                <ChartText class="chart-tick" x="@Num(PlotLeft - 8)" y="@Num(tick.Position + 4)" text-anchor="end">@tick.Text</ChartText>
+            }
+
+            @if (_view.MedianX is { } medianX)
+            {
+                <line class="model-map-median" data-guide="median-x" x1="@Num(medianX)" y1="@Num(PlotTop)" x2="@Num(medianX)" y2="@Num(PlotBottom)" />
+            }
+            @if (_view.MedianY is { } medianY)
+            {
+                <line class="model-map-median" data-guide="median-y" x1="@Num(PlotLeft)" y1="@Num(medianY)" x2="@Num(PlotRight)" y2="@Num(medianY)" />
+            }
+            @foreach (var quadrant in _view.Quadrants)
+            {
+                <ChartText class="model-map-quadrant" x="@Num(quadrant.X)" y="@Num(quadrant.Y)" text-anchor="@quadrant.Anchor">@quadrant.Name</ChartText>
+            }
+
+            <line class="chart-baseline" x1="@Num(PlotLeft)" y1="@Num(PlotBottom)" x2="@Num(PlotRight)" y2="@Num(PlotBottom)" />
+            <line class="chart-baseline" x1="@Num(PlotLeft)" y1="@Num(PlotTop)" x2="@Num(PlotLeft)" y2="@Num(PlotBottom)" />
+            <ChartText class="chart-axis-title" x="@Num((PlotLeft + PlotRight) / 2)" y="@Num(PlotBottom + 36)" text-anchor="middle">@_view.XTitle</ChartText>
+            <ChartText class="chart-axis-title" x="@Num(PlotLeft)" y="@Num(PlotTop - 8)" text-anchor="start">@_view.YTitle</ChartText>
+
+            @foreach (var mark in _view.Marks)
+            {
+                <g class="model-map-mark" data-point="@mark.Model">
+                    @if (mark.WhiskerX is { } wx)
+                    {
+                        <line class="chart-whisker" x1="@Num(wx.From)" y1="@Num(mark.Y)" x2="@Num(wx.To)" y2="@Num(mark.Y)" />
+                        <line class="chart-whisker" x1="@Num(wx.From)" y1="@Num(mark.Y - 5)" x2="@Num(wx.From)" y2="@Num(mark.Y + 5)" />
+                        <line class="chart-whisker" x1="@Num(wx.To)" y1="@Num(mark.Y - 5)" x2="@Num(wx.To)" y2="@Num(mark.Y + 5)" />
+                    }
+                    @if (mark.WhiskerY is { } wy)
+                    {
+                        <line class="chart-whisker" x1="@Num(mark.X)" y1="@Num(wy.From)" x2="@Num(mark.X)" y2="@Num(wy.To)" />
+                        <line class="chart-whisker" x1="@Num(mark.X - 5)" y1="@Num(wy.From)" x2="@Num(mark.X + 5)" y2="@Num(wy.From)" />
+                        <line class="chart-whisker" x1="@Num(mark.X - 5)" y1="@Num(wy.To)" x2="@Num(mark.X + 5)" y2="@Num(wy.To)" />
+                    }
+                    <circle class="model-map-bubble" cx="@Num(mark.X)" cy="@Num(mark.Y)" r="@Num(mark.Radius)" style="@BubbleStyle(mark)">
+                        <title>@mark.Tooltip</title>
+                    </circle>
+                    <ChartText class="chart-label" x="@Num(mark.LabelX)" y="@Num(mark.LabelY + 4)" text-anchor="@mark.LabelAnchor">@mark.Model</ChartText>
+                </g>
+            }
+        </svg>
+        <p class="model-map-reading">@_view.Reading</p>
+        @if (_view.Unplaced.Count > 0)
+        {
+            <p class="muted model-map-unplaced">Not placed: @(string.Join("; ", _view.Unplaced)).</p>
+        }
+    }
+    <ChartTable Headers="_view.TableHeaders" Rows="_view.TableRows" />
+</ChartFrame>
+
+@code {
+    /// <summary>The plot edges, shared with the geometry so the markup and the layout agree.</summary>
+    private const double PlotLeft = ModelMapGeometry.PlotLeft;
+    private const double PlotRight = ModelMapGeometry.PlotRight;
+    private const double PlotTop = ModelMapGeometry.PlotTop;
+    private const double PlotBottom = ModelMapGeometry.PlotBottom;
+
+    /// <summary>Visible title and the accessible name of the chart.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>Every model of the scope, with the palette slot it keeps across filters (03 §6.1).</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MapModel> Models { get; set; } = [];
+
+    /// <summary>Move quality is offered only when Stockfish has measured the moves (03 §13).</summary>
+    [Parameter]
+    public bool MoveQualityAvailable { get; set; }
+
+    // 03 §13: the default is x = average cost per game, y = rating ("who is strong for the money").
+    private const MapCoefficient DefaultX = MapCoefficient.Cost;
+    private const MapCoefficient DefaultY = MapCoefficient.Rating;
+
+    private readonly string _id = "model-map-" + Guid.NewGuid().ToString("N")[..8];
+    private MapCoefficient _x = DefaultX;
+    private MapCoefficient _y = DefaultY;
+    private IReadOnlyList<MapCoefficient> _choices = [];
+    private IReadOnlyList<int?> _hatchSlots = [];
+    private ModelMapView _view = null!;
+
+    protected override void OnParametersSet()
+    {
+        _choices = MapAxes.Choices(MoveQualityAvailable);
+        _x = Keep(_x, DefaultX);
+        _y = Keep(_y, DefaultY);
+        Rebuild();
+    }
+
+    private MapCoefficient Keep(MapCoefficient chosen, MapCoefficient fallback) =>
+        _choices.Contains(chosen) ? chosen : fallback;
+
+    private void Rebuild()
+    {
+        _view = ModelMapGeometry.Build(Models, _x, _y);
+        // A hatch per colour that a provisional bubble can take, plus the neutral one for models beyond the eight slots.
+        _hatchSlots = Models.Where(m => m.Provisional).Select(m => m.Slot).Distinct().ToList();
+    }
+
+    private void OnXChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<MapCoefficient>(args.Value?.ToString(), out var coefficient))
+        {
+            _x = coefficient;
+            Rebuild();
+        }
+    }
+
+    private void OnYChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<MapCoefficient>(args.Value?.ToString(), out var coefficient))
+        {
+            _y = coefficient;
+            Rebuild();
+        }
+    }
+
+    private string HatchId(int? slot) => $"{_id}-hatch-{(slot is { } s ? s.ToString() : "neutral")}";
+
+    private static string Colour(int? slot) => slot is { } s ? ChartPalette.Series(s) : ChartPalette.Neutral;
+
+    private string BubbleStyle(MapMark mark) => mark.Provisional
+        ? $"fill: url(#{HatchId(mark.Slot)}); stroke: {Colour(mark.Slot)}"
+        : $"fill: {Colour(mark.Slot)}; stroke: var(--chart-surface)";
+}
