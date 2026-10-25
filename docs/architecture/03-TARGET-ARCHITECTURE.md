@@ -466,3 +466,90 @@ attempts, note?`). Everything the channel plays is stored; nothing about the sch
   game; **Up next** (next 3 slots with start times); local clock; "technical break" and "intermission
   between games" cards; auto-reconnect of the live stream; no scrollbars, no cursor, no text
   smaller than 28 px. Query options: `?theme=light`, `?top=5`.
+
+## 10. Live game transparency and cost (owner request 2026-10-25)
+
+The owner ran real games and asked for five things: who is to move, a move list that reads like a chess site, the
+models' full reasoning and the messages exchanged with the engine (in a log under the board), the tokens and the cost
+in US dollars at the end of a game, and why every model said "multiplier unknown".
+
+**Why "multiplier unknown".** Since June 2026 GitHub Copilot bills chat by **AI Credits** (1 credit = 0.01 USD), metered
+per token and priced per model, instead of premium requests × a model multiplier. In `GitHub.Copilot.SDK` 1.0.26 the
+token-billed models list `ModelInfo.Billing.Multiplier = null` and carry their prices in
+`ModelInfo.Billing.TokenPrices` (`Rpc.ModelBillingTokenPrices`: `BatchSize`, `InputPrice`, `OutputPrice`,
+`CacheReadPrice`, `CacheWritePrice`, in the unit `models.listTokenPriceUnits` reports). The gateway read only the
+multiplier. The SDK also reports, per reply: `AssistantUsageEvent.Data.InputTokens`, `OutputTokens`, `ReasoningTokens`,
+`CacheReadTokens`, `Cost`, `CopilotUsage.TotalNanoAiu` (the request's cost in nano AI units) and `AiCreditsStatus`; and
+`AssistantMessageData.ReasoningText` / `AssistantReasoningEvent.Data.Content` carry readable reasoning when the model
+exposes it. None of this was captured.
+
+### 10.1 Contracts (frozen 2026-10-25, additive)
+
+```csharp
+// Chess.Llm (03 §3.1)
+public sealed record LlmModelInfo(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, LlmTokenPrices? Pricing = null);
+public sealed record LlmTokenPrices(long BatchSize, double? InputCredits, double? OutputCredits, double? CachedInputCredits);
+public sealed record LlmReply(string Text, TimeSpan Latency, int? InputTokens, int? OutputTokens,
+    string? Reasoning = null, int? ReasoningTokens = null, int? CachedInputTokens = null, double? AiCredits = null);
+
+// Chess.Api (03 §5.1); the web copies in Chess.Web/Api are identical
+public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null);
+public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens, double? CachedInputUsdPerMillionTokens);
+public sealed record AttemptDto(/* as before */ ..., string? Reasoning = null, int? InputTokens = null, int? OutputTokens = null,
+    int? ReasoningTokens = null, double? AiCredits = null, string? RejectionKind = null);
+public sealed record SideUsageDto(string Color, string ModelId, int Requests, long InputTokens, long OutputTokens,
+    long ReasoningTokens, long CachedInputTokens, double? AiCredits, double? EstimatedUsd, string CostBasis);
+public sealed record GameUsageDto(Guid GameId, SideUsageDto White, SideUsageDto Black, double? TotalAiCredits,
+    double? TotalEstimatedUsd, double UsdPerAiCredit);
+
+// SSE (GET /api/games/{id}/events), published for every LLM reply after it is stored
+public sealed record AttemptRecorded(Guid GameId, DateTimeOffset At, int Ply, int Attempt, string Color, string ModelId,
+    string Prompt, string? RawReply, string? Reasoning, string? ParsedSan, bool Legal, long LatencyMs,
+    int? InputTokens, int? OutputTokens, int? ReasoningTokens, double? AiCredits, string? RejectionKind) : IGameEvent;
+```
+
+New endpoint: `GET /api/games/{id}/usage` → `GameUsageDto` (404 for an unknown game). `GET /api/attempts?gameId=` returns
+the new `AttemptDto` fields. `GET /api/models` fills `Pricing`.
+
+### 10.2 Cost model
+
+- **Per reply, in AI credits:** the reported cost when the runtime reports one (`TotalNanoAiu / 1e9`, summed over the
+  reply's usage events; assumption: 1 AI unit = 1 AI credit, to be confirmed by the owner's live smoke run); otherwise an
+  estimate from the model's token prices: `((input − cached) × InputCredits + cached × CachedInputCredits + output ×
+  OutputCredits) / BatchSize`, with reasoning tokens counted inside output tokens; otherwise unknown.
+- **USD** = credits × `Arena:Cost:UsdPerAiCredit` (default `0.01`). The UI always labels it *estimated* and shows the rate.
+- **Cost basis per side:** `free` (random player), `reported` (every reply reported), `estimated` (every reply has a
+  reported or an estimated cost, at least one estimated), `partial` (some replies unknown; the sum covers the rest),
+  `unknown` (none known).
+- Model prices are shown as `$in / $out per 1M tokens` (credits per batch × 1 000 000 / `BatchSize` × USD per credit).
+  A model with neither a multiplier nor prices shows "price unknown".
+- Cost and tokens are never part of the rating (RATING.md §8).
+- Copilot's **Auto** model picks a different model per request, so it is not one player: it is hidden from the model
+  lists unless `Arena:ShowAutoModel = true`.
+
+### 10.3 Rejected replies and the move timeout
+
+An attempt that is not a legal move has a `RejectionKind`: `unparseable` (the reply is not one move, e.g. prose around
+it), `illegal` (one move that is not legal here), `ambiguous` (it matches several legal moves, e.g. `Rc7` when `Rac7` and
+`Rfc7` are legal), `timeout` (no reply within `Players:MoveTimeoutSeconds`), `error` (the gateway failed). The reason text
+names the kind and the candidate move. The rated prompt and the strictness do not change: a reply with prose around the
+move is still rejected, because following the one-move instruction is what legality `L` measures (RATING.md §4). The
+default move timeout rises from 60 s to **180 s**, because reasoning models routinely think longer than a minute.
+
+### 10.4 Live game page (`/`), following lichess and chess.com
+
+- **Player bars** above (Black) and below (White) the board: colour chip, model name, the side to move highlighted, a
+  "thinking" indicator with elapsed seconds and "attempt n of 3", material balance (captured pieces), and running
+  tokens and estimated cost for that side.
+- **Status line:** "Move 12 · White to move · gpt-x is thinking (attempt 2 of 3)"; then the result banner
+  ("1-0 · White wins by checkmate").
+- **Board:** the last move's from and to squares highlighted; a king in check highlighted.
+- **Move list:** a numbered two-column table (`1. e4 e5`), the latest ply highlighted and kept in view; a move that
+  needed retries carries a small marker with the count; selecting a move jumps to its entries in the log.
+- **Engine log** (under the board, full width): one entry per attempt, newest first, with ply, side, model, "attempt n
+  of N", a verdict badge (legal, unparseable, illegal, ambiguous, timeout, error), latency, tokens and credits; each entry
+  expands to the prompt sent, the raw reply and the reasoning ("this model did not expose its reasoning" when there is
+  none). Filters: all, rejected only, White, Black.
+- **Game summary** when the game ends: per side and in total, requests, input, output, reasoning and cached tokens, AI
+  credits and the estimated USD cost with its basis and rate.
+- The finished-game replay (`/games/{id}`) shows the same move table, log and summary for any stored game.

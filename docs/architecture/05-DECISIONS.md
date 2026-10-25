@@ -190,3 +190,19 @@ Restart: a running schedule resumes; the interrupted game is excluded from ratin
 limits are the dominant operational risk and are handled by the failure policy, not by retries inside a move.
 
 **Amended 2026-10-24: broadcast games are outside `Arena:MaxConcurrentGames` by decision; the cap is per source; operational rule: do not run a tournament during a broadcast.**
+
+## ADR-012 — Cost in AI credits and US dollars; reasoning is stored
+
+**Status:** Accepted (2026-10-25).
+
+**Context.** Copilot bills chat by AI credits (0.01 USD each, token-metered per model) since June 2026, so the model
+multiplier is null for the token-billed models and every model showed "multiplier unknown". The owner wants the tokens
+and the dollar cost of each game, the models' reasoning and the messages exchanged with the engine.
+**Decision.** The gateway captures, per reply, tokens (input, output, reasoning, cached), the reported AI-credit cost and
+the readable reasoning, and lists each model's token prices (03 §10). Every attempt stores them. The API computes cost per
+side as in 03 §10.2, with `Arena:Cost:UsdPerAiCredit` (default 0.01) and a cost basis that says how much of it was
+reported. Prices replace the multiplier in the UI. Copilot's Auto model is hidden by default.
+**Consequences.** Reasoning text is stored in `move_attempts` (it can be long; it is the owner's own data on the owner's
+machine, P5 unaffected). The 1 AI unit = 1 AI credit assumption and the price unit are unverified until the owner's live
+smoke run; both are isolated in one place each so a correction is one line. The multiplier-based estimates in the
+tournament form and the broadcast planner are replaced by AI-credit estimates (G5).

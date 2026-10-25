@@ -17,7 +17,9 @@ public sealed record TournamentDto(Guid Id, string Name, IReadOnlyList<string> M
     int GamesTotal, int GamesFinished, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt);  // Status: running | finished | cancelled
 public sealed record TournamentCreatedDto(TournamentDto Tournament, IReadOnlyList<ModelPremiumEstimateDto> EstimatedPremiumRequests);
 public sealed record ModelPremiumEstimateDto(string ModelId, double? EstimatedPremiumRequests);  // null: multiplier unknown
-public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled);
+public sealed record ModelDto(string Id, string DisplayName, double? PremiumMultiplier, bool Enabled, ModelPricingDto? Pricing = null);
+public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
+    double? CachedInputUsdPerMillionTokens);
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);
 
 // Local copies of Chess.Rating.ModelRating and PairwiseCoefficient (03 §3.4).
@@ -34,4 +36,12 @@ public sealed record ModelResultsDto(string Model, int Games, int Wins, int Draw
     int Moves, double FirstAttemptLegalRate, double AvgLatencyMs, double? AvgInputTokens, double? AvgOutputTokens,
     double? AverageCentipawnLoss);
 public sealed record AttemptDto(Guid GameId, int Ply, int Number, string ModelId, string Prompt, string? RawReply,
-    string? ParsedSan, bool Legal, long LatencyMs, string? Error, DateTimeOffset CreatedAt);
+    string? ParsedSan, bool Legal, long LatencyMs, string? Error, DateTimeOffset CreatedAt,
+    string? Reasoning = null, int? InputTokens = null, int? OutputTokens = null, int? ReasoningTokens = null,
+    double? AiCredits = null, string? RejectionKind = null);       // RejectionKind (03 §10): null when legal
+
+// 03 §10: GET /api/games/{id}/usage. CostBasis: reported | estimated | partial | unknown | free.
+public sealed record SideUsageDto(string Color, string ModelId, int Requests, long InputTokens, long OutputTokens,
+    long ReasoningTokens, long CachedInputTokens, double? AiCredits, double? EstimatedUsd, string CostBasis);
+public sealed record GameUsageDto(Guid GameId, SideUsageDto White, SideUsageDto Black, double? TotalAiCredits,
+    double? TotalEstimatedUsd, double UsdPerAiCredit);
