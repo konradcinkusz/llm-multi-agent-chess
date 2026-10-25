@@ -124,6 +124,13 @@ few games (need 20 rated games per model)."
 
 - **Arena score** `AS_i = 100 · mean_{j ≠ i} RQC(i, j)` over every other rated model. 50 is the
   average of the field. The leaderboard sorts by `AS`, then `R`.
+- **Arena interval:** `ArenaScoreLow` / `ArenaScoreHigh` are the 2.5 / 97.5 percentiles of `AS` over the same bootstrap
+  resamples. On each resample `AS` is computed from that resample's ratings, over the models that resample rated; a model
+  absent from a resample has no value there. Without resamples the interval collapses to `AS`.
+- **Conservative order** (`GET /api/ratings?order=conservative`; the default `order=score` is the order above): non-provisional
+  models first, then by `ArenaScoreLow` descending, then `AS`, then `R`, then model name. It ranks by the lower bound of the
+  arena score, so a model with more games (a narrower interval) beats one with the same point score and fewer games. The
+  order changes only the sequence of the models, never a number.
 - **Bootstrap:** `BootstrapSamples = 200` resamples of the rated games with replacement, using
   `new Random(Seed)` with `Seed = 20261024`; refit §3–§5 on each sample; the 2.5 / 97.5
   percentiles give `CiLow` / `CiHigh` for `R` and `RqcLow` / `RqcHigh` for RQC. Move statistics
@@ -144,6 +151,10 @@ few games (need 20 rated games per model)."
 | V7 | 10 rated games for A | A is provisional |
 | V8 | `ACPL = 100`, `L = 0.5` | `MQ = 0.5`, `Q = 0.6·0.5 + 0.4·0.5 = 0.5` |
 | V9 | no Stockfish data, `L = 0.8` | `Q = 0.8`, `MoveQuality = null` |
+| V10 | any input with bootstrap samples | `ArenaScoreLow ≤ ArenaScore ≤ ArenaScoreHigh`, and the interval has a positive width |
+| V11 | two models of equal strength, one with 30 rated games and one with 300 | the 30-game model has the wider arena interval |
+| V12 | two models with equal `AS`; A has the higher lower bound (more games), B the higher rating | conservative order: A first; score order: B first (rating breaks the tie) |
+| V13 | same games, same seed, computed twice | identical `ArenaScoreLow` / `ArenaScoreHigh` (exact equality) |
 
 ## 8. What is deliberately not in the score
 

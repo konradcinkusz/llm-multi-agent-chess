@@ -112,6 +112,54 @@ public sealed class RatingEndpointTests(SeededRatingsApp app) : IClassFixture<Se
         Assert.Equal(before.Games + 1, after.Games);
     }
 
+    [Fact]
+    public async Task Leaderboard_in_conservative_order_is_the_calculator_order_of_the_same_numbers()
+    {
+        var report = RatingCalculator.Compute(RatingSeed.RatedOutcomes, RatingSeed.RatedStats, new RatingOptions());
+        var expected = RatingCalculator.Order(report, RatingOrder.Conservative);
+
+        var dto = await GetAsync<LeaderboardDto>(app.CreateClient(), "/api/ratings?order=conservative");
+
+        Assert.Equal(expected.Models, dto.Models);
+    }
+
+    [Fact]
+    public async Task Order_score_is_the_default_leaderboard()
+    {
+        var client = app.CreateClient();
+
+        var plain = await GetAsync<LeaderboardDto>(client, "/api/ratings");
+        var score = await GetAsync<LeaderboardDto>(client, "/api/ratings?order=score");
+
+        Assert.Equal(plain.Models, score.Models);
+    }
+
+    [Fact]
+    public async Task Every_model_carries_the_arena_score_bounds_around_its_point_score()
+    {
+        var dto = await GetAsync<LeaderboardDto>(app.CreateClient(), "/api/ratings");
+
+        Assert.NotEmpty(dto.Models);
+        foreach (var row in dto.Models)
+        {
+            Assert.NotNull(row.ArenaScoreLow);
+            Assert.NotNull(row.ArenaScoreHigh);
+            Assert.InRange(row.ArenaScore, row.ArenaScoreLow!.Value, row.ArenaScoreHigh!.Value);
+        }
+    }
+
+    [Theory]
+    [InlineData("best")]
+    [InlineData("Conservative")]
+    [InlineData("")]
+    public async Task An_unknown_order_is_400_problem_details(string order)
+    {
+        var response = await app.CreateClient().GetAsync($"/api/ratings?order={order}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
     private static async Task<T> GetAsync<T>(HttpClient client, string url)
     {
         var response = await client.GetAsync(url);
