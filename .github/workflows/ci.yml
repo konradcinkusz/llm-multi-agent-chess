@@ -21,7 +21,10 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # Pinned: 10.0.403 is listed on the release feed but its download answers 409, so `global-json-file`
+          # (which resolves the newest 10.0 SDK) failed every job on 2026-10-25. 10.0.402 satisfies global.json.
+          # Return to `global-json-file: global.json` once the newest SDK downloads again.
+          dotnet-version: 10.0.402
           cache: true
           cache-dependency-path: Directory.Packages.props
 
@@ -115,7 +118,10 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # Pinned: 10.0.403 is listed on the release feed but its download answers 409, so `global-json-file`
+          # (which resolves the newest 10.0 SDK) failed every job on 2026-10-25. 10.0.402 satisfies global.json.
+          # Return to `global-json-file: global.json` once the newest SDK downloads again.
+          dotnet-version: 10.0.402
 
       - name: Check solution membership and AppHost registration
         run: |
@@ -148,7 +154,10 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # Pinned: 10.0.403 is listed on the release feed but its download answers 409, so `global-json-file`
+          # (which resolves the newest 10.0 SDK) failed every job on 2026-10-25. 10.0.402 satisfies global.json.
+          # Return to `global-json-file: global.json` once the newest SDK downloads again.
+          dotnet-version: 10.0.402
           cache: true
           cache-dependency-path: Directory.Packages.props
 
