@@ -1,4 +1,4 @@
-/* The replay (03 §6, 07 §6): the board and its stepping buttons in a card; the move details and the moves beside it on a wide screen. */
+/* The replay (03 §6, 07 §6, 03 §10.4): the board and its stepping buttons in a card; the move details and the moves beside it on a wide screen. */
 
 .replay-back {
     margin: 0 0 var(--space-3);
@@ -74,37 +74,16 @@
     font-variant-numeric: tabular-nums;
 }
 
-.replay-moves-table {
-    max-height: 420px;
-    overflow: auto;
+/* The summary and the engine log take the full width below the board and the moves, as on the live page. */
+.replay-summary-card,
+.replay-log {
+    min-width: 0;
+    margin-top: var(--space-5);
 }
 
-.moves-table {
-    width: 100%;
-}
-
-.moves-table th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: var(--surface-2);
-}
-
-.moves-table tr.current td {
-    background: var(--accent-soft);
-}
-
-.move-button {
-    padding: 2px var(--space-1);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--accent);
-    font: inherit;
-    font-weight: 500;
-    cursor: pointer;
-}
-
-.move-button:hover {
-    text-decoration: underline;
+.replay-log .card-header,
+.replay-summary-card .card-header {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    justify-content: flex-start;
 }
