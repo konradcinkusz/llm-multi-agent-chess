@@ -99,6 +99,11 @@ internal sealed class GameRun(
                 CreatedAt = now,
                 InputTokens = attempt.InputTokens,
                 OutputTokens = attempt.OutputTokens,
+                Reasoning = attempt.Reasoning,
+                ReasoningTokens = attempt.ReasoningTokens,
+                CachedInputTokens = attempt.CachedInputTokens,
+                AiCredits = attempt.AiCredits,
+                RejectionKind = attempt.RejectionKind,
             });
         }
 
@@ -155,8 +160,8 @@ internal sealed class GameRun(
         foreach (var attempt in attempts)
         {
             events.Publish(new AttemptRecorded(game.Id, now, ply, attempt.Number, color, modelId, attempt.Prompt,
-                attempt.RawReply, Reasoning: null, attempt.ParsedSan, attempt.Legal, (long)attempt.Latency.TotalMilliseconds,
-                attempt.InputTokens, attempt.OutputTokens, ReasoningTokens: null, AiCredits: null, RejectionKind: null));
+                attempt.RawReply, attempt.Reasoning, attempt.ParsedSan, attempt.Legal, (long)attempt.Latency.TotalMilliseconds,
+                attempt.InputTokens, attempt.OutputTokens, attempt.ReasoningTokens, attempt.AiCredits, attempt.RejectionKind));
         }
     }
 
