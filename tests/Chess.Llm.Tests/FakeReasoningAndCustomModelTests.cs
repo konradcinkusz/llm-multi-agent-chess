@@ -86,6 +86,34 @@ public class FakeReasoningAndCustomModelTests
         Assert.Throws<ArgumentException>(() => new FakeLlmGateway(customModels: [Custom(id, displayName: null)]));
     }
 
+    [Fact]
+    public async Task CustomModelsOfEveryProviderTypeAreListedWithTheirPricesAndStartOffline()
+    {
+        var gateway = new FakeLlmGateway(
+            customModels:
+            [
+                new CustomModelOptions { Id = "claude", ProviderType = "anthropic", BaseUrl = "https://api.anthropic.com", Model = "claude-sonnet-5-5", ApiKey = "sk-test", UsdPerMillionInput = 3, UsdPerMillionOutput = 15 },
+                new CustomModelOptions { Id = "gpt", ProviderType = "openai", BaseUrl = "https://api.openai.com/v1", Model = "gpt-5", CreditsPerMillionInput = 200, CreditsPerMillionOutput = 800 },
+                new CustomModelOptions { Id = "deepinfra", ProviderType = "openai", BaseUrl = "https://api.deepinfra.com/v1/openai", Model = "meta-llama/Llama-4" },
+            ],
+            usdPerAiCredit: 0.01);
+
+        var models = await gateway.ListModelsAsync(CancellationToken.None);
+
+        var claude = models.Single(m => m.Id == "claude");
+        Assert.True(claude.Custom);
+        Assert.Equal(new LlmTokenPrices(1_000_000, 300, 1500, null), claude.Pricing);
+        Assert.Equal(new LlmTokenPrices(1_000_000, 200, 800, null), models.Single(m => m.Id == "gpt").Pricing);
+        Assert.Null(models.Single(m => m.Id == "deepinfra").Pricing);
+
+        foreach (var id in new[] { "claude", "gpt", "deepinfra" })
+        {
+            var conversation = await gateway.StartConversationAsync(new LlmConversationOptions(id, "system", TimeSpan.FromSeconds(5)), CancellationToken.None);
+            Assert.Equal(id, conversation.ModelId);
+            await conversation.DisposeAsync();
+        }
+    }
+
     private static CustomModelOptions Custom(string id, string? displayName) => new()
     {
         Id = id,
