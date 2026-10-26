@@ -105,9 +105,24 @@ public class PromptStylesTests
     [InlineData("Move: e5\nRe-checking the options.\nMove: Nf3", "Nf3")]
     [InlineData("move: Nf3", "Nf3")]
     [InlineData("Nf3", "Nf3")]
+    [InlineData("**Move:** Nf3", "Nf3")]
+    [InlineData("Move: **Nf3**", "Nf3")]
+    [InlineData("- Move: Nf3", "Nf3")]
+    [InlineData("1. **Move:** Nf3", "Nf3")]
+    [InlineData("> Move: Nf3", "Nf3")]
+    [InlineData("Analysis.\n```\nMove: Nf3\n```", "Nf3")]
     public void TheMoveIsTheTextAfterTheLastMoveLine(string reply, string expected)
     {
         Assert.Equal(expected, PromptStyles.Find("think")!.MoveText(reply));
+    }
+
+    [Theory]
+    [InlineData("**Plan:** castle and push the c-pawn", "castle and push the c-pawn")]
+    [InlineData("- Plan: castle", "castle")]
+    [InlineData("Plan: **castle**\nMove: O-O", "castle")]
+    public void TheMarkdownAroundThePlanLabelAndValueIsIgnored(string reply, string expected)
+    {
+        Assert.Equal(expected, PromptStyles.Find("think")!.PlanOf(reply));
     }
 
     [Fact]
