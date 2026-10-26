@@ -156,6 +156,126 @@ public class ArenaOptionsTests
         await host.StopAsync();
     }
 
+    [Fact]
+    public void AnthropicIsAcceptedAsAProviderType()
+    {
+        var result = Validate(Valid(c =>
+        {
+            c.ProviderType = "anthropic";
+            c.BaseUrl = "https://api.anthropic.com";
+            c.Model = "claude-sonnet-5-5";
+        }));
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void AnUnknownProviderTypeNamesTheSupportedOnes()
+    {
+        var result = Validate(Valid(c => c.ProviderType = "gemini"));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Failures(result), f => f.StartsWith("Arena:CustomModels[0].ProviderType 'gemini' is not supported", StringComparison.Ordinal)
+            && f.Contains("'anthropic', 'openai' or 'azure'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnthropicWithoutABaseUrlIsRejectedWithItsOwnMessage()
+    {
+        var result = Validate(Valid(c =>
+        {
+            c.ProviderType = "anthropic";
+            c.BaseUrl = "";
+        }));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Failures(result), f => f.StartsWith("Arena:CustomModels[0].BaseUrl is required for anthropic", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnthropicNeedsNoWireApi()
+    {
+        var result = Validate(Valid(c =>
+        {
+            c.ProviderType = "anthropic";
+            c.BaseUrl = "https://api.anthropic.com";
+            c.WireApi = "";
+        }));
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void APriceGivenInUsdOrInCreditsPassesValidation()
+    {
+        Assert.True(Validate(Valid(c => (c.UsdPerMillionInput, c.UsdPerMillionOutput) = (3.0, 15.0))).Succeeded);
+        Assert.True(Validate(Valid(c => (c.CreditsPerMillionInput, c.CreditsPerMillionOutput) = (300, 1500))).Succeeded);
+    }
+
+    [Fact]
+    public void AUsdInputPriceWithoutItsOutputIsRejected()
+    {
+        AssertPairRejected(Valid(c => (c.UsdPerMillionInput, c.UsdPerMillionOutput) = (3.0, null)), "UsdPerMillionInput", "UsdPerMillionOutput");
+    }
+
+    [Fact]
+    public void AUsdOutputPriceWithoutItsInputIsRejected()
+    {
+        AssertPairRejected(Valid(c => (c.UsdPerMillionInput, c.UsdPerMillionOutput) = (null, 15.0)), "UsdPerMillionInput", "UsdPerMillionOutput");
+    }
+
+    [Fact]
+    public void ACreditInputPriceWithoutItsOutputIsRejected()
+    {
+        AssertPairRejected(Valid(c => (c.CreditsPerMillionInput, c.CreditsPerMillionOutput) = (300.0, null)), "CreditsPerMillionInput", "CreditsPerMillionOutput");
+    }
+
+    [Fact]
+    public void ACreditOutputPriceWithoutItsInputIsRejected()
+    {
+        AssertPairRejected(Valid(c => (c.CreditsPerMillionInput, c.CreditsPerMillionOutput) = (null, 1500.0)), "CreditsPerMillionInput", "CreditsPerMillionOutput");
+    }
+
+    private void AssertPairRejected(CustomModelOptions custom, string inputName, string outputName)
+    {
+        var result = Validate(custom);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Failures(result), f => f == $"Arena:CustomModels[0]: set {inputName} and {outputName} together, or neither.");
+    }
+
+    [Theory]
+    [InlineData(-1.0)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void APriceMustBeFiniteAndNotNegative(double price)
+    {
+        var result = Validate(Valid(c => (c.UsdPerMillionInput, c.UsdPerMillionOutput) = (price, 15.0)));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Failures(result), f => f.StartsWith("Arena:CustomModels[0].UsdPerMillionInput must be a finite number", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-0.01)]
+    [InlineData(double.NaN)]
+    public void TheDollarValueOfACreditMustBePositive(double usdPerAiCredit)
+    {
+        var options = new ArenaOptions { Cost = new ArenaCostOptions { UsdPerAiCredit = usdPerAiCredit } };
+
+        var result = new ArenaOptionsValidator().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Failures(result), f => f.StartsWith("Arena:Cost:UsdPerAiCredit must be a positive number", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheDollarValueOfACreditDefaultsToTheApiDefault()
+    {
+        Assert.Equal(0.01, new ArenaOptions().Cost.UsdPerAiCredit);
+    }
+
     private static CustomModelOptions Valid(Action<CustomModelOptions>? change = null)
     {
         var custom = new CustomModelOptions
