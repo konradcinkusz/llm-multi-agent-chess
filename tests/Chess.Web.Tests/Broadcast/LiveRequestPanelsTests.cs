@@ -193,6 +193,8 @@ public class LiveRequestPanelsTests
 
         var cut = Render(ctx);
 
+        // Wait for the queue to be read first: until then the page cannot know whether a request waits.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=broadcast-queue] li")));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=broadcast-intermission]")));
         Assert.DoesNotContain(server.Handler.Requests, request => request.Target.StartsWith("/api/games?", StringComparison.Ordinal));
         Assert.Equal("LLM Chess 24h", cut.Find("[data-testid=broadcast-title]").TextContent);
