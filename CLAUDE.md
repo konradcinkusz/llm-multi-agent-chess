@@ -84,7 +84,8 @@ These hold on `main`. The CI jobs named in brackets enforce the ones they name.
 - `Chess.ServiceDefaults` stays at or below 400 lines of C#. [CI: kernel size guard]
 - Every `.csproj` under `src/` and `tests/` is in `Chess.sln`, and every web project (`Microsoft.NET.Sdk.Web`) is registered in `src/Chess.AppHost/AppHost.cs`. [CI: solution]
 - Results is the first item of the navigation and its Big Picture comes first on the page (03 §6.1).
-- A broadcast game is an ordinary rated game; pacing applies only to games that belong to a broadcast slot (03 §9).
+- A broadcast game is an ordinary rated game; pacing applies only to games the broadcast runner plays (its slots and viewer requests, 03 §9, §15).
+- A viewer-paid game never runs on the Copilot subscription when `Arena:Requests:RequireApiKeyModels` is on (the default), and stops at the net amount paid (03 §15.2). A payment is never lost: played or kept as credit.
 - The Copilot health check is never Unhealthy: a missing login is Degraded and the rest of the app keeps running (P8).
 - The API and the web app answer 403 to a request from another site: a foreign `Origin`, or `Sec-Fetch-Site: cross-site` (ADR-006, amended). [Tests: `Chess.Api.Tests` `OriginGuardTests.Foreign_origin_cannot_start_a_broadcast_schedule`; `Chess.Web.Tests` `OriginGuardTests.Foreign_origin_cannot_negotiate_a_blazor_circuit`]
 - Cost never enters the rating. `Chess.Rating` takes no cost input, and latency, tokens and cost stay out of `R`, `Q` and `RQC` (RATING.md §8). Cost is AI credits, with a dollar figure at `Arena:Cost:UsdPerAiCredit`.
