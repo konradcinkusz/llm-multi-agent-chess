@@ -165,3 +165,20 @@ Latency, tokens, and cost are recorded per move and shown beside the ranking on 
 (the "Strength vs cost" chart). Cost is in AI credits, with a dollar figure at `Arena:Cost:UsdPerAiCredit`. They are **never** folded into `R`, `Q` or `RQC`: a cheap,
 fast model that plays badly must not outrank an expensive one that plays well, and the reader
 should make the cost trade-off themselves.
+
+## 9. Examples: player ids and prompt styles
+
+These are examples of the player ids of §1, not new rules. Each row is one player in the one fit (§3), ranked on its own.
+
+| Player id | The player |
+|---|---|
+| `claude-sonnet-5.5` | the model at its default effort, under `classic` (the plain id) |
+| `claude-sonnet-5.5@medium` | the medium-effort variant, under `classic` |
+| `claude-sonnet-5.5~think` | the default effort, under `think` |
+| `claude-sonnet-5.5@medium~think` | the medium-effort variant, under `think`: a player of its own |
+| `claude-sonnet-5.5~classic` | refused (400): write `claude-sonnet-5.5` |
+| `random` | the random player, which takes no style |
+
+Two ids that differ only in their style are two players in the one fit. Their games link them through §3, and their
+relative coefficient is read like any other pair (§5). The Results page's "Prompt styles compared" section reports that
+comparison with the one significance rule of §5.

@@ -18,11 +18,12 @@
 #>
 [CmdletBinding()]
 param(
-    # The model to benchmark, with an optional effort: <model> or <model>@<effort>.
+    # The model to benchmark, with an optional effort and prompt style: <model>[@<effort>][~<style>].
     [Parameter(Mandatory)]
     [string] $Candidate,
 
-    # Opponent ids. Default: every enabled model except the candidate and Auto.
+    # Opponent ids, each with an optional effort and style. Default: every enabled model except the candidate's model
+    # (in any effort or style) and Auto.
     [string[]] $Opponents = @(),
 
     # Games against each opponent: an even number, at least 2.
@@ -31,7 +32,8 @@ param(
     # Games played in parallel; at most Arena:MaxConcurrentGames.
     [int] $Concurrency = 2,
 
-    # The run's name; the file names use it too. Default: the candidate, with @ replaced by -.
+    # The run's name; the file names use it too. Default: the candidate, with each character other than letters, digits,
+    # dot, dash and underscore replaced by -.
     [string] $Name,
 
     # Where benchmark-<name>.md and benchmark-<name>.json are written.

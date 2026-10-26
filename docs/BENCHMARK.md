@@ -9,6 +9,8 @@ This works for three kinds of candidate:
 - a **Copilot model**, e.g. `claude-sonnet-4.5`;
 - a **variant** with a reasoning effort, `<model>@<effort>`, e.g. `claude-sonnet-4.5@medium`. Each effort is ranked as
   its own player;
+- a **prompt style**, `~<style>`, e.g. `fake-a~think`: the same player under another prompt (`classic`, `board` or `think`).
+  Each style is its own player. Section 8 covers styled candidates and opponents.
 - **your own model** behind an OpenAI-compatible or Azure endpoint (vLLM, Ollama, LM Studio, a fine-tuned deployment).
   See [Your own model](#your-own-model).
 
@@ -62,8 +64,8 @@ Both scripts take the same options. The PowerShell names are in brackets.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--candidate ID` [`-Candidate`] | required | The model to benchmark: `<model>` or `<model>@<effort>`. |
-| `--opponents LIST` [`-Opponents`] | every enabled model except the candidate and `Auto` | Comma-separated opponent ids. A reference panel (section 4) is the usual choice. |
+| `--candidate ID` [`-Candidate`] | required | The model to benchmark: `<model>`, `<model>@<effort>` or `<model>[@<effort>]~<style>`, e.g. `claude-sonnet-4.5@medium~think`. |
+| `--opponents LIST` [`-Opponents`] | every enabled model except the candidate's model (in any effort or style) and `Auto` | Comma-separated opponent ids, each with an optional effort and style. A reference panel (section 4) is the usual choice. |
 | `--games N` [`-Games`] | `30` | Games against each opponent. Even, at least 2, so colours alternate. |
 | `--concurrency N` [`-Concurrency`] | `2` | Games played at once. At most `Arena:MaxConcurrentGames` (default 2). It changes the time, not the cost. |
 | `--name NAME` [`-Name`] | the candidate id | The run's name. The file names use it, with characters other than letters, digits, `.`, `_` and `-` replaced by `-`. |
@@ -234,7 +236,9 @@ the sample is small, and it is the number to quote, not the point. The rule of t
 - **Rating formula version**: the version of [RATING.md](RATING.md). Two reports with different formula versions are on
   different scales.
 - **Prompt version**: a hash of the prompt text the models were given. A change to the wording changes it. Two reports
-  with different prompt versions were played under different instructions and are not directly comparable.
+  with different prompt versions were played under different instructions and are not directly comparable. For a styled
+  candidate it is that style's version, the one `GET /api/prompt-styles` lists. It names the candidate's style only: the
+  opponents' styles show in their rows.
 - **Generated**: when the report was written.
 
 The Markdown report has no keys, tokens or paths in it, so it is safe to share as it is.
@@ -245,7 +249,7 @@ The scripts use the same endpoints as any client. All paths are under the API (`
 
 | Call | Result |
 |---|---|
-| `POST /api/benchmarks` | `201` with the run and its cost estimate. Body: `{"name","candidate","opponents","gamesPerOpponent","maxConcurrency"}`. An unknown effort or an odd number of games is a `400` naming the problem. |
+| `POST /api/benchmarks` | `201` with the run and its cost estimate. Body: `{"name","candidate","opponents","gamesPerOpponent","maxConcurrency"}`; `candidate` and `opponents` take full player ids. An unknown effort or an odd number of games is a `400` naming the problem. |
 | `GET /api/benchmarks` | Every benchmark, newest first. |
 | `GET /api/benchmarks/{id}` | One run: `status` (`running`, `finished` or `cancelled`), `gamesFinished` and `gamesTotal`. |
 | `GET /api/benchmarks/{id}/report` | The report as JSON. |
@@ -268,3 +272,235 @@ The API refuses a request from another website, so a page in your browser cannot
 - A benchmark's games count against `Arena:MaxConcurrentGames`, as a tournament's do. A broadcast plays outside that cap (see the
   [README](../README.md#cost-ai-credits-per-move)), so a benchmark started during a broadcast adds requests on top
   of the broadcast's.
+
+## 8. Prompt styles: candidates and opponents
+
+A player id may carry a prompt style after its effort: `model[@effort][~style]`. The three styles, what each one sends and
+what each one costs are in the [README](../README.md#prompt-styles). A styled player is its own player in the ranking, rated
+on the same scale as every other one ([RATING.md §1](RATING.md#1-what-counts-as-a-game)).
+
+Both options take full ids:
+
+- `--candidate fake-a~think`, or `--candidate fake-a@high~think` with an effort as well;
+- `--opponents fake-b~think,random`, where a missing style means `classic`.
+
+With no `--opponents`, the opponents are every enabled model except the candidate's model in any effort or style, and `Auto`.
+On the fake profile a `fake-a~think` candidate therefore played `fake-b` and `random`; the plain `fake-a` was not one of them.
+
+### Comparing styles
+
+To find out whether a style helps, compare it on the same field:
+
+1. **A tournament with the styles.** On the Tournaments page, tick the models and the style chips (Classic, Board, Think, then
+   move): every chosen model plays every chosen style, round robin. Over the API, list the full ids:
+   `POST /api/tournaments` with `"models": ["fake-a", "fake-a~think"]`.
+2. **The Results page.** The **Prompt styles compared** section appears once a model has played under two styles. For each
+   style it gives the rating with its 95 % interval, the games, legality, move quality (when Stockfish data exists) and the
+   cost per game, and each style's verdict against the baseline (classic, or the first style that played). The style filter
+   above the leaderboard shows one style's players. It hides rows and never refits the ratings.
+3. **A benchmark of the styled candidate**, for a report to share, run the same way as the plain candidate so both reports
+   have the same opponents. The recorded run below uses `--games 4`; the default is 30 games against each opponent.
+
+The fingerprint's prompt version is the candidate's style version, from `GET /api/prompt-styles`. Two reports with different
+candidate versions were played under different instructions and are not directly comparable.
+
+### A recorded fake run
+
+The run below was recorded against a fresh fake profile (`dotnet run --project src/Chess.AppHost --launch-profile fake`).
+The commands are exactly as they were run. `…` marks trimmed output. The fake model's tokens and results say nothing about
+Copilot models.
+
+**The styles and their versions.**
+
+```bash
+curl -s http://127.0.0.1:5080/api/prompt-styles | jq -r '.[] | [.id, .version, .perMoveConversation] | @tsv'
+```
+
+```text
+classic	sha256:9b00ea00ef62	false
+board	sha256:3548a18e635a	true
+think	sha256:7283339d2a04	true
+```
+
+**Ids the API refuses.** `fake-a~classic` names the default style, `fake-a~nope` names no style, and `random` takes no style.
+
+```bash
+curl -s -X POST http://127.0.0.1:5080/api/games -H 'Content-Type: application/json' \
+  -d '{"white":{"kind":"llm","modelId":"fake-a~classic"},"black":{"kind":"llm","modelId":"fake-b"},"rated":false}' | jq -r '.detail'
+curl -s -X POST http://127.0.0.1:5080/api/games -H 'Content-Type: application/json' \
+  -d '{"white":{"kind":"llm","modelId":"fake-a~nope"},"black":{"kind":"llm","modelId":"fake-b"},"rated":false}' | jq -r '.detail'
+curl -s -X POST http://127.0.0.1:5080/api/games -H 'Content-Type: application/json' \
+  -d '{"white":{"kind":"random","modelId":"random~think"},"black":{"kind":"llm","modelId":"fake-b"},"rated":false}' | jq -r '.detail'
+```
+
+```text
+The white player: 'fake-a~classic' names the default style: write the plain id, fake-a.
+The white player: 'nope' is not a prompt style. The styles are: classic, board, think.
+The white random player's model must be 'random'.
+```
+
+**One `think` game, and what the model saw.** The game is `fake-a~think` (white) against `fake-b`.
+
+```bash
+GID=$(curl -s -X POST http://127.0.0.1:5080/api/games -H 'Content-Type: application/json' \
+  -d '{"white":{"kind":"llm","modelId":"fake-a~think"},"black":{"kind":"llm","modelId":"fake-b"},"rated":true}' | jq -r '.id')
+until [ "$(curl -s http://127.0.0.1:5080/api/games/$GID | jq -r '.summary.state')" = finished ]; do sleep 2; done
+curl -s http://127.0.0.1:5080/api/games/$GID | jq -c '.summary | {result, termination, plyCount}'
+```
+
+```text
+{"result":"1-0","termination":"checkmate","plyCount":117}
+```
+
+The attempts endpoint returns the prompt and the reply of every attempt. This is the first move of the `think` player:
+
+```bash
+curl -s "http://127.0.0.1:5080/api/attempts?gameId=$GID&model=fake-a~think&pageSize=200" \
+  | jq -r '.items[] | select(.ply == 1) | .prompt, "--- reply ---", .rawReply, "--- parsed: \(.parsedSan), legal: \(.legal)"'
+```
+
+```text
+You are playing a game of chess. It is White to move.
+Position (FEN): rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+Board (rank 8 at the top, White in upper case):
+8 r n b q k b n r
+7 p p p p p p p p
+6 . . . . . . . .
+5 . . . . . . . .
+4 . . . . . . . .
+3 . . . . . . . .
+2 P P P P P P P P
+1 R N B Q K B N R
+  a b c d e f g h
+White: Ke1, Qd1, Ra1, Rh1, Bc1, Bf1, Nb1, Ng1, pawns a2, b2, c2, d2, e2, f2, g2, h2
+Black: Ke8, Qd8, Ra8, Rh8, Bc8, Bf8, Nb8, Ng8, pawns a7, b7, c7, d7, e7, f7, g7, h7
+Material: White 39, Black 39 (pawn 1, knight and bishop 3, rook 5, queen 9). Balance: level.
+Game (PGN moves): none
+Legal moves: Na3, Nc3, Nf3, Nh3, a3, a4, b3, b4, c3, c4, d3, d4, e3, e4, f3, f4, g3, g4, h3, h4
+Answer with a short analysis, then the line `Plan: <one sentence>` and the line `Move: <SAN>`.
+--- reply ---
+Analysis: the legal moves are listed in the prompt, and a3 is one of them.
+Plan: keep the pieces coordinated.
+Move: a3
+--- parsed: a3, legal: true
+```
+
+The system prompt is not stored with the attempt. For `think` it is the goal of `board` (play to win, trade only when the
+trade gains something, a draw is worth half a point, activate the king in the endgame) and the answer format.
+
+The third move of the same player carries the plan from its last move, and the game so far in PGN:
+
+```bash
+curl -s "http://127.0.0.1:5080/api/attempts?gameId=$GID&model=fake-a~think&pageSize=200" \
+  | jq -r '.items[] | select(.ply == 3) | .prompt, "--- reply ---", .rawReply'
+```
+
+```text
+You are playing a game of chess. It is White to move.
+Your plan from your last move: keep the pieces coordinated.
+Position (FEN): rnbqkbnr/p1pppppp/1p6/8/8/P7/1PPPPPPP/RNBQKBNR w KQkq - 0 2
+…
+Game (PGN moves): 1. a3 b6
+Legal moves: Nc3, Nf3, Nh3, Ra2, a4, b3, b4, c3, c4, d3, d4, e3, e4, f3, f4, g3, g4, h3, h4
+Answer with a short analysis, then the line `Plan: <one sentence>` and the line `Move: <SAN>`.
+--- reply ---
+Analysis: the legal moves are listed in the prompt, and c4 is one of them.
+Plan: keep the pieces coordinated.
+Move: c4
+```
+
+**Tokens per move.** The cost endpoint averages each id's stored moves. Columns: id, moves, average input tokens, average
+output tokens.
+
+```bash
+curl -s http://127.0.0.1:5080/api/cost/inputs | jq -r '.models[] | [.modelId, .moves, (.averageInputTokens | round), (.averageOutputTokens | round)] | @tsv'
+```
+
+```text
+fake-a	200	98	13
+fake-a~think	259	357	43
+fake-b	58	97	13
+```
+
+`think` writes about three times the output tokens of `classic` here (43 against 13). It also reads more input, because its
+prompt carries the board and the whole game in PGN, and each move starts a new conversation. `board` has the same prompt, so
+its input grows with the game.
+
+**A tournament with two styles.**
+
+```bash
+CREATED=$(curl -s -X POST http://127.0.0.1:5080/api/tournaments -H 'Content-Type: application/json' \
+  -d '{"name":"Q4 style comparison","models":["fake-a","fake-a~think"],"gamesPerPair":2,"maxConcurrency":2}')
+TID=$(echo "$CREATED" | jq -r '.tournament.id')
+until [ "$(curl -s http://127.0.0.1:5080/api/tournaments/$TID | jq -r '.status')" != running ]; do sleep 3; done
+curl -s http://127.0.0.1:5080/api/tournaments/$TID | jq -c '{status, gamesTotal, gamesFinished}'
+curl -s "http://127.0.0.1:5080/api/ratings?tournamentId=$TID" | jq -r '.models[] | [.model, (.rating | round), .games] | @tsv'
+```
+
+```text
+{"status":"finished","gamesTotal":2,"gamesFinished":2}
+fake-a~think	100	2
+fake-a	-100	2
+```
+
+The same two players in the browser: the Tournaments page's style chips read `Classic`, `Board` and `Think, then move`. With Fake A and
+Fake B ticked and the Think chip ticked, the estimate panel lists four players: `Fake A`, `Fake A · Think, then move`, `Fake B`
+and `Fake B · Think, then move`. An id with no stored moves yet takes its model's history, as `Fake B · Board` does below:
+
+```text
+Fake B | $0.01 / $0.04 per 1M tokens | 0 | 0 credits | $0.0001 | from 1,033 past moves
+Fake B · Board | $0.01 / $0.04 per 1M tokens | 0 | 0 credits | $0.0001 | from 1,033 past moves
+```
+
+On the Results page, the **Prompt styles compared** section and the style filter then showed (the fake ratings of the whole
+store, so the numbers are not a result):
+
+```text
+Prompt styles compared
+Model	Style	Rating	95 % interval	Games	Legality	Move quality	Cost per game	Against the baseline
+fake-b	classic	-57	-345 to 287	11	100%	—	$0.000	Baseline
+fake-b	think	-34	-389 to 319	8	100%	—	$0.001	No significant difference from classic: RQC 0.52, 95 % interval 0.33 to 0.69.
+fake-a	classic	-226	-583 to 149	10	100%	—	$0.000	Baseline
+fake-a	think	-162	-449 to 151	17	100%	—	$0.001	No significant difference from classic: RQC 0.57, 95 % interval 0.38 to 0.77.
+```
+
+The style chips above the leaderboard read `All`, `classic`, `think`: a style's chip appears once it has played, so `board`
+is absent until a board game is played. Choosing `think` leaves the rows `fake-b~think` and `fake-a~think` in the leaderboard.
+
+**A benchmark of a styled candidate.** `--games 4` keeps the smoke run short; the default is 30.
+
+```bash
+scripts/benchmark.sh --candidate fake-a~think --games 4 --out-dir ~/benchmarks
+grep 'Prompt version' ~/benchmarks/benchmark-fake-a-think.md
+```
+
+```text
+Benchmark f3ec1818-ca17-45ab-a95b-c39769e411e6: fake-a~think against 2 opponent(s), 8 games in all (2 concurrent).
+Estimate: 0 premium request(s), about $0.0019; 0 model(s) without a price are not counted.
+[10:46:32] running: 0 of 8 games finished
+[10:46:42] finished: 8 of 8 games finished
+Wrote <out-dir>/benchmark-fake-a-think.md and …json (8 games, score 25%).
+- Prompt version: sha256:7283339d2a04
+```
+
+The candidate's version is `sha256:7283339d2a04`, the `think` version above. The opponents were `fake-b` and `random`, as the
+default rule gives.
+
+A styled opponent:
+
+```bash
+scripts/benchmark.sh --candidate fake-a --opponents fake-b~think --games 2 --out-dir ~/benchmarks
+grep -E 'Prompt version|^\| fake-b~think' ~/benchmarks/benchmark-fake-a.md
+```
+
+```text
+Benchmark da90e0ff-9e86-415c-8238-1e3c093d9e6c: fake-a against 1 opponent(s), 2 games in all (2 concurrent).
+Estimate: 0 premium request(s), about $0.0004; 0 model(s) without a price are not counted.
+[10:46:42] running: 0 of 2 games finished
+[10:46:52] finished: 2 of 2 games finished
+Wrote <out-dir>/benchmark-fake-a.md and …json (2 games, score 25%).
+| fake-b~think | 2 | 0 | 1 | 1 | 0 | 25.0 % | -191 (−∞ to 0) | 0.33 (0.17 to 0.68) | 100.0 % | $0.0003 |
+- Prompt version: sha256:9b00ea00ef62
+```
+
+The plain candidate's version is `classic`'s (`sha256:9b00ea00ef62`), and its row shows the styled opponent `fake-b~think`.

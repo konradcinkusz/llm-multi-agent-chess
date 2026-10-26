@@ -15,16 +15,18 @@ readonly POLL_SECONDS=10
 
 usage() {
     cat <<'EOF'
-Usage: scripts/benchmark.sh --candidate <model[@effort]> [options]
+Usage: scripts/benchmark.sh --candidate <model[@effort][~style]> [options]
 
 Plays the candidate against each opponent, with colours alternating, and writes the report.
 
 Options:
-  --candidate ID     the model to benchmark, e.g. claude-sonnet-4.5@medium (required)
-  --opponents LIST   comma-separated opponent ids (default: every enabled model except the candidate and Auto)
+  --candidate ID     the model to benchmark, e.g. claude-sonnet-4.5@medium or claude-sonnet-4.5@medium~think (required)
+  --opponents LIST   comma-separated opponent ids, each with an optional effort and style (default: every enabled model
+                     except the candidate's model in any effort or style, and Auto)
   --games N          games against each opponent: an even number, at least 2 (default 30)
   --concurrency N    games played in parallel (default 2, at most Arena:MaxConcurrentGames)
-  --name NAME        the run's name; the file names use it too (default: the candidate, with @ replaced by -)
+  --name NAME        the run's name; the file names use it too (default: the candidate, with each character other than
+                     letters, digits, dot, dash and underscore replaced by -)
   --out-dir DIR      where benchmark-<name>.md and benchmark-<name>.json are written (default: the current directory)
   -h, --help         show this help
 
