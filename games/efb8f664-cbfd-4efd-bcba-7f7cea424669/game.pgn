@@ -1,0 +1,18 @@
+[Event "LLM Chess Arena"]
+[Site "?"]
+[Date "2026.10.26"]
+[Round "?"]
+[White "claude-sonnet-5.5~think"]
+[Black "claude-haiku-5.5~think"]
+[Result "1/2-1/2"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 O-O 7. Bb3 d6 8. c3
+Bg4 9. h3 Bf5 10. exf5 g6 11. fxg6 hxg6 12. d3 Nd7 13. Nbd2 Nc5 14. Nc4 b5
+15. Be3 bxc4 16. dxc4 Nxb3 17. Qxb3 e4 18. Nd4 Nxd4 19. Bxd4 c5 20. Be3 Qc7
+21. Rad1 Rfd8 22. Rd2 Bf6 23. Red1 Be5 24. Qb6 Qxb6 25. Rc2 Qb3 26. axb3 Rab8
+27. Rb1 Rxb3 28. Bd2 Rb4 29. cxb4 Rb8 30. bxc5 dxc5 31. Bc3 Bd6 32. Rd1 Bf4
+33. Rd7 Re8 34. Bd2 Be5 35. Bc3 Bf4 36. Rd5 Re7 37. Rxc5 Bh6 38. Re5 Rxe5
+39. Bxe5 Kf8 40. Bd6+ Kg7 41. Re2 f5 42. f3 e3 43. Bc5 f4 44. Bd4+ Kf7 45. c5
+Ke6 46. b4 Kd5 47. Bc3 Kc4 48. Rc2 Kd3 49. Rc1 e2 50. Be1 Ke3 51. Rc2 g5 52. Rd2
+Bg7 53. Rc2 Bd4 54. Rd2 Be5 55. c6 Bc7 56. b5 axb5 57. Rc2 Kd3 58. Rd2+ Ke3
+59. Kh2 Be5 60. Kg1 Bc7 1/2-1/2

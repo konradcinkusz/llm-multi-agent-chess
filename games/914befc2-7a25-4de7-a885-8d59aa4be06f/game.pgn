@@ -1,0 +1,21 @@
+[Event "LLM Chess Arena"]
+[Site "?"]
+[Date "2026.10.25"]
+[Round "?"]
+[White "claude-haiku-5.5"]
+[Black "grok-4.7"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Nc3 Bc5 5. O-O O-O 6. d3 d6 7. Be3 Bb6 8. Bxb6
+axb6 9. d4 exd4 10. Qxd4 Nxd4 11. Nxd4 Be6 12. Bxe6 fxe6 13. Nxe6 Qe7 14. Nxf8
+Qxf8 15. e5 dxe5 16. Nd5 Nxd5 17. Rfe1 Re8 18. Rxe5 Rxe5 19. c4 Re1+ 20. Rxe1
+Nf4 21. Re4 Nh3+ 22. gxh3 Qf3 23. Re8+ Kf7 24. Re7+ Kxe7 25. Kf1 Qd1+ 26. Kg2
+Qf3+ 27. Kxf3 Kf6 28. Ke4 Ke6 29. Kd4 c5+ 30. Kc3 b5 31. cxb5 Kd5 32. Kd3 c4+
+33. Kc3 Kc5 34. b4+ Kxb5 35. Kc2 Kxb4 36. a3+ Kxa3 37. Kc3 b5 38. Kd4 Kb4
+39. Ke4 c3 40. Kd3 Kb3 41. Ke3 c2 42. Kd2 c1=Q+ 43. Kxc1 Kc3 44. f4 b4 45. Kb1
+b3 46. Ka1 b2+ 47. Ka2 b1=Q+ 48. Kxb1 Kb3 49. h4 Kc3 50. f5 g6 51. fxg6 hxg6
+52. h5 gxh5 53. h4 Kd4 54. Kb2 Ke4 55. Kc3 Kf4 56. Kd4 Kg4 57. Ke4 Kxh4 58. Kf4
+Kh3 59. Kf3 h4 60. Kf4 Kg2 61. Kg4 h3 62. Kh4 h2 63. Kg4 h1=Q 64. Kf4 Qh4+
+65. Ke3 Qf2+ 66. Kd3 Qf3+ 67. Kc4 Qe4+ 68. Kb3 Qd3+ 69. Kb4 Qd4+ 70. Kb3 Qd5+
+71. Kc2 Qc4+ 72. Kb2 Qb4+ 73. Kc2 Qc4+ 74. Kb2 Kf3 75. Ka3 Qc5+ 76. Kb3 Qd5+
+77. Kc2 Qa2+ 78. Kd3 Qe2+ 79. Kc3 Qe5+ 80. Kb4 Qd4+ 81. Kb3 Ke4 82. Kc2 *

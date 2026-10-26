@@ -1,0 +1,272 @@
+[
+  {
+    "gameId": "757b069b-f829-4eee-8d38-7d6f4a4df613",
+    "white": {
+      "color": "white",
+      "modelId": "claude-haiku-5.5~board",
+      "requests": 16,
+      "inputTokens": 13560,
+      "outputTokens": 11967,
+      "reasoningTokens": 11871,
+      "cachedInputTokens": 812,
+      "aiCredits": 0.7583520000000001,
+      "estimatedUsd": 0.007583520000000002,
+      "costBasis": "reported"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "grok-4.7~board",
+      "requests": 16,
+      "inputTokens": 31562,
+      "outputTokens": 35178,
+      "reasoningTokens": 35140,
+      "cachedInputTokens": 19968,
+      "aiCredits": 24.424,
+      "estimatedUsd": 0.24424,
+      "costBasis": "partial"
+    },
+    "totalAiCredits": 25.182351999999998,
+    "totalEstimatedUsd": 0.25182351999999997,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "efb8f664-cbfd-4efd-bcba-7f7cea424669",
+    "white": {
+      "color": "white",
+      "modelId": "claude-sonnet-5.5~think",
+      "requests": 60,
+      "inputTokens": 64954,
+      "outputTokens": 44409,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": 60.63550000000001,
+      "estimatedUsd": 0.6063550000000001,
+      "costBasis": "reported"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "claude-haiku-5.5~think",
+      "requests": 60,
+      "inputTokens": 64112,
+      "outputTokens": 88490,
+      "reasoningTokens": 74248,
+      "cachedInputTokens": 0,
+      "aiCredits": 5.225300000000002,
+      "estimatedUsd": 0.052253000000000015,
+      "costBasis": "reported"
+    },
+    "totalAiCredits": 65.86080000000001,
+    "totalEstimatedUsd": 0.6586080000000001,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "497042d0-e6be-4588-b0aa-e6b5fbd4462d",
+    "white": {
+      "color": "white",
+      "modelId": "claude-haiku-5.5~think",
+      "requests": 47,
+      "inputTokens": 48259,
+      "outputTokens": 71281,
+      "reasoningTokens": 59629,
+      "cachedInputTokens": 0,
+      "aiCredits": 4.166817499999999,
+      "estimatedUsd": 0.04166817499999999,
+      "costBasis": "reported"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "claude-haiku-5.5~think",
+      "requests": 47,
+      "inputTokens": 48809,
+      "outputTokens": 51003,
+      "reasoningTokens": 41066,
+      "cachedInputTokens": 989,
+      "aiCredits": 3.148419000000001,
+      "estimatedUsd": 0.03148419000000001,
+      "costBasis": "reported"
+    },
+    "totalAiCredits": 7.315236499999999,
+    "totalEstimatedUsd": 0.073152365,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "93a1a7cd-c56c-4651-8822-9488a0f756bd",
+    "white": {
+      "color": "white",
+      "modelId": "claude-haiku-5.5~think",
+      "requests": 3,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "claude-haiku-5.5~think",
+      "requests": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "totalAiCredits": null,
+    "totalEstimatedUsd": null,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "914befc2-7a25-4de7-a885-8d59aa4be06f",
+    "white": {
+      "color": "white",
+      "modelId": "claude-haiku-5.5",
+      "requests": 85,
+      "inputTokens": 1190538,
+      "outputTokens": 3031,
+      "reasoningTokens": 1690,
+      "cachedInputTokens": 1166052,
+      "aiCredits": 1.6222094999999999,
+      "estimatedUsd": 0.016222095,
+      "costBasis": "reported"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "grok-4.7",
+      "requests": 82,
+      "inputTokens": 1470823,
+      "outputTokens": 16878,
+      "reasoningTokens": 16650,
+      "cachedInputTokens": 1388672,
+      "aiCredits": 95.99059999999999,
+      "estimatedUsd": 0.9599059999999999,
+      "costBasis": "reported"
+    },
+    "totalAiCredits": 97.61280949999998,
+    "totalEstimatedUsd": 0.9761280949999999,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "76f67b63-57d8-4cef-9efb-12f89344f59d",
+    "white": {
+      "color": "white",
+      "modelId": "kimi-k3",
+      "requests": 59,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "claude-sonnet-5.5",
+      "requests": 57,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "totalAiCredits": null,
+    "totalEstimatedUsd": null,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "089db3d1-36d4-4df3-a3c9-ac5a261597cb",
+    "white": {
+      "color": "white",
+      "modelId": "claude-haiku-5.5",
+      "requests": 39,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "claude-sonnet-5.5",
+      "requests": 34,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "totalAiCredits": null,
+    "totalEstimatedUsd": null,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "8e00c719-e4d4-48eb-b53f-fd1b421fce43",
+    "white": {
+      "color": "white",
+      "modelId": "claude-haiku-5.5",
+      "requests": 85,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "claude-haiku-5.5",
+      "requests": 76,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "totalAiCredits": null,
+    "totalEstimatedUsd": null,
+    "usdPerAiCredit": 0.01
+  },
+  {
+    "gameId": "9e6fb620-e944-4eea-b5fb-4d24c5b69501",
+    "white": {
+      "color": "white",
+      "modelId": "claude-sonnet-5.5",
+      "requests": 40,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "black": {
+      "color": "black",
+      "modelId": "claude-sonnet-5.5",
+      "requests": 40,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "aiCredits": null,
+      "estimatedUsd": null,
+      "costBasis": "unknown"
+    },
+    "totalAiCredits": null,
+    "totalEstimatedUsd": null,
+    "usdPerAiCredit": 0.01
+  }
+]

@@ -1,0 +1,15 @@
+[Event "LLM Chess Arena"]
+[Site "?"]
+[Date "2026.10.25"]
+[Round "?"]
+[White "claude-sonnet-5.5"]
+[Black "claude-sonnet-5.5"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 e6 7. g4 h6 8. h3 Nc6
+9. Bg2 Bd7 10. O-O Be7 11. Nxc6 Bxc6 12. Qe2 O-O 13. Rfd1 Qc7 14. a3 Rfd8
+15. Rac1 Rac8 16. Bf3 Bd7 17. h4 d5 18. e5 Qxe5 19. Bd4 Qd6 20. Qe3 Qc7 21. g5
+Ne4 22. Nxe4 dxe4 23. Bb6 Qxb6 24. Qxb6 exf3 25. Qxb7 Bc6 26. Rxd8+ Bxd8
+27. Qxc8 Kh7 28. Qxd8 hxg5 29. Qxg5 g6 30. Qe7 Kg7 31. Qd6 e5 32. Qxc6 Kg8
+33. Qxf3 f6 34. Qxf6 Kh7 35. Qxe5 g5 36. Qxg5 Kh8 37. h5 Kh7 38. h6 Kh8 39. Qg7#
+1-0

@@ -1,0 +1,11 @@
+[Event "LLM Chess Arena"]
+[Site "?"]
+[Date "2026.10.26"]
+[Round "?"]
+[White "claude-haiku-5.5~board"]
+[Black "grok-4.7~board"]
+[Result "0-1"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. Nxf7 Kxf7 6. Bxd5+ Ke8 7. Bxc6+ bxc6
+8. Nc3 Bd6 9. O-O Be6 10. d4 c5 11. Qh5+ Nxh5 12. g4 Bxg4 13. dxe5 Bxe5 14. f3
+Qh4 15. fxg4 Qxh2# 0-1

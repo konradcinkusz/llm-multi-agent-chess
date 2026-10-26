@@ -1,0 +1,16 @@
+[Event "LLM Chess Arena"]
+[Site "?"]
+[Date "2026.10.26"]
+[Round "?"]
+[White "claude-haiku-5.5~think"]
+[Black "claude-haiku-5.5~think"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. O-O Bc5 5. d3 O-O 6. c3 d6 7. d4 exd4 8. cxd4
+Nxe4 9. dxc5 dxc5 10. Qxd8 Rxd8 11. Nbd2 Nf6 12. Ng5 Nd5 13. Nb3 Be6 14. Nxc5 b6
+15. Ncxe6 fxe6 16. Nxe6 Rd6 17. Bxd5 Rxd5 18. Nxc7 Rdd8 19. Nxa8 Rxa8 20. Rd1
+Nd4 21. Rxd4 Rc8 22. Rd7 Rc2 23. Rd8+ Kf7 24. Rd7+ Ke6 25. Rxg7 Kf6 26. Rxh7
+Rxb2 27. Bxb2+ Kg6 28. Rxa7 Kf5 29. Ra5+ bxa5 30. Rd1 Ke4 31. Rd4+ Ke5 32. Rd7+
+Ke4 33. Ra7 Kd3 34. Rxa5 Kc2 35. Bd4 Kb1 36. Rc5 Kxa2 37. Rc3 Kb2 38. Kf1 Ka2
+39. Rd3 Kb1 40. Rd2 Kc1 41. Ke2 Kb1 42. Bc3 Kc1 43. Rd1+ Kc2 44. Bd4 Kb3 45. Kd3
+Ka4 46. Kc4 Ka5 47. Ra1# 1-0

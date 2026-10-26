@@ -1,0 +1,173 @@
+[
+  {
+    "id": "757b069b-f829-4eee-8d38-7d6f4a4df613",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5~board"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "grok-4.7~board"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "0-1",
+    "termination": "checkmate",
+    "plyCount": 30,
+    "createdAt": "2026-10-26T13:02:51.177004+00:00",
+    "finishedAt": "2026-10-26T13:16:45.672803+00:00"
+  },
+  {
+    "id": "efb8f664-cbfd-4efd-bcba-7f7cea424669",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-sonnet-5.5~think"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5~think"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "1/2-1/2",
+    "termination": "threefold",
+    "plyCount": 120,
+    "createdAt": "2026-10-26T12:29:30.689091+00:00",
+    "finishedAt": "2026-10-26T12:48:21.212252+00:00"
+  },
+  {
+    "id": "497042d0-e6be-4588-b0aa-e6b5fbd4462d",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5~think"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5~think"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "1-0",
+    "termination": "checkmate",
+    "plyCount": 93,
+    "createdAt": "2026-10-26T12:00:58.138838+00:00",
+    "finishedAt": "2026-10-26T12:15:09.659626+00:00"
+  },
+  {
+    "id": "93a1a7cd-c56c-4651-8822-9488a0f756bd",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5~think"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5~think"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "0-1",
+    "termination": "forfeit-white",
+    "plyCount": 0,
+    "createdAt": "2026-10-26T11:51:43.58414+00:00",
+    "finishedAt": "2026-10-26T11:51:47.855408+00:00"
+  },
+  {
+    "id": "914befc2-7a25-4de7-a885-8d59aa4be06f",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "grok-4.7"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "*",
+    "termination": "aborted",
+    "plyCount": 163,
+    "createdAt": "2026-10-25T13:16:44.486457+00:00",
+    "finishedAt": "2026-10-25T13:23:00.700079+00:00"
+  },
+  {
+    "id": "76f67b63-57d8-4cef-9efb-12f89344f59d",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "kimi-k3"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "claude-sonnet-5.5"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "1/2-1/2",
+    "termination": "insufficient-material",
+    "plyCount": 109,
+    "createdAt": "2026-10-25T09:06:09.192526+00:00",
+    "finishedAt": "2026-10-25T09:16:04.94056+00:00"
+  },
+  {
+    "id": "089db3d1-36d4-4df3-a3c9-ac5a261597cb",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "claude-sonnet-5.5"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "0-1",
+    "termination": "checkmate",
+    "plyCount": 66,
+    "createdAt": "2026-10-25T08:57:07.603627+00:00",
+    "finishedAt": "2026-10-25T08:59:32.177835+00:00"
+  },
+  {
+    "id": "8e00c719-e4d4-48eb-b53f-fd1b421fce43",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "claude-haiku-5.5"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "1-0",
+    "termination": "checkmate",
+    "plyCount": 153,
+    "createdAt": "2026-10-25T08:51:23.268983+00:00",
+    "finishedAt": "2026-10-25T08:55:27.030677+00:00"
+  },
+  {
+    "id": "9e6fb620-e944-4eea-b5fb-4d24c5b69501",
+    "tournamentId": null,
+    "white": {
+      "kind": "llm",
+      "modelId": "claude-sonnet-5.5"
+    },
+    "black": {
+      "kind": "llm",
+      "modelId": "claude-sonnet-5.5"
+    },
+    "rated": true,
+    "state": "finished",
+    "result": "1-0",
+    "termination": "checkmate",
+    "plyCount": 77,
+    "createdAt": "2026-10-25T08:23:16.730698+00:00",
+    "finishedAt": "2026-10-25T08:29:51.640316+00:00"
+  }
+]

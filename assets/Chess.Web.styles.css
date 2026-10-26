@@ -1,0 +1,2005 @@
+/* /Components/Charts/ChartFrame.razor.rz.scp.css */
+/* Chart tokens (03 §6.1). Light values are the default; dark values apply under prefers-color-scheme.
+   Charts read colour only through these custom properties, so the two themes never diverge. */
+.chart-frame[b-51cxn9leia] {
+    --chart-surface: var(--surface, #ffffff);
+    --chart-border: var(--border, #dde1e7);
+    --chart-ink: var(--text, #14181f);
+    --chart-ink-2: var(--text-2, #4a5462);
+    --chart-muted: var(--text-3, #646d79);
+    --chart-grid: var(--border, #dde1e7);
+    --chart-baseline: var(--border-strong, #c3cad3);
+    --chart-neutral: var(--text-3, #646d79);
+    --chart-accent: var(--chart-series-0);
+    --chart-series-0: #2a78d6;
+    --chart-series-1: #eb6834;
+    --chart-series-2: #1baf7a;
+    --chart-series-3: #eda100;
+    --chart-series-4: #e87ba4;
+    --chart-series-5: #008300;
+    --chart-series-6: #6250d6;
+    --chart-series-7: #e34948;
+    --chart-diverge-low: #2a78d6;
+    --chart-diverge-high: #e34948;
+    --chart-diverge-mid: #f0efec;
+
+    /* Card-like: inner padding keeps the labels off the edge; overflow-x scrolls a wide chart inside its frame at phone width. */
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0 0 24px;
+    padding: var(--space-4, 16px);
+    overflow-x: auto;
+    border: 1px solid var(--chart-border);
+    border-radius: var(--radius-lg, 14px);
+    background: var(--chart-surface);
+    color: var(--chart-ink);
+    font: 13px/1.4 var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
+}
+
+@media (prefers-color-scheme: dark) {
+    .chart-frame[b-51cxn9leia] {
+        --chart-surface: var(--surface, #171a20);
+        --chart-border: var(--border, #2a2f38);
+        --chart-ink: var(--text, #e8eaee);
+        --chart-ink-2: var(--text-2, #b4bac4);
+        --chart-muted: var(--text-3, #8e95a0);
+        --chart-grid: var(--border, #2a2f38);
+        --chart-baseline: var(--border-strong, #3a414c);
+        --chart-neutral: var(--text-3, #8e95a0);
+        --chart-series-0: #3987e5;
+        --chart-series-1: #d95926;
+        --chart-series-2: #199e70;
+        --chart-series-3: #c98500;
+        --chart-series-4: #d55181;
+        --chart-series-5: #008300;
+        --chart-series-6: #9085e9;
+        --chart-series-7: #e66767;
+        --chart-diverge-low: #3987e5;
+        --chart-diverge-high: #e66767;
+        --chart-diverge-mid: #383835;
+    }
+}
+
+.chart-frame .chart-title[b-51cxn9leia] {
+    margin: 0 0 8px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.chart-frame .chart-description[b-51cxn9leia] {
+    margin: 0 0 8px;
+    color: var(--chart-ink-2);
+}
+
+.chart-frame .chart-empty[b-51cxn9leia] {
+    color: var(--chart-ink-2);
+}
+
+/* The SVG fills its frame; its inline style keeps it between its natural width and 1.5 times it (ChartGeometry.FillStyle, U6). */
+.chart-frame[b-51cxn9leia]  .chart-svg {
+    display: block;
+    height: auto;
+    overflow: visible;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-grid {
+    stroke: var(--chart-grid);
+    stroke-width: 1;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-baseline {
+    stroke: var(--chart-baseline);
+    stroke-width: 1;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-tick {
+    fill: var(--chart-muted);
+    font-size: 11px;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-axis-title {
+    fill: var(--chart-ink-2);
+    font-size: 11px;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-label {
+    fill: var(--chart-ink);
+    font-size: 12px;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-value {
+    fill: var(--chart-ink);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-whisker {
+    stroke: var(--chart-ink-2);
+    stroke-width: 1.5;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-ring {
+    stroke: var(--chart-surface);
+    stroke-width: 2;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-hit {
+    fill: transparent;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-hole {
+    fill: none;
+    stroke: var(--chart-grid);
+}
+
+.chart-frame[b-51cxn9leia]  .chart-muted-cell {
+    opacity: 0.4;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-legend li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-swatch {
+    display: inline-block;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-table {
+    margin-top: 8px;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-table summary {
+    color: var(--chart-ink-2);
+    cursor: pointer;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-table table {
+    margin-top: 6px;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-frame[b-51cxn9leia]  .chart-table th,
+.chart-frame[b-51cxn9leia]  .chart-table td {
+    padding: 4px 12px 4px 0;
+    border-bottom: 1px solid var(--chart-grid);
+    text-align: left;
+}
+/* /Components/Charts/ModelMap.razor.rz.scp.css */
+/* The model map (03 §13). Colours come from the chart tokens of ChartFrame.razor.css, never from literals. */
+
+.model-map-controls[b-piatpckm84] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin: 0 0 12px;
+}
+
+.model-map-controls .field[b-piatpckm84] {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+.model-map-controls select[b-piatpckm84] {
+    width: 100%;
+}
+
+.model-map-median[b-piatpckm84] {
+    stroke: var(--chart-ink-2);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+    opacity: 0.6;
+}
+
+.model-map-quadrant[b-piatpckm84] {
+    fill: var(--chart-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+
+.model-map-bubble[b-piatpckm84] {
+    fill-opacity: 0.85;
+    stroke-width: 1.5;
+}
+
+.model-map-reading[b-piatpckm84] {
+    margin: 8px 0 0;
+    color: var(--chart-ink-2);
+}
+
+.model-map-unplaced[b-piatpckm84] {
+    margin: 4px 0 0;
+}
+/* /Components/Layout/BroadcastLayout.razor.rz.scp.css */
+/* A fixed full-viewport frame: nothing in it can scroll, and the pointer is hidden for OBS. */
+.broadcast-layout[b-7n7c81ox3w] {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: #000;
+    cursor: none;
+}
+/* /Components/Pages/Admin/AttemptsPage.razor.rz.scp.css */
+/* Attempts log (03 §6, 07 §6): filters in a card, then one bordered row per attempt that opens to its prompt and reply. */
+
+.admin-page[b-6hbl49cl7k] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.admin-page > .page-header[b-6hbl49cl7k] {
+    margin-bottom: 0;
+}
+
+.game-id-input[b-6hbl49cl7k] {
+    font-family: var(--font-mono);
+}
+
+.attempt-list[b-6hbl49cl7k] {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.attempt[b-6hbl49cl7k] {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.failed-attempt[b-6hbl49cl7k] {
+    border-color: var(--danger);
+}
+
+.attempt > details > summary[b-6hbl49cl7k] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    list-style: none;
+}
+
+.attempt > details > summary[b-6hbl49cl7k]::-webkit-details-marker {
+    display: none;
+}
+
+.attempt > details > summary:hover[b-6hbl49cl7k] {
+    background: var(--surface-2);
+}
+
+/* A white and a black piece read as light and dark chips in either theme: the black chip inverts the text colours. */
+.white-badge[b-6hbl49cl7k] {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+}
+
+.black-badge[b-6hbl49cl7k] {
+    background: var(--text);
+    color: var(--bg);
+}
+
+.model-tag[b-6hbl49cl7k] {
+    font-weight: 500;
+}
+
+.san[b-6hbl49cl7k] {
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+.attempt-number[b-6hbl49cl7k],
+.latency[b-6hbl49cl7k],
+.date-sm[b-6hbl49cl7k] {
+    color: var(--text-3);
+    font-size: var(--text-xs);
+}
+
+.attempt-meta[b-6hbl49cl7k] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--space-4);
+    border-top: 1px solid var(--border);
+    font-size: var(--text-sm);
+}
+
+.attempt-section[b-6hbl49cl7k] {
+    padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.section-label[b-6hbl49cl7k] {
+    margin-bottom: var(--space-1);
+    color: var(--text-3);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.success-label[b-6hbl49cl7k] {
+    color: var(--success);
+}
+
+.fail-label[b-6hbl49cl7k] {
+    color: var(--danger);
+}
+
+.prompt-text[b-6hbl49cl7k],
+.reply-text[b-6hbl49cl7k] {
+    margin: 0;
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 320px;
+    overflow: auto;
+}
+
+.valid-reply[b-6hbl49cl7k] {
+    border-left: 3px solid var(--success);
+}
+
+.invalid-reply[b-6hbl49cl7k] {
+    border-left: 3px solid var(--danger);
+}
+
+.no-reply[b-6hbl49cl7k] {
+    margin: 0;
+}
+
+.pagination[b-6hbl49cl7k] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    font-size: var(--text-sm);
+}
+
+.pagination span[b-6hbl49cl7k] {
+    color: var(--text-2);
+}
+
+.note[b-6hbl49cl7k] {
+    margin: 0;
+    font-size: var(--text-sm);
+}
+/* /Components/Pages/Admin/SitePage.razor.rz.scp.css */
+/* Public site page (ADR-013): facts in a definition list, actions in a card. */
+
+.site-facts[b-e1tobaj95l] {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 1rem;
+    margin: 0;
+}
+
+.site-facts dt[b-e1tobaj95l] {
+    color: var(--text-3);
+}
+
+.site-facts dd[b-e1tobaj95l] {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+/* /Components/Pages/Benchmark/BenchmarkCancel.razor.rz.scp.css */
+/* The two-step cancel of a running benchmark: the first click asks, the second aborts its games. */
+
+.cancel-confirm[b-ksjm5g5ea5] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+/* /Components/Pages/Benchmark/BenchmarkPage.razor.rz.scp.css */
+/* The benchmark form and the list of runs (03 §12.3, 07 §6). The estimate sits right above Start, as on the tournament form. */
+
+.benchmark-section[b-9kie43tr7t] {
+    margin: 0;
+}
+
+.benchmark-opponents[b-9kie43tr7t] {
+    margin: 0;
+}
+
+.benchmark-estimate h3[b-9kie43tr7t] {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-base);
+}
+
+.benchmark-estimate p[b-9kie43tr7t] {
+    margin: var(--space-2) 0;
+}
+
+.benchmark-estimate .table-wrap[b-9kie43tr7t] {
+    margin: var(--space-2) 0;
+}
+
+.benchmark-large[b-9kie43tr7t] {
+    margin: var(--space-3) 0;
+}
+
+.benchmark-large p[b-9kie43tr7t] {
+    margin: var(--space-1) 0;
+}
+
+.benchmark-problem[b-9kie43tr7t] {
+    margin: 0;
+}
+
+.benchmark-created[b-9kie43tr7t] {
+    border-left-color: var(--success);
+}
+
+.benchmark-created p[b-9kie43tr7t] {
+    margin: var(--space-1) 0;
+}
+/* /Components/Pages/Benchmark/BenchmarkReportPage.razor.rz.scp.css */
+/* The benchmark report (03 §12.3): the summary, the ranking chart, the per-opponent table, the fingerprint and the downloads. */
+
+.back-link[b-1yo1qpm4i4] {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+}
+
+.benchmark-facts[b-1yo1qpm4i4] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-4);
+    margin: var(--space-3) 0 0;
+}
+
+.benchmark-facts > div[b-1yo1qpm4i4] {
+    margin: 0;
+}
+
+.benchmark-facts dt[b-1yo1qpm4i4] {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.benchmark-facts dd[b-1yo1qpm4i4] {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.benchmark-opponent-table th[scope="row"][b-1yo1qpm4i4] {
+    font-weight: 600;
+}
+
+.benchmark-interval[b-1yo1qpm4i4] {
+    display: block;
+    margin-top: var(--space-1);
+    color: var(--text-3);
+    font-size: var(--text-sm);
+    font-weight: 400;
+}
+/* /Components/Pages/Broadcast/LiveBroadcastPage.razor.rz.scp.css */
+/*
+ * The OBS frame. A 16:9 stage fits the window, and every size is in container units of that stage, so the whole
+ * picture scales as one. At 1920 px wide 1cqw is 19.2 px: the smallest text here (1.6cqw) is 30.7 px, above the 28 px floor.
+ */
+
+.bc-stage[b-bjmn60c9bn] {
+    --bc-bg: #0d1014;
+    --bc-ink: #eceff4;
+    --bc-muted: rgb(236 239 244 / 0.7);
+    --bc-panel: rgb(255 255 255 / 0.05);
+    --bc-accent: #f0b429;
+    --bc-card: rgb(8 10 14 / 0.86);
+
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(100vw, calc(100vh * 16 / 9));
+    aspect-ratio: 16 / 9;
+    container-type: size;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 38cqw 1fr;
+    grid-template-rows: 9cqh 1fr;
+    gap: 2cqh 3cqw;
+    padding: 0 2.5cqw 2cqh;
+    font-size: 1.6cqw;
+    line-height: 1.3;
+    background: var(--bc-bg);
+    color: var(--bc-ink);
+}
+
+.bc-light[b-bjmn60c9bn] {
+    --bc-bg: #f5f3ee;
+    --bc-ink: #1d232b;
+    --bc-muted: rgb(29 35 43 / 0.7);
+    --bc-panel: rgb(0 0 0 / 0.05);
+    --bc-accent: #8a5a00;
+    --bc-card: rgb(245 243 238 / 0.9);
+}
+
+/* Header */
+
+.bc-head[b-bjmn60c9bn] {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--bc-panel);
+}
+
+.bc-title[b-bjmn60c9bn],
+.bc-clock[b-bjmn60c9bn] {
+    margin: 0;
+    font-size: 2.8cqw;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.bc-head-right[b-bjmn60c9bn] {
+    display: flex;
+    align-items: center;
+    gap: 2cqw;
+}
+
+.bc-link[b-bjmn60c9bn] {
+    margin: 0;
+    color: var(--bc-accent);
+}
+
+/* The game: players, board, status */
+
+.bc-game[b-bjmn60c9bn] {
+    display: flex;
+    flex-direction: column;
+    gap: 1cqh;
+    min-height: 0;
+}
+
+.bc-player[b-bjmn60c9bn] {
+    display: flex;
+    align-items: center;
+    gap: 1cqw;
+    height: 5cqh;
+    font-size: 2.2cqw;
+    font-weight: 600;
+    min-width: 0;
+}
+
+.bc-player span:last-child[b-bjmn60c9bn] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bc-swatch[b-bjmn60c9bn] {
+    flex: none;
+    width: 1.6cqw;
+    height: 1.6cqw;
+    border-radius: 0.3cqw;
+}
+
+.bc-board-frame[b-bjmn60c9bn] {
+    position: relative;
+}
+
+.bc-board[b-bjmn60c9bn] {
+    width: 100%;
+    aspect-ratio: 1;
+}
+
+.bc-board[b-bjmn60c9bn]  .chess-board {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+}
+
+/* Board coordinates are drawn at 16 units of an 800-unit board, far below 28 px on screen. They are hidden. */
+.bc-board[b-bjmn60c9bn]  .coord {
+    display: none;
+}
+
+.bc-status[b-bjmn60c9bn] {
+    height: 4cqh;
+    margin: 0;
+    font-size: 1.8cqw;
+    color: var(--bc-muted);
+}
+
+/* Cards that cover the board: intermission, technical break */
+
+.bc-card[b-bjmn60c9bn] {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2cqh;
+    padding: 4cqw;
+    text-align: center;
+    background: var(--bc-card);
+}
+
+.bc-card h2[b-bjmn60c9bn] {
+    margin: 0;
+    font-size: 4.2cqw;
+}
+
+.bc-card p[b-bjmn60c9bn] {
+    margin: 0;
+    font-size: 2.2cqw;
+}
+
+.bc-notice h2[b-bjmn60c9bn] {
+    color: var(--bc-accent);
+}
+
+/* Side: leaderboard, then moves and up next */
+
+.bc-side[b-bjmn60c9bn] {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 2cqh;
+    min-height: 0;
+}
+
+.bc-panel[b-bjmn60c9bn] {
+    min-height: 0;
+    overflow: hidden;
+    padding: 1.2cqh 1.5cqw;
+    border-radius: 1cqw;
+    background: var(--bc-panel);
+}
+
+.bc-panel h2[b-bjmn60c9bn] {
+    margin: 0 0 1cqh;
+    font-size: 1.8cqw;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bc-muted);
+}
+
+.bc-panel ol[b-bjmn60c9bn] {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.bc-panel li[b-bjmn60c9bn] {
+    height: 3.8cqh;
+    align-items: center;
+}
+
+.bc-muted[b-bjmn60c9bn] {
+    margin: 0;
+    font-size: 1.6cqw;
+    color: var(--bc-muted);
+}
+
+.bc-name[b-bjmn60c9bn] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bc-num[b-bjmn60c9bn] {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.bc-prov[b-bjmn60c9bn] {
+    font-weight: 400;
+    color: var(--bc-muted);
+}
+
+.bc-table li[b-bjmn60c9bn] {
+    display: grid;
+    grid-template-columns: 3.4cqw 2cqw 1fr 7cqw 7cqw;
+    gap: 1cqw;
+    font-size: 1.7cqw;
+}
+
+.bc-table .bc-table-head[b-bjmn60c9bn] {
+    height: 3cqh;
+    font-size: 1.6cqw;
+    color: var(--bc-muted);
+}
+
+.bc-table .bc-table-head span:nth-child(n + 4)[b-bjmn60c9bn] {
+    text-align: right;
+}
+
+.bc-rank[b-bjmn60c9bn] {
+    font-weight: 700;
+}
+
+.bc-lower[b-bjmn60c9bn] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2cqw;
+    min-height: 0;
+}
+
+.bc-moves li[b-bjmn60c9bn] {
+    display: grid;
+    grid-template-columns: 4cqw 1fr 1fr;
+    gap: 1cqw;
+    font-size: 1.7cqw;
+}
+
+.bc-num-move[b-bjmn60c9bn] {
+    color: var(--bc-muted);
+}
+
+.bc-next li[b-bjmn60c9bn] {
+    display: grid;
+    grid-template-columns: 6cqw 1fr;
+    gap: 1cqw;
+    font-size: 1.7cqw;
+}
+
+.bc-time[b-bjmn60c9bn] {
+    font-variant-numeric: tabular-nums;
+    color: var(--bc-accent);
+}
+/* /Components/Pages/Broadcast/PlanPage.razor.rz.scp.css */
+/* The broadcast planner (03 §9.4, 07 §6). Sections run top to bottom in the order the owner works: plan, check, save, start. */
+
+.plan-section[b-0xfpz0axuy] {
+    margin: 0;
+}
+
+.plan-section > h2[b-0xfpz0axuy] {
+    margin-bottom: var(--space-3);
+}
+
+.plan-section h3[b-0xfpz0axuy] {
+    margin: var(--space-4) 0 var(--space-1);
+    font-size: var(--text-base);
+}
+
+.plan-models[b-0xfpz0axuy] {
+    margin: 0;
+}
+
+.plan-problem[b-0xfpz0axuy] {
+    margin: 0;
+}
+
+.plan-estimate h3[b-0xfpz0axuy] {
+    margin-top: 0;
+}
+
+.plan-estimate p[b-0xfpz0axuy] {
+    margin: var(--space-2) 0;
+}
+
+.plan-estimate .table-wrap[b-0xfpz0axuy] {
+    margin: var(--space-2) 0;
+}
+
+.plan-saved[b-0xfpz0axuy] {
+    margin: var(--space-3) 0 0;
+}
+
+.plan-row-actions[b-0xfpz0axuy] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+/* Kept off the layout, but still read by screen readers. Pinned to the top left so it never widens the page. */
+.visually-hidden[b-0xfpz0axuy] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+/* /Components/Pages/Broadcast/PlanTimeline.razor.rz.scp.css */
+/* The preview timeline (03 §9.4). Text follows the page ink, so both themes read. */
+
+.plan-timeline[b-cfpgdbx0xn] {
+    margin: var(--space-2) 0 0;
+}
+
+.plan-timeline svg[b-cfpgdbx0xn] {
+    display: block;
+    width: 100%;
+    height: auto;
+    color: var(--text);
+}
+
+.plan-axis line[b-cfpgdbx0xn] {
+    stroke: currentColor;
+    stroke-opacity: 0.25;
+}
+
+/* The viewBox is 1000 units wide and scales down on a phone, so the labels are sized to stay readable at 390 px. */
+.plan-axis text[b-cfpgdbx0xn] {
+    fill: currentColor;
+    font-family: var(--font-sans);
+    font-size: 26px;
+    opacity: 0.8;
+}
+
+.plan-legend[b-cfpgdbx0xn] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+.plan-legend li[b-cfpgdbx0xn] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.plan-swatch[b-cfpgdbx0xn] {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+/* /Components/Pages/Games/GameReplayPage.razor.rz.scp.css */
+/* The replay (03 §6, 07 §6, 03 §10.4): the board and its stepping buttons in a card; the move details and the moves beside it on a wide screen. */
+
+.replay-back[b-5joxgo0o64] {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+}
+
+.replay-layout[b-5joxgo0o64] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+}
+
+@media (min-width: 900px) {
+    .replay-layout[b-5joxgo0o64] {
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    }
+}
+
+.replay-main[b-5joxgo0o64],
+.replay-side[b-5joxgo0o64] {
+    min-width: 0;
+}
+
+.replay-board[b-5joxgo0o64] {
+    width: 100%;
+    max-width: 560px;
+    margin-inline: auto;
+    border-radius: var(--radius);
+}
+
+.replay-board[b-5joxgo0o64]  .chess-board {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+
+.replay-controls[b-5joxgo0o64] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+/* First, Previous, Next and Last share one segmented control. */
+.replay-buttons[b-5joxgo0o64] {
+    display: inline-flex;
+}
+
+.replay-buttons .btn[b-5joxgo0o64] {
+    margin-left: -1px;
+    border-radius: 0;
+}
+
+.replay-buttons .btn:first-child[b-5joxgo0o64] {
+    margin-left: 0;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.replay-buttons .btn:last-child[b-5joxgo0o64] {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.replay-buttons .btn:focus-visible[b-5joxgo0o64] {
+    position: relative;
+    z-index: 1;
+}
+
+.replay-ply[b-5joxgo0o64] {
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+/* The summary and the engine log take the full width below the board and the moves, as on the live page. */
+.replay-summary-card[b-5joxgo0o64],
+.replay-log[b-5joxgo0o64] {
+    min-width: 0;
+    margin-top: var(--space-5);
+}
+
+.replay-log .card-header[b-5joxgo0o64],
+.replay-summary-card .card-header[b-5joxgo0o64] {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    justify-content: flex-start;
+}
+/* /Components/Pages/Games/GamesPage.razor.rz.scp.css */
+/* The game archive (03 §6, 07 §6): filters in a field row above the table, which scrolls inside its .table-wrap. */
+
+.games-filters[b-09cll6bo00] {
+    margin-bottom: var(--space-4);
+}
+
+.games-table[b-09cll6bo00] {
+    width: 100%;
+}
+
+.games-pager[b-09cll6bo00] {
+    margin-top: var(--space-4);
+}
+
+.games-pager span[b-09cll6bo00] {
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+/* /Components/Pages/Games/MoveDetails.razor.rz.scp.css */
+/* Details of the move on the board (03 §6, 07 §6): the attempts, latency and analysis the archive keeps for each move. */
+
+.move-details[b-trdh8ecw5f] {
+    border-left: 4px solid var(--accent);
+}
+
+.move-details dl[b-trdh8ecw5f] {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+    font-size: var(--text-sm);
+}
+
+.move-details dt[b-trdh8ecw5f] {
+    color: var(--text-2);
+}
+
+.move-details dd[b-trdh8ecw5f] {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+}
+/* /Components/Pages/HeadToHead/HeadToHeadPage.razor.rz.scp.css */
+/* Head-to-head page (07 §6). The reading is a card: the RQC is the hero number, the verbal reading and the figures follow,
+   and the direct games are a second card. Colour comes from the tokens in app.css only. */
+
+.card-title[b-1uhig07kim] {
+    margin-bottom: var(--space-3);
+}
+
+.h2h-label[b-1uhig07kim] {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.h2h-hero[b-1uhig07kim] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+    margin: var(--space-1) 0 var(--space-3);
+    font-size: var(--text-lg);
+    color: var(--text-2);
+}
+
+.h2h-rqc[b-1uhig07kim] {
+    color: var(--text);
+    font-size: var(--text-3xl);
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.h2h-reading[b-1uhig07kim] {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-lg);
+}
+
+.h2h-note[b-1uhig07kim] {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
+}
+
+.h2h-figures[b-1uhig07kim] {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-6);
+    margin: 0;
+}
+
+.h2h-figures dt[b-1uhig07kim] {
+    color: var(--text-2);
+    font-weight: 600;
+}
+
+.h2h-figures dd[b-1uhig07kim] {
+    margin: 0;
+}
+
+@media (max-width: 599.98px) {
+    .h2h-figures[b-1uhig07kim] {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .h2h-figures dt[b-1uhig07kim] {
+        margin-top: var(--space-3);
+    }
+}
+
+/* The table is the containing block of its visually hidden header, so that label stays inside the .table-wrap scroll box. */
+.h2h-games[b-1uhig07kim] {
+    position: relative;
+    font-size: var(--text-sm);
+}
+
+.visually-hidden[b-1uhig07kim] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+/* /Components/Pages/Play/PlayPage.razor.rz.scp.css */
+/*
+ * The live game (03 §6, 07 §6, 03 §10.4): players, board and moves each sit in a card; the game summary and the engine
+ * log take the full width below them. The player bars, move table and log are styled by their own components.
+ */
+
+.play-layout[b-tfp1yybuyj] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+}
+
+@media (min-width: 900px) {
+    .play-layout[b-tfp1yybuyj] {
+        grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(200px, 260px);
+    }
+}
+
+.play-setup[b-tfp1yybuyj],
+.play-board[b-tfp1yybuyj],
+.play-moves[b-tfp1yybuyj] {
+    min-width: 0;
+}
+
+/* The side's king as a chip: the hollow king is White and the filled one is Black, in both themes. */
+.play-side-name[b-tfp1yybuyj] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.play-side-chip[b-tfp1yybuyj] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: var(--text-base);
+    line-height: 1;
+}
+
+.play-check[b-tfp1yybuyj] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+.play-check input[b-tfp1yybuyj] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.play-board-frame[b-tfp1yybuyj] {
+    width: 100%;
+    max-width: 560px;
+    margin-inline: auto;
+}
+
+.play-board-frame[b-tfp1yybuyj]  .chess-board {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.play-status[b-tfp1yybuyj] {
+    margin: 0;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+.play-result[b-tfp1yybuyj] {
+    margin: 0;
+}
+
+.play-result .badge[b-tfp1yybuyj] {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-base);
+}
+
+.play-notice[b-tfp1yybuyj] {
+    margin: 0;
+    font-size: var(--text-sm);
+}
+
+.play-notices[b-tfp1yybuyj] {
+    margin: 0;
+    padding-left: var(--space-5);
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+.play-notices code[b-tfp1yybuyj] {
+    margin-left: var(--space-1);
+    font-family: var(--font-mono);
+}
+
+.play-pace[b-tfp1yybuyj] {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: grid;
+    gap: var(--space-2);
+}
+
+.play-pace legend[b-tfp1yybuyj] {
+    padding: 0;
+    margin-bottom: var(--space-2);
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.play-pace-behind[b-tfp1yybuyj] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    margin: 0;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+.play-pgn[b-tfp1yybuyj] {
+    max-height: 240px;
+    overflow: auto;
+    margin: 0;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    white-space: pre-wrap;
+}
+
+.play-summary[b-tfp1yybuyj],
+.play-log[b-tfp1yybuyj] {
+    min-width: 0;
+    margin-top: var(--space-5);
+}
+
+.play-log .card-header[b-tfp1yybuyj],
+.play-summary .card-header[b-tfp1yybuyj] {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    justify-content: flex-start;
+}
+/* /Components/Pages/Results/ResultsPage.razor.rz.scp.css */
+/* Results page (03 §6.1, 07 §6). Each section is one card with its heading inside; the Big Picture is the hero card at the top,
+   so its headline and chart are visible at 1366×768. Colour comes from the tokens in app.css only. */
+
+/* The chart frame keeps its own padding, border and radius for the charts on other pages. Inside a section card it is only
+   the chart, so the card supplies the frame. */
+.results-card[b-76113xomc6]  .chart-frame {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.card-title[b-76113xomc6] {
+    margin-bottom: var(--space-3);
+}
+
+.headline[b-76113xomc6] {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 var(--space-4);
+}
+
+.hero-label[b-76113xomc6] {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.hero-leader[b-76113xomc6] {
+    font-size: var(--text-3xl);
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.hero-stats[b-76113xomc6] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-2);
+    font-size: var(--text-base);
+}
+
+.verdict[b-76113xomc6] {
+    margin: 0 0 var(--space-5);
+    color: var(--text);
+}
+
+.results-note[b-76113xomc6] {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
+}
+
+.results-more[b-76113xomc6] {
+    margin: 0 0 var(--space-3);
+}
+
+.results-folded[b-76113xomc6] {
+    margin: 0;
+    font-size: var(--text-sm);
+}
+
+.move-quality[b-76113xomc6] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+    gap: var(--space-4);
+}
+
+.results-table[b-76113xomc6] {
+    font-variant-numeric: tabular-nums;
+}
+/* /Components/Pages/Tournaments/CancelTournament.razor.rz.scp.css */
+/* The confirm pair sits on one line and wraps on a phone. The buttons themselves are the shared .btn and .btn-danger (07 §4). */
+.cancel-confirm[b-fcq1pr10mr] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+/* /Components/Pages/Tournaments/TournamentDetailPage.razor.rz.scp.css */
+/* Tournament detail: facts, progress, leaderboard and games (03 §6, 07 §6). */
+
+.back[b-ex4net8xo0] {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+}
+
+.tournament-facts[b-ex4net8xo0] {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+}
+
+.tournament-facts dt[b-ex4net8xo0] {
+    color: var(--text-2);
+    font-weight: 500;
+}
+
+.tournament-facts dd[b-ex4net8xo0] {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tournament-actions[b-ex4net8xo0] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3) var(--space-4);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+
+.tournament-summary[b-ex4net8xo0] {
+    margin-bottom: var(--space-6);
+}
+
+.tournament-section[b-ex4net8xo0] {
+    margin: 0 0 var(--space-6);
+}
+
+.tournament-section > p[b-ex4net8xo0] {
+    margin: 0 0 var(--space-3);
+}
+/* /Components/Pages/Tournaments/TournamentProgress.razor.rz.scp.css */
+/* A progress track (07 §4 .progress) with a fixed width, and the count beside it. */
+.tournament-progress[b-kdz3mph1lk] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+}
+
+.progress[b-kdz3mph1lk] {
+    width: 140px;
+}
+/* /Components/Pages/Tournaments/TournamentsPage.razor.rz.scp.css */
+/* Tournaments list and create form (03 §6, 07 §6). The estimate sits right above the start button, so it is read before confirming. */
+
+.tournament-section[b-c53vns1lma] {
+    margin: 0;
+}
+
+.tournament-models[b-c53vns1lma] {
+    margin: 0;
+}
+
+.tournament-estimate h3[b-c53vns1lma] {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-base);
+}
+
+.tournament-estimate p[b-c53vns1lma] {
+    margin: var(--space-2) 0;
+}
+
+.tournament-estimate .table-wrap[b-c53vns1lma] {
+    margin: var(--space-2) 0;
+}
+
+.tournament-problem[b-c53vns1lma] {
+    margin: 0;
+}
+
+.tournament-created[b-c53vns1lma] {
+    border-left-color: var(--success);
+}
+
+.tournament-created p[b-c53vns1lma] {
+    margin: var(--space-1) 0;
+}
+
+/* Kept off the layout, but still read by screen readers. Pinned to the top left so it never widens the page. */
+.visually-hidden[b-c53vns1lma] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+/* /Components/Shared/Game/EngineLog.razor.rz.scp.css */
+/* The engine log (03 §10.4): filters above, one expandable entry per attempt, the selected move's entries outlined. */
+
+.engine-log[b-m6gkbna3ax] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+}
+
+.engine-filters[b-m6gkbna3ax] {
+    gap: var(--space-2);
+}
+
+.engine-filters .btn-filter-active[b-m6gkbna3ax] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.engine-entries[b-m6gkbna3ax] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 640px;
+    overflow-y: auto;
+}
+
+.engine-entry[b-m6gkbna3ax] {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.engine-entry-selected[b-m6gkbna3ax] {
+    border-color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.engine-summary[b-m6gkbna3ax] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius);
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.engine-summary[b-m6gkbna3ax]::-webkit-details-marker {
+    display: none;
+}
+
+.engine-summary:focus-visible[b-m6gkbna3ax] {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.engine-where[b-m6gkbna3ax],
+.engine-model[b-m6gkbna3ax],
+.engine-attempt[b-m6gkbna3ax] {
+    white-space: nowrap;
+}
+
+.engine-san[b-m6gkbna3ax] {
+    font-family: var(--font-mono);
+}
+
+.engine-figures[b-m6gkbna3ax] {
+    margin-left: auto;
+    font-size: var(--text-xs);
+    overflow-wrap: anywhere;
+}
+
+.engine-body[b-m6gkbna3ax] {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: 0 var(--space-3) var(--space-3);
+}
+
+.engine-heading[b-m6gkbna3ax] {
+    margin: var(--space-2) 0 0;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.engine-text[b-m6gkbna3ax] {
+    max-height: 240px;
+    overflow: auto;
+    margin: 0;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+/* /Components/Shared/Game/GameUsageSummary.razor.rz.scp.css */
+/* The per-side usage table of a finished game. It scrolls inside its .table-wrap on a phone, never the page. */
+
+.usage-table th[scope="row"][b-0jgw1i6j0v] {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.usage-table tfoot th[b-0jgw1i6j0v],
+.usage-table tfoot td[b-0jgw1i6j0v] {
+    border-top: 2px solid var(--border-strong);
+    font-weight: 600;
+}
+
+.usage-table .badge[b-0jgw1i6j0v] {
+    white-space: nowrap;
+}
+
+/* A caption that only screen readers announce (the app has no shared utility for it). */
+.visually-hidden[b-0jgw1i6j0v] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+/* /Components/Shared/Game/MoveTable.razor.rz.scp.css */
+/*
+ * The move list (03 §10.4): numbered rows, "1. e4 e5", one cell per ply. The list starts scrolled to its end, so the newest
+ * move is in view: column-reverse puts the scroll origin at the bottom, without any script.
+ */
+
+.move-table-scroll[b-2kdyz40s1o] {
+    display: flex;
+    flex-direction: column-reverse;
+    max-height: 520px;
+    overflow-y: auto;
+    border-radius: var(--radius-sm);
+}
+
+.move-table[b-2kdyz40s1o] {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.move-row[b-2kdyz40s1o] {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0 var(--space-2);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+}
+
+.move-row:nth-child(odd)[b-2kdyz40s1o] {
+    background: var(--surface-2);
+}
+
+.move-number[b-2kdyz40s1o] {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+/* A move is a button: picking it selects its entries in the engine log. Reset to plain text, not the secondary button. */
+.move-table .move-cell[b-2kdyz40s1o] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 30px;
+    padding: 0 var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+}
+
+.move-table .move-cell:hover[b-2kdyz40s1o] {
+    background: var(--surface);
+}
+
+.move-table .move-cell:focus-visible[b-2kdyz40s1o] {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.move-table .move-latest[b-2kdyz40s1o] {
+    background: var(--accent-soft);
+    color: var(--text);
+    font-weight: 650;
+}
+
+.move-table .move-selected[b-2kdyz40s1o] {
+    border-color: var(--accent);
+}
+
+.move-table .move-pending[b-2kdyz40s1o],
+.move-table .move-empty[b-2kdyz40s1o] {
+    display: flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 var(--space-2);
+    color: var(--text-3);
+}
+
+.move-table .move-empty[b-2kdyz40s1o] {
+    visibility: hidden;
+}
+
+.move-retries[b-2kdyz40s1o] {
+    margin-left: auto;
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
+}
+/* /Components/Shared/Game/PlayerBar.razor.rz.scp.css */
+/* One player beside the board: colour chip, name, the side to move, the thinking line, captures and running usage. */
+
+.player-bar[b-olb9kgl7u8] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    min-width: 0;
+}
+
+.player-bar-active[b-olb9kgl7u8] {
+    border-color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.player-chip[b-olb9kgl7u8] {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    font-size: var(--text-lg);
+    line-height: 1;
+}
+
+.player-chip-white[b-olb9kgl7u8] {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.player-chip-black[b-olb9kgl7u8] {
+    background: var(--text);
+    color: var(--surface);
+}
+
+.player-main[b-olb9kgl7u8] {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.player-name[b-olb9kgl7u8] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.player-thinking[b-olb9kgl7u8] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--accent);
+    font-size: var(--text-sm);
+}
+
+.player-captured[b-olb9kgl7u8] {
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+}
+
+.player-captured .num[b-olb9kgl7u8] {
+    margin-left: var(--space-2);
+    color: var(--text-2);
+    font-weight: 600;
+}
+
+.player-usage[b-olb9kgl7u8] {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: none;
+    gap: 2px;
+    font-size: var(--text-xs);
+    text-align: right;
+}
+
+@media (max-width: 480px) {
+    .player-usage[b-olb9kgl7u8] {
+        align-items: flex-start;
+        text-align: left;
+    }
+}
+/* /Components/Site/Game/SiteEngineLog.razor.rz.scp.css */
+/* The engine log (03 §10.4) as a static page shows it. Its look follows EngineLog.razor.css; the filters are left out. */
+
+.engine-entries[b-be1nn5dbdw] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.engine-entry[b-be1nn5dbdw] {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.engine-summary[b-be1nn5dbdw] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius);
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.engine-summary[b-be1nn5dbdw]::-webkit-details-marker {
+    display: none;
+}
+
+.engine-summary:focus-visible[b-be1nn5dbdw] {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.engine-where[b-be1nn5dbdw],
+.engine-model[b-be1nn5dbdw],
+.engine-attempt[b-be1nn5dbdw] {
+    white-space: nowrap;
+}
+
+.engine-san[b-be1nn5dbdw] {
+    font-family: var(--font-mono);
+}
+
+.engine-figures[b-be1nn5dbdw] {
+    margin-left: auto;
+    font-size: var(--text-xs);
+    overflow-wrap: anywhere;
+}
+
+.engine-body[b-be1nn5dbdw] {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: 0 var(--space-3) var(--space-3);
+}
+
+.engine-heading[b-be1nn5dbdw] {
+    margin: var(--space-2) 0 0;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.engine-text[b-be1nn5dbdw] {
+    max-height: 240px;
+    overflow: auto;
+    margin: 0;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+/* /Components/Site/Game/SiteGamePage.razor.rz.scp.css */
+/* The boards of a game (03 §11) are laid out by the page; each board's own rules are in SitePlyBoard.razor.css. */
+.site-boards[b-djr4a3zn5y] {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-4);
+    min-width: 0;
+}
+/* /Components/Site/Game/SiteMoveTable.razor.rz.scp.css */
+/* The move list (03 §10.4) as a static page shows it: numbered rows, one link per ply. Its look follows MoveTable.razor.css. */
+
+.move-table[b-1q4viy2a7g] {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.move-row[b-1q4viy2a7g] {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0 var(--space-2);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+}
+
+.move-row:nth-child(odd)[b-1q4viy2a7g] {
+    background: var(--surface-2);
+}
+
+.move-number[b-1q4viy2a7g] {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.move-cell[b-1q4viy2a7g] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 30px;
+    padding: 0 var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+a.move-cell:hover[b-1q4viy2a7g] {
+    background: var(--surface);
+}
+
+a.move-cell:focus-visible[b-1q4viy2a7g] {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.move-empty[b-1q4viy2a7g] {
+    visibility: hidden;
+}
+
+.move-retries[b-1q4viy2a7g] {
+    margin-left: auto;
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
+}
+/* /Components/Site/Game/SitePlyBoard.razor.rz.scp.css */
+/* Only one board shows at a time: the one the address names (#ply-n), or the start position when the address names none. */
+.ply-board[b-vnbya7gmlt] {
+    display: none;
+    width: 100%;
+    max-width: 480px;
+    margin: 0;
+    /* A #ply-n jump lands below the sticky header, not under it. */
+    scroll-margin-top: 5rem;
+}
+
+.ply-board:target[b-vnbya7gmlt],
+.ply-start[b-vnbya7gmlt] {
+    display: block;
+}
+
+.ply-board:target ~ .ply-start[b-vnbya7gmlt] {
+    display: none;
+}
+
+.ply-caption[b-vnbya7gmlt] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+.ply-links[b-vnbya7gmlt] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+/* /Components/Site/SiteLayout.razor.rz.scp.css */
+/* The snapshot strip and the footer of the static site. Colour comes from the tokens in app.css only (07 §1). */
+.site-strip[b-y0o73ohrng] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--gutter);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.site-live[b-y0o73ohrng] {
+    font-weight: 600;
+}
+
+.site-footer[b-y0o73ohrng] {
+    max-width: var(--content-max);
+    margin: var(--space-7) auto 0;
+    padding: var(--space-5) var(--gutter);
+    border-top: 1px solid var(--border);
+    color: var(--text-3);
+    font-size: var(--text-sm);
+}
+
+.site-footer p[b-y0o73ohrng] {
+    max-width: 70ch;
+    margin: 0 0 var(--space-3);
+}
+
+.site-support[b-y0o73ohrng] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}

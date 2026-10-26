@@ -1,0 +1,296 @@
+{
+  "claude-haiku-5.5": [
+    {
+      "takenAt": "2026-10-25T08:55:42.532196+00:00",
+      "ratedGames": 2,
+      "model": "claude-haiku-5.5",
+      "rating": 0,
+      "ciLow": 0,
+      "ciHigh": 0,
+      "arenaScore": 49.91272735358207,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-25T08:59:41.431053+00:00",
+      "ratedGames": 3,
+      "model": "claude-haiku-5.5",
+      "rating": -217.722942365448,
+      "ciLow": -217.722942365448,
+      "ciHigh": 0,
+      "arenaScore": 17.897080888373594,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-25T09:16:10.890863+00:00",
+      "ratedGames": 4,
+      "model": "claude-haiku-5.5",
+      "rating": -205.5968104570125,
+      "ciLow": -259.0881312961017,
+      "ciHigh": 0,
+      "arenaScore": 25.017999847561732,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T11:51:55.599923+00:00",
+      "ratedGames": 5,
+      "model": "claude-haiku-5.5",
+      "rating": -158.63954444706872,
+      "ciLow": -268.55330825262496,
+      "ciHigh": 0,
+      "arenaScore": 34.08585176114228,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:15:14.951739+00:00",
+      "ratedGames": 6,
+      "model": "claude-haiku-5.5",
+      "rating": -173.29567132595457,
+      "ciLow": -307.6452999356284,
+      "ciHigh": 1.598721155460185E-15,
+      "arenaScore": 28.61132375823507,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:48:29.880881+00:00",
+      "ratedGames": 7,
+      "model": "claude-haiku-5.5",
+      "rating": -170.8747574386755,
+      "ciLow": -289.09518307594254,
+      "ciHigh": 3.8902214782865445E-15,
+      "arenaScore": 29.799146352958527,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T13:16:59.923573+00:00",
+      "ratedGames": 8,
+      "model": "claude-haiku-5.5",
+      "rating": -163.18972883719306,
+      "ciLow": -258.5326107199775,
+      "ciHigh": 4.349113661798252E-15,
+      "arenaScore": 32.23588511954143,
+      "provisional": true
+    }
+  ],
+  "claude-haiku-5.5~board": [
+    {
+      "takenAt": "2026-10-26T13:16:59.923573+00:00",
+      "ratedGames": 8,
+      "model": "claude-haiku-5.5~board",
+      "rating": -156.49078014799665,
+      "ciLow": -270.78207545308436,
+      "ciHigh": -85.66759495427225,
+      "arenaScore": 32.95208014596903,
+      "provisional": true
+    }
+  ],
+  "claude-haiku-5.5~think": [
+    {
+      "takenAt": "2026-10-26T11:51:55.599923+00:00",
+      "ratedGames": 5,
+      "model": "claude-haiku-5.5~think",
+      "rating": -7.105427357601002E-15,
+      "ciLow": -8.40808903982785E-15,
+      "ciHigh": 1.0258460747536431E-14,
+      "arenaScore": 37.34438938494889,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:15:14.951739+00:00",
+      "ratedGames": 6,
+      "model": "claude-haiku-5.5~think",
+      "rating": 4.884981308350689E-15,
+      "ciLow": -1.0036416142611414E-14,
+      "ciHigh": 8.463600191059099E-15,
+      "arenaScore": 50.26514554683954,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:48:29.880881+00:00",
+      "ratedGames": 7,
+      "model": "claude-haiku-5.5~think",
+      "rating": 43.481884882314134,
+      "ciLow": -58.74195966813416,
+      "ciHigh": 153.27879744818532,
+      "arenaScore": 55.551991130622746,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T13:16:59.923573+00:00",
+      "ratedGames": 8,
+      "model": "claude-haiku-5.5~think",
+      "rating": 31.809890466769435,
+      "ciLow": -44.2611122356301,
+      "ciHigh": 125.90914315660159,
+      "arenaScore": 53.82992041577936,
+      "provisional": true
+    }
+  ],
+  "claude-sonnet-5.5": [
+    {
+      "takenAt": "2026-10-25T08:30:00.375554+00:00",
+      "ratedGames": 1,
+      "model": "claude-sonnet-5.5",
+      "rating": 0,
+      "ciLow": 0,
+      "ciHigh": 0,
+      "arenaScore": 50,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-25T08:55:42.532196+00:00",
+      "ratedGames": 2,
+      "model": "claude-sonnet-5.5",
+      "rating": 0,
+      "ciLow": 0,
+      "ciHigh": 0,
+      "arenaScore": 50.08727264641794,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-25T08:59:41.431053+00:00",
+      "ratedGames": 3,
+      "model": "claude-sonnet-5.5",
+      "rating": 217.722942365448,
+      "ciLow": 0,
+      "ciHigh": 217.722942365448,
+      "arenaScore": 82.1029191116264,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-25T09:16:10.890863+00:00",
+      "ratedGames": 4,
+      "model": "claude-sonnet-5.5",
+      "rating": 231.4450462813094,
+      "ciLow": 0,
+      "ciHigh": 259.0881312961017,
+      "arenaScore": 77.95716334437209,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T11:51:55.599923+00:00",
+      "ratedGames": 5,
+      "model": "claude-sonnet-5.5",
+      "rating": 130.34274166199063,
+      "ciLow": -90.71326142199344,
+      "ciHigh": 261.81084691145855,
+      "arenaScore": 70.87348668309596,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:15:14.951739+00:00",
+      "ratedGames": 6,
+      "model": "claude-sonnet-5.5",
+      "rating": 162.46238248326,
+      "ciLow": -49.44167178185235,
+      "ciHigh": 307.6452999356284,
+      "arenaScore": 69.99585187171725,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:48:29.880881+00:00",
+      "ratedGames": 7,
+      "model": "claude-sonnet-5.5",
+      "rating": 157.19553430646644,
+      "ciLow": -27.59087975622045,
+      "ciHigh": 308.2039989564467,
+      "arenaScore": 68.4021561033775,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T13:16:59.923573+00:00",
+      "ratedGames": 8,
+      "model": "claude-sonnet-5.5",
+      "rating": 140.37617860212222,
+      "ciLow": -28.146441535469865,
+      "ciHigh": 260.45456119300167,
+      "arenaScore": 65.2734967737156,
+      "provisional": true
+    }
+  ],
+  "claude-sonnet-5.5~think": [
+    {
+      "takenAt": "2026-10-26T12:48:29.880881+00:00",
+      "ratedGames": 7,
+      "model": "claude-sonnet-5.5~think",
+      "rating": -43.481884882314134,
+      "ciLow": -153.27879745086088,
+      "ciHigh": 66.30309583753318,
+      "arenaScore": 44.89883100211159,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T13:16:59.923573+00:00",
+      "ratedGames": 8,
+      "model": "claude-sonnet-5.5~think",
+      "rating": -31.809890466769435,
+      "ciLow": -131.95544833961802,
+      "ciHigh": 60.10906503957699,
+      "arenaScore": 46.7007168024025,
+      "provisional": true
+    }
+  ],
+  "grok-4.7~board": [
+    {
+      "takenAt": "2026-10-26T13:16:59.923573+00:00",
+      "ratedGames": 8,
+      "model": "grok-4.7~board",
+      "rating": 156.49078014799665,
+      "ciLow": 85.66759495427219,
+      "ciHigh": 270.7820754530843,
+      "arenaScore": 66.6939107455285,
+      "provisional": true
+    }
+  ],
+  "kimi-k3": [
+    {
+      "takenAt": "2026-10-25T09:16:10.890863+00:00",
+      "ratedGames": 4,
+      "model": "kimi-k3",
+      "rating": -25.84823582429687,
+      "ciLow": -148.61326778675357,
+      "ciHigh": 148.61326778808973,
+      "arenaScore": 47.02483680806617,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T11:51:55.599923+00:00",
+      "ratedGames": 5,
+      "model": "kimi-k3",
+      "rating": 28.296802785078107,
+      "ciLow": -169.447783876762,
+      "ciHigh": 194.9552249769993,
+      "arenaScore": 57.696272170812875,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:15:14.951739+00:00",
+      "ratedGames": 6,
+      "model": "kimi-k3",
+      "rating": 10.833288842694557,
+      "ciLow": -184.47839253928444,
+      "ciHigh": 189.0760767457395,
+      "arenaScore": 51.12767882320812,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T12:48:29.880881+00:00",
+      "ratedGames": 7,
+      "model": "kimi-k3",
+      "rating": 13.67922313220904,
+      "ciLow": -169.00825330008502,
+      "ciHigh": 114.46069412586594,
+      "arenaScore": 51.34787541092965,
+      "provisional": true
+    },
+    {
+      "takenAt": "2026-10-26T13:16:59.923573+00:00",
+      "ratedGames": 8,
+      "model": "kimi-k3",
+      "rating": 22.813550235070842,
+      "ciLow": -141.754134067157,
+      "ciHigh": 104.21997011757712,
+      "arenaScore": 52.313989997063565,
+      "provisional": true
+    }
+  ]
+}
