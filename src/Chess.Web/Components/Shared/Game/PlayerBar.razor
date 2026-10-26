@@ -12,6 +12,11 @@
             {
                 <span class="badge badge-accent" data-testid="to-move">To move</span>
             }
+            else
+            {
+                @* Holds the badge's place, so the bar keeps its height when the turn changes. *@
+                <span class="badge badge-accent player-placeholder" aria-hidden="true">To move</span>
+            }
         </div>
 
         @if (Attempt is { } attempt)
@@ -19,6 +24,13 @@
             <div class="player-thinking" data-testid="player-thinking">
                 <span class="dot dot-accent" aria-hidden="true"></span>
                 Thinking for @Seconds s · attempt @Math.Min(attempt, EngineEntry.MaxAttempts) of @EngineEntry.MaxAttempts
+            </div>
+        }
+        else
+        {
+            <div class="player-thinking player-placeholder" aria-hidden="true">
+                <span class="dot dot-accent"></span>
+                Thinking
             </div>
         }
 
@@ -35,6 +47,7 @@
         @if (Totals.Requests == 0)
         {
             <span class="muted">No model requests yet</span>
+            <span class="muted player-placeholder" aria-hidden="true">≈ $0 est.</span>
         }
         else
         {

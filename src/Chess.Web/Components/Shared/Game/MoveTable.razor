@@ -1,8 +1,8 @@
 @using Chess.Web.Api
 
-<div class="move-table-scroll">
+<div class="move-table-scroll @(NewestFirst ? "move-table-fixed" : null)">
     <ol class="move-table" data-testid="move-list" aria-label="Moves">
-        @foreach (var row in Rows)
+        @foreach (var row in NewestFirst ? Rows.Reverse() : Rows)
         {
             <li class="move-row">
                 <span class="move-number" aria-hidden="true">@row.Number.</span>
@@ -41,12 +41,12 @@
             </li>
         }
     </ol>
-</div>
 
-@if (Moves.Count == 0 && PendingPly is null)
-{
-    <p class="muted empty-state" data-testid="no-moves">No moves yet.</p>
-}
+    @if (Moves.Count == 0 && PendingPly is null)
+    {
+        <p class="muted empty-state" data-testid="no-moves">No moves yet.</p>
+    }
+</div>
 
 @code {
     /// <summary>The moves played so far, in ply order.</summary>
@@ -64,6 +64,13 @@
     /// <summary>Raised with the ply of a move the user picked. Picking the selected move again clears it (null).</summary>
     [Parameter]
     public EventCallback<int?> OnSelect { get; set; }
+
+    /// <summary>
+    /// The live game's list: the newest move on top, in a box of fixed height that does not grow with the game. The replay
+    /// keeps the game's order, first move on top.
+    /// </summary>
+    [Parameter]
+    public bool NewestFirst { get; set; }
 
     private int LatestPly => Moves.Count == 0 ? 0 : Moves.Max(move => move.Ply);
 

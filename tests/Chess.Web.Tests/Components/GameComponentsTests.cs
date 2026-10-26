@@ -86,6 +86,44 @@ public class MoveTableTests
         Assert.Equal("No moves yet.", cut.Find("[data-testid=no-moves]").TextContent);
     }
 
+    [Fact]
+    public void TheLiveListPutsTheNewestMoveOnTopInABoxOfFixedHeight()
+    {
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<MoveTable>(p => p
+            .Add(x => x.Moves, [Move(1, "e4"), Move(2, "e5"), Move(3, "Nf3")])
+            .Add(x => x.PendingPly, 4)
+            .Add(x => x.NewestFirst, true));
+
+        var rows = cut.FindAll("[data-testid=move-list] li");
+        Assert.Equal(new[] { "2.", "1." }, rows.Select(row => row.QuerySelector(".move-number")!.TextContent));
+        Assert.Equal("Nf3", rows[0].QuerySelector("[data-testid=move-cell]")!.TextContent.Trim());
+        Assert.NotNull(rows[0].QuerySelector("[data-testid=move-pending]"));
+        Assert.Contains("move-table-fixed", cut.Find(".move-table-scroll").ClassList);
+    }
+
+    [Fact]
+    public void TheReplayListKeepsTheGameInOrder()
+    {
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<MoveTable>(p => p.Add(x => x.Moves, [Move(1, "e4"), Move(2, "e5"), Move(3, "Nf3")]));
+
+        Assert.Equal(new[] { "1.", "2." }, cut.FindAll("[data-testid=move-list] li").Select(row => row.QuerySelector(".move-number")!.TextContent));
+        Assert.DoesNotContain("move-table-fixed", cut.Find(".move-table-scroll").ClassList);
+    }
+
+    [Fact]
+    public void TheEmptyStateSitsInsideTheList()
+    {
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<MoveTable>(p => p.Add(x => x.Moves, []).Add(x => x.NewestFirst, true));
+
+        Assert.NotNull(cut.Find("[data-testid=no-moves]").Closest(".move-table-scroll"));
+    }
+
     private static MoveDto Move(int ply, string san, int attempts = 1) =>
         new(ply, ply % 2 == 1 ? "White" : "Black", san, Fen, attempts, 900, null, null, null, null);
 }
@@ -112,6 +150,33 @@ public class PlayerBarTests
         Assert.Contains("player-bar-active", white.Find("[data-testid=player-white]").ClassList);
         Assert.Empty(black.FindAll("[data-testid=to-move]"));
         Assert.Equal("false", black.Find("[data-testid=player-black]").GetAttribute("data-to-move"));
+    }
+
+    /// <summary>
+    /// The bar keeps one height through the game, so the board under it never moves: the badge, the thinking line, the
+    /// captures and both usage lines are rendered in every state, hidden when they have nothing to say.
+    /// </summary>
+    [Fact]
+    public void EveryRowIsRenderedInEveryStateSoTheBarKeepsItsHeight()
+    {
+        using var ctx = new BunitContext();
+
+        var idle = ctx.Render<PlayerBar>(p => p.Add(x => x.Color, "Black").Add(x => x.Name, "Claude"));
+        var busy = ctx.Render<PlayerBar>(p => p
+            .Add(x => x.Color, "White").Add(x => x.Name, "GPT").Add(x => x.ToMove, true).Add(x => x.Attempt, 1)
+            .Add(x => x.CapturedHere, "♟").Add(x => x.Totals, new SideTotals(2, 1_200, 300, 2.5)));
+
+        foreach (var bar in new[] { idle, busy })
+        {
+            Assert.Single(bar.FindAll(".player-name .badge"));
+            Assert.Single(bar.FindAll(".player-thinking"));
+            Assert.Single(bar.FindAll(".player-captured"));
+            Assert.Equal(2, bar.FindAll(".player-usage > span").Count);
+        }
+
+        Assert.Equal(3, idle.FindAll(".player-placeholder").Count);
+        Assert.All(idle.FindAll(".player-placeholder"), placeholder => Assert.Equal("true", placeholder.GetAttribute("aria-hidden")));
+        Assert.Empty(busy.FindAll(".player-placeholder"));
     }
 
     [Fact]

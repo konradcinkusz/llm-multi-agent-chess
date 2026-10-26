@@ -70,10 +70,28 @@
     height: auto;
 }
 
+/*
+ * The status line alternates between "Move 12 · White to move" and the longer "... is thinking (attempt 1 of 3)" every
+ * turn. A fixed height of two lines (three on a phone), clamped, keeps what follows it from moving each turn.
+ */
 .play-status {
+    --status-lines: 2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--status-lines);
+    line-clamp: var(--status-lines);
+    height: calc(var(--text-sm) * 1.5 * var(--status-lines));
     margin: 0;
+    overflow: hidden;
     color: var(--text-2);
     font-size: var(--text-sm);
+    line-height: 1.5;
+}
+
+@media (max-width: 599px) {
+    .play-status {
+        --status-lines: 3;
+    }
 }
 
 .play-result {
@@ -117,6 +135,11 @@
     color: var(--text-2);
     font-size: var(--text-sm);
     font-weight: 500;
+}
+
+/* Room for the "behind" line at its tallest (its text above the Catch up button), so the list under it never moves. */
+.play-pace-slot {
+    min-height: calc(var(--text-sm) * 1.5 + var(--space-2) + 30px);
 }
 
 .play-pace-behind {
