@@ -122,7 +122,8 @@ public static class PlanPlanner
             return 0;
         }
 
-        if (!multipliers.TryGetValue(model, out var multiplier) || multiplier is not { } value)
+        // A styled player is billed as its model (03 §14.4): its multiplier is the model's.
+        if (!multipliers.TryGetValue(PlayerId.Parse(model).Model, out var multiplier) || multiplier is not { } value)
         {
             return null;
         }

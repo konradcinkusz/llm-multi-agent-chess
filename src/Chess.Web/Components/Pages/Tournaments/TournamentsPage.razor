@@ -67,13 +67,32 @@
                 </div>
             </fieldset>
 
-            @if (SelectedModels.Count >= 2)
+            <fieldset class="tournament-styles">
+                <legend>Prompt styles</legend>
+                <div class="chips">
+                    @foreach (var style in _styles)
+                    {
+                        <label class="chip">
+                            <input id="style-@style.Id" type="checkbox" checked="@_selectedStyles.Contains(style.Id)"
+                                   @onchange="e => ToggleStyle(style.Id, e.Value)" />
+                            @style.DisplayName
+                            <span class="muted">@PromptStyleChoices.Players(PromptStyleChoices.Participants(SelectedModels, [style.Id]).Count)</span>
+                        </label>
+                    }
+                </div>
+                @if (_stylesNotice is { } notice)
+                {
+                    <p class="field-hint" data-testid="styles-notice">@notice</p>
+                }
+            </fieldset>
+
+            @if (Participants.Count >= 2)
             {
-                var pairs = SelectedModels.Count * (SelectedModels.Count - 1) / 2;
+                var pairs = Participants.Count * (Participants.Count - 1) / 2;
                 var gameCount = pairs * _gamesPerPair;
-                var estimates = PremiumEstimate.For(_models!, SelectedModels, _gamesPerPair);
+                var estimates = PremiumEstimate.For(_models!, Participants, _gamesPerPair);
                 var unknown = estimates.Count(estimate => estimate.Requests is null);
-                var gamesPerModel = (SelectedModels.Count - 1) * _gamesPerPair;
+                var gamesPerModel = (Participants.Count - 1) * _gamesPerPair;
 
                 <div class="callout callout-info tournament-estimate" aria-live="polite">
                     <h3>Estimated cost</h3>
@@ -93,7 +112,7 @@
                                 {
                                     var cost = CostOf(estimate.ModelId, gamesPerModel);
                                     <tr>
-                                        <td>@estimate.ModelId</td>
+                                        <td>@PromptStyleChoices.Label(estimate.ModelId, _models, _styles)</td>
                                         <td>@TournamentFormat.Price(Find(estimate.ModelId)?.Pricing)</td>
                                         <td class="num">@TournamentFormat.Requests(estimate.Requests)</td>
                                         <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
@@ -112,8 +131,8 @@
                         }
                     </p>
                     <p>
-                        Known AI credits: @TournamentFormat.Credits(KnownCredits(SelectedModels, gamesPerModel)),
-                        USD: @TournamentFormat.Usd(KnownUsd(SelectedModels, gamesPerModel)).
+                        Known AI credits: @TournamentFormat.Credits(KnownCredits(Participants, gamesPerModel)),
+                        USD: @TournamentFormat.Usd(KnownUsd(Participants, gamesPerModel)).
                     </p>
                 </div>
             }
@@ -228,6 +247,10 @@
     private CostInputsDto? _costs;
     private IReadOnlyList<ModelDto> _choices = [];
 
+    private IReadOnlyList<PromptStyleDto> _styles = [PromptStyleChoices.Classic];
+    private string? _stylesNotice;
+    private readonly HashSet<string> _selectedStyles = [PlayerId.DefaultStyle];
+
     private IReadOnlyList<TournamentDto>? _tournaments;
     private string? _listError;
 
@@ -243,8 +266,15 @@
     private IReadOnlyList<string> SelectedModels =>
         _choices.Where(model => _selected.Contains(model.Id)).Select(model => model.Id).ToArray();
 
+    /// <summary>The selected styles, in the order the form lists them.</summary>
+    private IReadOnlyList<string> SelectedStyles =>
+        _styles.Where(style => _selectedStyles.Contains(style.Id)).Select(style => style.Id).ToArray();
+
+    /// <summary>Every model in every selected style: the players of the tournament (03 §14.4).</summary>
+    private IReadOnlyList<string> Participants => PromptStyleChoices.Participants(SelectedModels, SelectedStyles);
+
     private IReadOnlyList<string> Problems =>
-        TournamentFormRules.Problems(_name, SelectedModels, _gamesPerPair, _maxConcurrency);
+        TournamentFormRules.Problems(_name, Participants, _gamesPerPair, _maxConcurrency);
 
     protected override async Task OnInitializedAsync()
     {
@@ -257,6 +287,10 @@
         {
             _modelsError = ex.Message;
         }
+
+        var styles = await PromptStyleChoices.LoadAsync(Api, _cts.Token);
+        _styles = styles.Styles;
+        _stylesNotice = styles.Notice;
 
         await LoadCostInputsAsync();
         await LoadTournamentsAsync(_cts.Token);
@@ -311,7 +345,20 @@
         }
     }
 
-    private ModelDto? Find(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId);
+    private void ToggleStyle(string styleId, object? selected)
+    {
+        if (selected is true)
+        {
+            _selectedStyles.Add(styleId);
+        }
+        else
+        {
+            _selectedStyles.Remove(styleId);
+        }
+    }
+
+    /// <summary>The model a player plays as, with the player's id, so its prices are looked up under that player.</summary>
+    private ModelDto? Find(string playerId) => PromptStyleChoices.Find(_models, playerId);
 
     /// <summary>One model's estimate in this tournament: the games it plays, at its moves on one side each.</summary>
     private CostPreview.Estimate? CostOf(string modelId, int gamesPerModel) =>
@@ -352,7 +399,7 @@
         _created = null;
         try
         {
-            var request = new CreateTournamentRequest(_name.Trim(), SelectedModels, _gamesPerPair, _maxConcurrency);
+            var request = new CreateTournamentRequest(_name.Trim(), Participants, _gamesPerPair, _maxConcurrency);
             _created = await Api.CreateTournamentAsync(request, _cts.Token);
             _name = "";
             _selected.Clear();

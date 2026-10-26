@@ -1,6 +1,7 @@
 @page "/"
 @using Chess.Web.Api
 @using Chess.Web.Components.Shared
+@using Chess.Web.Components.Pages.Tournaments
 @using Chess.Web.Components.Shared.Game
 @implements IDisposable
 @inject ArenaApiClient Api
@@ -33,6 +34,11 @@ else
                 <div class="callout callout-warning" role="alert" data-testid="gateway-banner">@_gatewayMessage</div>
             }
 
+            @if (_stylesNotice is not null)
+            {
+                <p class="field-hint" data-testid="styles-notice">@_stylesNotice</p>
+            }
+
             <label class="field">
                 <span class="play-side-name"><span class="play-side-chip" aria-hidden="true">♔</span>White</span>
                 <select id="white-model" data-testid="white-model" @bind="_white" disabled="@PickersLocked">
@@ -43,6 +49,20 @@ else
                 </select>
             </label>
 
+            @if (_white != PlayChoices.Random)
+            {
+                <label class="field">
+                    White's prompt style
+                    <select id="white-style" data-testid="white-style" @bind="_whiteStyle" disabled="@PickersLocked">
+                        @foreach (var style in _styles)
+                        {
+                            <option value="@style.Id">@style.DisplayName</option>
+                        }
+                    </select>
+                    <span class="field-hint">@PromptStyleChoices.Describe(_styles, _whiteStyle)</span>
+                </label>
+            }
+
             <label class="field">
                 <span class="play-side-name"><span class="play-side-chip" aria-hidden="true">♚</span>Black</span>
                 <select id="black-model" data-testid="black-model" @bind="_black" disabled="@PickersLocked">
@@ -52,6 +72,20 @@ else
                     }
                 </select>
             </label>
+
+            @if (_black != PlayChoices.Random)
+            {
+                <label class="field">
+                    Black's prompt style
+                    <select id="black-style" data-testid="black-style" @bind="_blackStyle" disabled="@PickersLocked">
+                        @foreach (var style in _styles)
+                        {
+                            <option value="@style.Id">@style.DisplayName</option>
+                        }
+                    </select>
+                    <span class="field-hint">@PromptStyleChoices.Describe(_styles, _blackStyle)</span>
+                </label>
+            }
 
             <label class="play-check">
                 <input type="checkbox" id="rated" data-testid="rated-toggle" @bind="_rated" disabled="@PickersLocked" />
@@ -195,6 +229,10 @@ else
 
     private string _white = PlayChoices.Random;
     private string _black = PlayChoices.Random;
+    private string _whiteStyle = PlayerId.DefaultStyle;
+    private string _blackStyle = PlayerId.DefaultStyle;
+    private IReadOnlyList<PromptStyleDto> _styles = [PromptStyleChoices.Classic];
+    private string? _stylesNotice;
     private bool _rated = true;
     private bool _starting;
 
@@ -318,6 +356,11 @@ else
         }
 
         _gatewayMessage = GatewayMessage(status, statusError);
+
+        var styles = await PromptStyleChoices.LoadAsync(Api, CancellationToken.None);
+        _styles = styles.Styles;
+        _stylesNotice = styles.Notice;
+
         if (models is null)
         {
             return;
@@ -355,8 +398,10 @@ else
 
         try
         {
+            var white = PromptStyleChoices.Player(_white, null, _whiteStyle);
+            var black = PromptStyleChoices.Player(_black, null, _blackStyle);
             var summary = await Api.CreateGameAsync(
-                new CreateGameRequest(PlayChoices.Player(_white), PlayChoices.Player(_black), _rated));
+                new CreateGameRequest(PlayChoices.Player(white), PlayChoices.Player(black), _rated));
             _live = new LiveGame(summary);
             _pace.Reset(0);
 
@@ -711,7 +756,8 @@ else
         ? (color == White ? live.Summary.White : live.Summary.Black).ModelId
         : color == White ? _white : _black;
 
-    private string ModelName(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId)?.DisplayName ?? modelId;
+    /// <summary>A player's name on the board: its model, and its style when it is not classic.</summary>
+    private string ModelName(string playerId) => PromptStyleChoices.Label(playerId, _models, _styles);
 
     /// <summary>Whose move it is: the side the game waits for, unless the game is over or not started.</summary>
     private bool ToMove(string color) => Shown is { IsFinished: false } shown && LiveGame.ColorOf(shown.NextPly) == color;
