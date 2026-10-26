@@ -1,6 +1,7 @@
 /*
- * The move list (03 §10.4): numbered rows, "1. e4 e5", one cell per ply. The list starts scrolled to its end, so the newest
- * move is in view: column-reverse puts the scroll origin at the bottom, without any script.
+ * The move list (03 §10.4): numbered rows, "1. e4 e5", one cell per ply. The replay lists the game in order and starts
+ * scrolled to its end (column-reverse puts the scroll origin at the bottom, without any script). The live game lists the
+ * newest move on top, in a box of fixed height, so nothing on the page moves as the game goes on.
  */
 
 .move-table-scroll {
@@ -9,6 +10,18 @@
     max-height: 520px;
     overflow-y: auto;
     border-radius: var(--radius-sm);
+}
+
+.move-table-scroll.move-table-fixed {
+    flex-direction: column;
+    height: 520px;
+    max-height: none;
+}
+
+@media (max-width: 899px) {
+    .move-table-scroll.move-table-fixed {
+        height: 360px;
+    }
 }
 
 .move-table {

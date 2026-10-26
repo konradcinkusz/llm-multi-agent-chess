@@ -572,8 +572,12 @@ default move timeout rises from 60 s to **180 s**, because reasoning models rout
 - **Status line:** "Move 12 · White to move · gpt-x is thinking (attempt 2 of 3)"; then the result banner
   ("1-0 · White wins by checkmate").
 - **Board:** the last move's from and to squares highlighted; a king in check highlighted.
-- **Move list:** a numbered two-column table (`1. e4 e5`), the latest ply highlighted and kept in view; a move that
-  needed retries carries a small marker with the count; selecting a move jumps to its entries in the log.
+- **Move list:** a numbered two-column table (`1. e4 e5`), the latest ply highlighted; on the live page the newest move
+  is on top and the list sits in a box of fixed height (the replay keeps the game's order). A move that needed retries
+  carries a small marker with the count; selecting a move jumps to its entries in the log.
+- **Fixed layout (owner request 2026-10-26):** nothing above the board changes size during a game, so the board never
+  moves. The player bars always render their rows (the "To move" badge and the thinking line are hidden placeholders
+  when idle), no row wraps, and the status line under the board has a fixed height.
 - **Engine log** (under the board, full width): one entry per attempt, newest first, with ply, side, model, "attempt n
   of N", a verdict badge (legal, unparseable, illegal, ambiguous, timeout, error), latency, tokens and credits; each entry
   expands to the prompt sent, the raw reply and the reasoning ("this model did not expose its reasoning" when there is

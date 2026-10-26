@@ -1,4 +1,8 @@
-/* One player beside the board: colour chip, name, the side to move, the thinking line, captures and running usage. */
+/*
+ * One player beside the board: colour chip, name, the side to move, the thinking line, captures and running usage.
+ * The bar keeps one height for the whole game, so the board under it never moves: every row is always rendered (a hidden
+ * placeholder stands in for the badge and the thinking line), and no row wraps.
+ */
 
 .player-bar {
     display: flex;
@@ -56,17 +60,30 @@
     overflow-wrap: anywhere;
 }
 
-.player-thinking {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    color: var(--accent);
-    font-size: var(--text-sm);
+.player-placeholder {
+    visibility: hidden;
 }
 
-.player-captured {
+.player-thinking {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    overflow: hidden;
+    color: var(--accent);
     font-size: var(--text-sm);
-    overflow-wrap: anywhere;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+/* One line even before the first capture: an empty line would have no height and grow on the first capture. */
+.player-captured {
+    min-height: calc(var(--text-sm) * 1.5);
+    overflow: hidden;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .player-captured .num {
@@ -82,7 +99,9 @@
     flex: none;
     gap: 2px;
     font-size: var(--text-xs);
+    line-height: 1.5;
     text-align: right;
+    white-space: nowrap;
 }
 
 @media (max-width: 480px) {

@@ -180,15 +180,18 @@ else
                         </label>
                     }
                 </div>
-                @if (Behind > 0)
-                {
-                    <p class="play-pace-behind" data-testid="pace-behind">
-                        <span>@PlayChoices.Behind(Behind)</span>
-                        <button type="button" class="btn btn-sm" data-testid="catch-up" @onclick="CatchUp">Catch up</button>
-                    </p>
-                }
+                @* The slot keeps its height when the line comes and goes, so the move list under it stays put. *@
+                <div class="play-pace-slot">
+                    @if (Behind > 0)
+                    {
+                        <p class="play-pace-behind" data-testid="pace-behind">
+                            <span>@PlayChoices.Behind(Behind)</span>
+                            <button type="button" class="btn btn-sm" data-testid="catch-up" @onclick="CatchUp">Catch up</button>
+                        </p>
+                    }
+                </div>
             </fieldset>
-            <MoveTable Moves="@Moves" PendingPly="@PendingPly" SelectedPly="@_selectedPly" OnSelect="@SelectPly" />
+            <MoveTable Moves="@Moves" PendingPly="@PendingPly" SelectedPly="@_selectedPly" OnSelect="@SelectPly" NewestFirst="true" />
         </aside>
     </div>
 
