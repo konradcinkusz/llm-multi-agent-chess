@@ -1,0 +1,21 @@
+{
+  "kind": "youtube#liveBroadcastListResponse",
+  "etag": "fixture-etag-broadcasts-active",
+  "pageInfo": { "totalResults": 1, "resultsPerPage": 5 },
+  "items": [
+    {
+      "kind": "youtube#liveBroadcast",
+      "etag": "fixture-etag-broadcast-1",
+      "id": "fixtureBroadcast01",
+      "snippet": {
+        "publishedAt": "2026-10-26T08:00:00+00:00",
+        "channelId": "UCfixturechannel0001",
+        "title": "Fixture 24-hour stream",
+        "description": "",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "isDefaultBroadcast": false
+      },
+      "status": { "lifeCycleStatus": "live", "privacyStatus": "unlisted" }
+    }
+  ]
+}

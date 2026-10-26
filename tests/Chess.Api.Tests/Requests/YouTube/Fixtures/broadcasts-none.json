@@ -1,0 +1,6 @@
+{
+  "kind": "youtube#liveBroadcastListResponse",
+  "etag": "fixture-etag-broadcasts-none",
+  "pageInfo": { "totalResults": 0, "resultsPerPage": 5 },
+  "items": []
+}

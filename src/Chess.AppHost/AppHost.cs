@@ -24,6 +24,26 @@ foreach (var key in CustomModelSettings.Keys(builder.Configuration))
     api.WithEnvironment(key.Name, builder.AddParameter(key.ParameterName, secret: true));
 }
 
+// YouTube intake (03 §15.5, ADR-016). The mode is forwarded when it is set here. The OAuth client id, client secret and refresh
+// token are secret parameters (user secrets: Parameters:youtube-*), passed on only when they are set, never written to a file.
+if (builder.Configuration["Arena:Requests:Mode"] is { Length: > 0 } requestsMode)
+{
+    api.WithEnvironment("Arena__Requests__Mode", requestsMode);
+}
+
+foreach (var (field, parameter) in new[]
+{
+    ("ClientId", "youtube-client-id"),
+    ("ClientSecret", "youtube-client-secret"),
+    ("RefreshToken", "youtube-refresh-token"),
+})
+{
+    if (builder.Configuration[$"Parameters:{parameter}"] is { Length: > 0 })
+    {
+        api.WithEnvironment($"Arena__Requests__YouTube__{field}", builder.AddParameter(parameter, secret: true));
+    }
+}
+
 var web = builder.AddProject<Projects.Chess_Web>("web")
     .WithHttpEndpoint(port: 5070, targetPort: 5070, name: "http", isProxied: false)
     .WithExternalHttpEndpoints()

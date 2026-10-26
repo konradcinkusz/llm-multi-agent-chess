@@ -1,0 +1,31 @@
+{
+  "kind": "youtube#liveChatMessageListResponse",
+  "etag": "fixture-etag-chat-page-2",
+  "nextPageToken": "page-3",
+  "pollingIntervalMillis": 10000,
+  "pageInfo": { "totalResults": 1, "resultsPerPage": 1 },
+  "items": [
+    {
+      "kind": "youtube#liveChatMessage",
+      "etag": "fixture-etag-message-7",
+      "id": "LCC.fixture-text-command-2",
+      "snippet": {
+        "type": "textMessageEvent",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "authorChannelId": "UCfixturepayer0003",
+        "publishedAt": "2026-10-26T10:25:00.000000+00:00",
+        "hasDisplayContent": true,
+        "displayMessage": "!g d3 vs c1 classic",
+        "textMessageDetails": { "messageText": "!g d3 vs c1 classic" }
+      },
+      "authorDetails": {
+        "channelId": "UCfixturepayer0003",
+        "displayName": "Cy",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": false,
+        "isChatModerator": false
+      }
+    }
+  ]
+}
