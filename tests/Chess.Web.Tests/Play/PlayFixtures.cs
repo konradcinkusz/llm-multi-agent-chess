@@ -28,6 +28,9 @@ internal sealed class PlayServer
 
     public string Models { get; set; } = PlayFixtures.Models;
 
+    /// <summary>What GET /api/prompt-styles answers; null makes the call fail, as an API without styles does.</summary>
+    public string? PromptStyles { get; set; } = PromptStyleFixtures.Json;
+
     public HttpStatusCode CreateStatus { get; set; } = HttpStatusCode.Created;
 
     /// <summary>What GET /api/games/{id} answers. The page loads it right after it opens the stream.</summary>
@@ -50,6 +53,11 @@ internal sealed class PlayServer
         if (route == "GET /api/models")
         {
             return Canned.Json(Models);
+        }
+
+        if (route == "GET /api/prompt-styles")
+        {
+            return PromptStyles is { } styles ? Canned.Json(styles) : Canned.Json("{}", HttpStatusCode.NotFound);
         }
 
         if (route == "GET /api/status")

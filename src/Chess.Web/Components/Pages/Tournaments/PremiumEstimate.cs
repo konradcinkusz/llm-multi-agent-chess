@@ -29,6 +29,7 @@ public static class PremiumEstimate
     /// <summary>The sum of the known estimates. Unknown ones are not counted; the page says how many there are.</summary>
     public static double Known(IEnumerable<ModelEstimate> estimates) => estimates.Sum(estimate => estimate.Requests ?? 0);
 
-    private static double? Multiplier(IReadOnlyList<ModelDto> catalog, string modelId) =>
-        catalog.FirstOrDefault(model => model.Id == modelId)?.PremiumMultiplier;
+    // A styled player is billed as its model (03 §14.4), so the multiplier is the model's.
+    private static double? Multiplier(IReadOnlyList<ModelDto> catalog, string playerId) =>
+        catalog.FirstOrDefault(model => model.Id == PromptStyleChoices.ModelOf(playerId))?.PremiumMultiplier;
 }

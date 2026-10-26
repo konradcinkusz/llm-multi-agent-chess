@@ -33,8 +33,14 @@ public static class CostPreview
             return new Estimate(null, null, "unknown", null);
         }
 
-        var history = inputs.Models.FirstOrDefault(entry => entry.ModelId == model.Id);
-        var fromHistory = history is { Moves: > 0, AverageInputTokens: not null, AverageOutputTokens: not null };
+        // A styled player (03 §14.4) with no history of its own is priced from its model's history.
+        var history = UsableHistory(inputs, model.Id);
+        if (history is null && PlayerId.Parse(model.Id) is { Style: not PlayerId.DefaultStyle } player)
+        {
+            history = UsableHistory(inputs, player.Model);
+        }
+
+        var fromHistory = history is not null;
         var inputTokens = fromHistory ? history!.AverageInputTokens!.Value : inputs.AssumedInputTokensPerMove;
         var outputTokens = fromHistory ? history!.AverageOutputTokens!.Value : inputs.AssumedOutputTokensPerMove;
 
@@ -42,4 +48,10 @@ public static class CostPreview
         return new Estimate(usd / inputs.UsdPerAiCredit, usd, fromHistory ? "history" : "assumed",
             fromHistory ? history!.Moves : null);
     }
+
+    /// <summary>The stored averages of one player or model, when there are moves to average.</summary>
+    private static ModelTokenAverageDto? UsableHistory(CostInputsDto inputs, string playerId) =>
+        inputs.Models.FirstOrDefault(entry => entry.ModelId == playerId) is { Moves: > 0, AverageInputTokens: not null, AverageOutputTokens: not null } history
+            ? history
+            : null;
 }

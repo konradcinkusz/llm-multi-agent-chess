@@ -12,6 +12,10 @@ public sealed class ArenaApiClient(HttpClient http)
     public Task<IReadOnlyList<ModelDto>> GetModelsAsync(CancellationToken ct = default) =>
         GetJsonAsync<IReadOnlyList<ModelDto>>("/api/models", ct);
 
+    /// <summary>The prompt styles, <c>classic</c> first (03 §14.3). The forms offer classic alone when this fails.</summary>
+    public Task<IReadOnlyList<PromptStyleDto>> GetPromptStylesAsync(CancellationToken ct = default) =>
+        GetJsonAsync<IReadOnlyList<PromptStyleDto>>("/api/prompt-styles", ct);
+
     /// <summary>The rate and the token averages the forms estimate with before anything is saved (03 §10).</summary>
     public Task<CostInputsDto> GetCostInputsAsync(CancellationToken ct = default) =>
         GetJsonAsync<CostInputsDto>("/api/cost/inputs", ct);

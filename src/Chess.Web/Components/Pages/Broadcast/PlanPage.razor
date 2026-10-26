@@ -77,6 +77,25 @@
             </div>
         </fieldset>
 
+        <fieldset class="plan-styles" data-testid="plan-styles">
+            <legend>Prompt styles</legend>
+            <div class="chips">
+                @foreach (var style in _styles)
+                {
+                    <label class="chip plan-style">
+                        <input data-testid="plan-style-@style.Id" type="checkbox" checked="@_selectedStyles.Contains(style.Id)"
+                               @onchange="e => ToggleStyle(style.Id, e.Value)" />
+                        @style.DisplayName
+                        <span class="muted">@PromptStyleChoices.Players(PromptStyleChoices.Participants(SelectedModels, [style.Id]).Count)</span>
+                    </label>
+                }
+            </div>
+            @if (_stylesNotice is { } notice)
+            {
+                <p class="field-hint" data-testid="styles-notice">@notice</p>
+            }
+        </fieldset>
+
         @foreach (var problem in FormProblems)
         {
             <p class="plan-problem error-text">@problem</p>
@@ -365,6 +384,9 @@
     private string? _modelsError;
     private IReadOnlyList<ModelDto> _choices = [];
     private readonly HashSet<string> _selected = [];
+    private IReadOnlyList<PromptStyleDto> _styles = [PromptStyleChoices.Classic];
+    private string? _stylesNotice;
+    private readonly HashSet<string> _selectedStyles = [PlayerId.DefaultStyle];
 
     private string _name = "LLM Chess 24h";
     private string _startText = "";
@@ -399,6 +421,10 @@
             _modelsError = ex.Message;
         }
 
+        var styles = await PromptStyleChoices.LoadAsync(Api, _cts.Token);
+        _styles = styles.Styles;
+        _stylesNotice = styles.Notice;
+
         await LoadCostInputsAsync();
         await ReloadSchedulesAsync();
     }
@@ -418,6 +444,12 @@
 
     private IReadOnlyList<string> SelectedModels =>
         _choices.Where(model => _selected.Contains(model.Id)).Select(model => model.Id).ToArray();
+
+    private IReadOnlyList<string> SelectedStyles =>
+        _styles.Where(style => _selectedStyles.Contains(style.Id)).Select(style => style.Id).ToArray();
+
+    /// <summary>Every selected model in every selected style: the players of the schedule (03 §14.4).</summary>
+    private IReadOnlyList<string> Participants => PromptStyleChoices.Participants(SelectedModels, SelectedStyles);
 
     private IReadOnlyList<string> FormProblems =>
         PlanFormat.ParseStartInput(_startText) is not { } start
@@ -489,9 +521,10 @@
         return known.Count == 0 ? null : known.Sum();
     }
 
-    private ModelDto? Find(string modelId) => _models?.FirstOrDefault(model => model.Id == modelId);
+    /// <summary>The model a player plays as, with the player's id, so its prices are looked up under that player.</summary>
+    private ModelDto? Find(string playerId) => PromptStyleChoices.Find(_models, playerId);
 
-    private string NameOf(string modelId) => Find(modelId)?.DisplayName ?? modelId;
+    private string NameOf(string playerId) => PromptStyleChoices.Label(playerId, _models, _styles);
 
     /// <summary>A schedule's estimate for one model on its row: the premium requests when it has a multiplier, then the credits and USD.</summary>
     private string EstimateText(ModelPremiumEstimateDto estimate)
@@ -515,7 +548,19 @@
             ? estimates.Sum(estimate => estimate.EstimatedUsd ?? 0)
             : null;
 
-    private PlanRequest FormRequest(DateTimeOffset start) => new(_name.Trim(), SelectedModels, start, _hours,
+    private void ToggleStyle(string styleId, object? selected)
+    {
+        if (selected is true)
+        {
+            _selectedStyles.Add(styleId);
+        }
+        else
+        {
+            _selectedStyles.Remove(styleId);
+        }
+    }
+
+    private PlanRequest FormRequest(DateTimeOffset start) => new(_name.Trim(), Participants, start, _hours,
         new PacingProfile(_moveDelayMs, _gameGapSeconds), _seed, AssumedPlies, AssumedMoveLatencyMs);
 
     private void OnStartChanged(ChangeEventArgs e) => _startText = e.Value?.ToString() ?? "";

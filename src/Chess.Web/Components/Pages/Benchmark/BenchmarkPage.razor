@@ -59,6 +59,17 @@
                         <span class="field-hint">Each effort is ranked as its own player, so a model at two efforts is two entries.</span>
                     </label>
                 }
+
+                <label class="field">
+                    Candidate's prompt style
+                    <select id="candidate-style" data-testid="candidate-style" @bind="_candidateStyle">
+                        @foreach (var style in _styles)
+                        {
+                            <option value="@style.Id">@style.DisplayName</option>
+                        }
+                    </select>
+                    <span class="field-hint">@PromptStyleChoices.Describe(_styles, _candidateStyle)</span>
+                </label>
             </div>
 
             <div class="field-row">
@@ -84,8 +95,23 @@
                 </label>
             </div>
 
+            @if (_stylesNotice is not null)
+            {
+                <p class="field-hint" data-testid="styles-notice">@_stylesNotice</p>
+            }
+
             <fieldset class="benchmark-opponents">
                 <legend>Opponents</legend>
+                <label class="field">
+                    Opponents' prompt style
+                    <select id="opponent-style" data-testid="opponent-style" @bind="_opponentStyle">
+                        @foreach (var style in _styles)
+                        {
+                            <option value="@style.Id">@style.DisplayName</option>
+                        }
+                    </select>
+                    <span class="field-hint">@PromptStyleChoices.Describe(_styles, _opponentStyle)</span>
+                </label>
                 <div class="chips">
                     <label class="chip">
                         <input id="opponents-all" type="radio" name="opponents" checked="@_allOpponents" @onchange="() => _allOpponents = true" />
@@ -278,6 +304,10 @@
     private string _name = "";
     private string? _candidateId;
     private string? _effort;
+    private IReadOnlyList<PromptStyleDto> _styles = [PromptStyleChoices.Classic];
+    private string? _stylesNotice;
+    private string _candidateStyle = PlayerId.DefaultStyle;
+    private string _opponentStyle = PlayerId.DefaultStyle;
     private bool _allOpponents = true;
     private readonly HashSet<string> _chosen = [];
     private int _gamesPerOpponent = DefaultGamesPerOpponent;
@@ -292,8 +322,8 @@
 
     private string? CandidateDefaultEffort => CandidateModel is { } model ? BenchmarkChoices.DefaultEffort(model) : null;
 
-    /// <summary>The candidate as the API names it: <c>model@effort</c> when the model lists efforts.</summary>
-    private string? CandidatePlayer => _candidateId is null ? null : BenchmarkChoices.Variant(_candidateId, _effort);
+    /// <summary>The candidate as the API names it: <c>model@effort~style</c>, the effort when the model lists efforts.</summary>
+    private string? CandidatePlayer => _candidateId is null ? null : PromptStyleChoices.Player(_candidateId, _effort, _candidateStyle);
 
     /// <summary>Every enabled model but the candidate's, what "All" plays. The API applies the same rule by default.</summary>
     private IReadOnlyList<ModelDto> _defaultOpponents = [];
@@ -302,9 +332,13 @@
     private IReadOnlyList<ModelDto> _opponents =>
         _allOpponents ? _defaultOpponents : _defaultOpponents.Where(model => _chosen.Contains(model.Id)).ToArray();
 
+    /// <summary>The opponents as the API will play them: each in the opponents' style (03 §14.4). The random player has none.</summary>
+    private IReadOnlyList<ModelDto> _opponentPlayers =>
+        _opponents.Select(model => model with { Id = PromptStyleChoices.Player(model.Id, null, _opponentStyle) }).ToArray();
+
     private BenchmarkEstimate.Result? _estimate =>
         CandidateModel is { } candidate && CandidatePlayer is { } player && _opponents.Count > 0
-            ? BenchmarkEstimate.For(candidate, player, _opponents, _costs, _gamesPerOpponent)
+            ? BenchmarkEstimate.For(candidate, player, _opponentPlayers, _costs, _gamesPerOpponent)
             : null;
 
     private IReadOnlyList<string> Problems =>
@@ -322,6 +356,10 @@
         {
             _modelsError = ex.Message;
         }
+
+        var styles = await PromptStyleChoices.LoadAsync(Api, _cts.Token);
+        _styles = styles.Styles;
+        _stylesNotice = styles.Notice;
 
         await LoadCostInputsAsync();
         await LoadBenchmarksAsync(_cts.Token);
@@ -410,7 +448,10 @@
         _created = null;
         try
         {
-            var opponents = _allOpponents ? null : _opponents.Select(model => model.Id).ToArray();
+            // "All" with no style sends no list, so the API plays its plain defaults; any other style needs the list.
+            var opponents = _allOpponents && _opponentStyle == PlayerId.DefaultStyle
+                ? null
+                : _opponentPlayers.Select(model => model.Id).ToArray();
             var request = new CreateBenchmarkRequest(_name.Trim(), CandidatePlayer!, opponents, _gamesPerOpponent, _maxConcurrency);
             _created = await Api.CreateBenchmarkAsync(request, _cts.Token);
             _name = "";
