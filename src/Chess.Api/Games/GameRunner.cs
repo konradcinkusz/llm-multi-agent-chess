@@ -56,7 +56,8 @@ public sealed class GameRunner(
 
     public bool TryAbort(Guid gameId)
     {
-        if (!_slots.TryGetValue(gameId, out var slot))
+        // A finished game's slot stays in the table until its finally removes it, after GameFinished was published.
+        if (!_slots.TryGetValue(gameId, out var slot) || slot.Finished)
         {
             return false;
         }
@@ -205,7 +206,7 @@ public sealed class GameRunner(
                 return null;
             }
 
-            await FinishAsync(run, end, gameId, stoppingToken);
+            await FinishAsync(run, end, gameId, slot, stoppingToken);
             return end;
         }
         catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
@@ -240,7 +241,7 @@ public sealed class GameRunner(
         }
     }
 
-    private async Task FinishAsync(GameRun run, GameEnd end, Guid gameId, CancellationToken stoppingToken)
+    private async Task FinishAsync(GameRun run, GameEnd end, Guid gameId, GameSlot slot, CancellationToken stoppingToken)
     {
         try
         {
@@ -252,7 +253,9 @@ public sealed class GameRunner(
         }
         finally
         {
-            // Subscribers must not wait forever, even when the save failed.
+            // Subscribers must not wait forever, even when the save failed. The slot is marked first, so a subscriber that
+            // reacts to GameFinished by aborting is told the game is no longer running.
+            slot.MarkFinished();
             events.Publish(new GameFinished(gameId, clock.GetUtcNow(), end.Result, end.Termination));
         }
     }
@@ -263,11 +266,17 @@ public sealed class GameRunner(
         private readonly CancellationTokenSource _cancellation = new();
         private readonly object _gate = new();
         private volatile bool _abortRequested;
+        private volatile bool _finished;
         private bool _disposed;
 
         public CancellationToken Token => _cancellation.Token;
 
         public bool AbortRequested => _abortRequested;
+
+        /// <summary>True once the game's end was recorded, before <see cref="GameFinished"/> is published.</summary>
+        public bool Finished => _finished;
+
+        public void MarkFinished() => _finished = true;
 
         // TryAbort can fetch a slot just before its game's finally disposes it, so an abort after disposal does nothing.
         public void Abort()
