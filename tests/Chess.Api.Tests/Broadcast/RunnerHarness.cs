@@ -6,9 +6,12 @@ using Chess.Api.Games;
 using Chess.Api.Persistence;
 using Chess.Api.Persistence.Entities;
 using Chess.Api.Players;
+using Chess.Api.Requests;
 using Chess.Api.Tests.Games;
 using Chess.Engine;
+using Chess.Llm;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -54,7 +57,8 @@ internal sealed class RunnerHarness : IAsyncDisposable
 
     private readonly ServiceProvider _services;
 
-    public RunnerHarness()
+    /// <param name="customModels">Custom (bring-your-own-key) models: the fake gateway serves them and paid requests may use them.</param>
+    public RunnerHarness(params CustomModelOptions[] customModels)
     {
         Clock = new RunnerClock(Start);
         var services = new ServiceCollection();
@@ -65,7 +69,8 @@ internal sealed class RunnerHarness : IAsyncDisposable
         Readiness = new DatabaseReadiness();
         Readiness.MarkReady(0);
         Signals = new BroadcastRunnerSignals();
-        Players = new BrokenOrRealPlayers(GameHarness.RealPlayers());
+        var gateway = new FakeLlmGateway(seed: 3, customModels: customModels);
+        Players = new BrokenOrRealPlayers(GameHarness.RealPlayers(gateway));
         Games = new GameRunner(
             Factory,
             Players,
@@ -76,7 +81,22 @@ internal sealed class RunnerHarness : IAsyncDisposable
             Readiness,
             NullLogger<GameRunner>.Instance);
         Controller = new BroadcastRunnerController(Factory, Signals, Clock);
-        Runner = new BroadcastRunner(Factory, Games, Players, Signals, Clock, Readiness, NullLogger<BroadcastRunner>.Instance);
+        Requests = BroadcastRequestsFor(Factory, gateway, Clock, customModels);
+        Runner = new BroadcastRunner(Factory, Games, Players, Requests, Signals, Clock, Readiness, NullLogger<BroadcastRunner>.Instance);
+    }
+
+    /// <summary>
+    /// The paid-request service over the same database and clock: the queue, the catalog served by <paramref name="gateway"/>,
+    /// and the arena's custom models for the bring-your-own-key check.
+    /// </summary>
+    public static BroadcastRequests BroadcastRequestsFor(IDbContextFactory<ArenaDbContext> factory, FakeLlmGateway gateway,
+        TimeProvider clock, IEnumerable<CustomModelOptions> customModels, RequestOptions? requestOptions = null)
+    {
+        var requests = Options.Create(requestOptions ?? new RequestOptions());
+        var queue = new GameRequestQueue(factory, requests, clock);
+        var catalog = new ModelCatalog(gateway, new MemoryCache(new MemoryCacheOptions()), Options.Create(new CatalogOptions()));
+        var arena = Options.Create(new ArenaOptions { CustomModels = customModels.ToList() });
+        return new BroadcastRequests(factory, queue, catalog, arena, requests, Options.Create(new CatalogOptions()), clock);
     }
 
     public RunnerClock Clock { get; }
@@ -92,6 +112,8 @@ internal sealed class RunnerHarness : IAsyncDisposable
     public GameRunner Games { get; }
 
     public BroadcastRunnerController Controller { get; }
+
+    public BroadcastRequests Requests { get; }
 
     public BroadcastRunner Runner { get; }
 

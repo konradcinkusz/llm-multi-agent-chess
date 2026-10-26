@@ -8,6 +8,7 @@ using Chess.Api.Tournaments;
 using Chess.Api.Players;
 using Chess.Api.Tests.Games;
 using Chess.Engine;
+using Chess.Llm;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -250,6 +251,7 @@ internal sealed class SoakHarness : IAsyncDisposable
             Readiness,
             NullLogger<GameRunner>.Instance);
         Controller = new BroadcastRunnerController(Factory, _signals, Clock);
-        _runner = new BroadcastRunner(Factory, _games, _players, _signals, Clock, Readiness, RunnerLog);
+        var requests = RunnerHarness.BroadcastRequestsFor(Factory, new FakeLlmGateway(seed: 3), Clock, []);
+        _runner = new BroadcastRunner(Factory, _games, _players, requests, _signals, Clock, Readiness, RunnerLog);
     }
 }

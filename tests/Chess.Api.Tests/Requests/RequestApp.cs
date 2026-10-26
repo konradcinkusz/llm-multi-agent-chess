@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Chess.Api.Tests.Requests;
 
@@ -28,6 +29,18 @@ internal sealed class RequestApp(string mode = "Mock") : WebApplicationFactory<P
         builder.UseSetting("Arena:Requests:Menu:1:PlayerId", "fake-b");
         builder.UseSetting("Arena:Requests:Menu:2:Code", "fah");
         builder.UseSetting("Arena:Requests:Menu:2:PlayerId", "fake-a@high");
+
+        // These tests drive the queue themselves. The broadcast runner plays queued requests with no schedule running (03 §15.1),
+        // so it would take a request before the test does; it is removed from this host.
+        builder.ConfigureServices(services =>
+        {
+            foreach (var hosted in services
+                .Where(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(Chess.Api.Broadcast.BroadcastRunner))
+                .ToList())
+            {
+                services.Remove(hosted);
+            }
+        });
     }
 
     public IDbContextFactory<ArenaDbContext> Factory => Services.GetRequiredService<IDbContextFactory<ArenaDbContext>>();
