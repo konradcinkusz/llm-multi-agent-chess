@@ -30,6 +30,7 @@ public sealed class TournamentJourney(ArenaFixture arena)
                 await page.GetByLabel("Name", new() { Exact = true }).FillAsync(name);
                 await page.GetByRole(AriaRole.Checkbox, new() { Name = "Fake A" }).CheckAsync();
                 await page.GetByRole(AriaRole.Checkbox, new() { Name = "Fake B" }).CheckAsync();
+                await page.GetByRole(AriaRole.Checkbox, new() { Name = "Think, then move" }).CheckAsync();
                 await page.GetByLabel("Games per pair").SelectOptionAsync("2");
             },
             // Start stays disabled until the server-bound form has a name and two models.
@@ -37,8 +38,8 @@ public sealed class TournamentJourney(ArenaFixture arena)
 
         await start.ClickAsync();
 
-        // Two fake models meet once, twice: one pair, two games.
-        await Expect(page.GetByText($"Started {name} with 2 games.")).ToBeVisibleAsync();
+        // Two fake models in two styles are four players: six pairs, two games each, twelve games.
+        await Expect(page.GetByText($"Started {name} with 12 games.")).ToBeVisibleAsync();
         await page.GetByRole(AriaRole.Link, new() { Name = "Open the tournament" }).ClickAsync();
 
         await Expect(page).ToHaveURLAsync(new Regex(@"/tournaments/[0-9a-f]{8}-"));
@@ -46,7 +47,7 @@ public sealed class TournamentJourney(ArenaFixture arena)
 
         await Expect(page.GetByRole(AriaRole.Definition).GetByText("Finished", new() { Exact = true }))
             .ToBeVisibleAsync(new() { Timeout = 180_000 });
-        await Expect(page.GetByText("2 of 2 games")).ToBeVisibleAsync();
+        await Expect(page.GetByText("12 of 12 games")).ToBeVisibleAsync();
 
         var leaderboard = page.GetByRole(AriaRole.Region, new() { Name = "Leaderboard", Exact = true });
         await Expect(leaderboard.GetByRole(AriaRole.Cell, new() { Name = Players.FakeA, Exact = true })).ToBeVisibleAsync();

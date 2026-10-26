@@ -50,7 +50,14 @@ public sealed class ResultsJourney(ArenaFixture arena)
         await Expect(page.Locator("section").First)
             .ToHaveAttributeAsync("data-section", "big-picture", new() { Timeout = LoadTimeout });
         var sections = page.Locator("section[data-section]");
-        await Expect(sections).ToHaveCountAsync(SectionOrder.Length, new() { Timeout = LoadTimeout });
+
+        // The table is the last fixed section, so once it is on the page the sections are loaded.
+        await Expect(sections.Nth(SectionOrder.Length - 1))
+            .ToHaveAttributeAsync("data-section", "table", new() { Timeout = LoadTimeout });
+
+        // "Prompt styles compared" (03 §6.1, item 8) appears only when a player is styled, and then it comes last.
+        var optional = await page.Locator("section[data-section='prompt-styles']").CountAsync() > 0 ? 1 : 0;
+        await Expect(sections).ToHaveCountAsync(SectionOrder.Length + optional, new() { Timeout = LoadTimeout });
         for (var index = 0; index < SectionOrder.Length; index++)
         {
             await Expect(sections.Nth(index))
@@ -62,7 +69,10 @@ public sealed class ResultsJourney(ArenaFixture arena)
         await Expect(leaderboard.GetByRole(AriaRole.Cell, new() { Name = Players.FakeB, Exact = true }))
             .ToBeVisibleAsync(new() { Timeout = LoadTimeout });
 
-        // The fake players are all classic, so "Prompt styles compared" (03 §6.1, item 8) is not on the page.
-        await Expect(page.Locator("section[data-section='prompt-styles']")).ToHaveCountAsync(0);
+        // A styled player from another journey can put "Prompt styles compared" on the page. It is the last section then.
+        if (optional == 1)
+        {
+            await Expect(sections.Last).ToHaveAttributeAsync("data-section", "prompt-styles", new() { Timeout = LoadTimeout });
+        }
     }
 }
