@@ -15,6 +15,7 @@ It runs on `localhost` only. Nothing is deployed. Every game, move, LLM attempt 
 - [URLs](#urls)
 - [Pages](#pages)
 - [How ratings work](#how-ratings-work)
+- [Prompt styles](#prompt-styles)
 - [Broadcast mode (24 h channel)](#broadcast-mode-24-h-channel)
 - [Public results site](#public-results-site)
 - [Benchmark your own model](#benchmark-your-own-model)
@@ -74,7 +75,7 @@ The navigation lists them in this order:
 
 | Page | Route | What it shows |
 |---|---|---|
-| **Results** | `/results` | The ranking. The **Big picture** comes first: a headline naming the best model, with its arena score and rating, then a ranked bar chart with 95 % intervals. Next, the **Model map**: every model on two coefficients you pick (rating, arena score, first-attempt legality, move quality, latency, tokens, cost, forfeit rate). Below it: rating over time, head-to-head matrix, results breakdown, move quality, strength against cost, and a full table. A tournament filter and an **Order** control sit above the Big picture. The order is **Arena score** (the default) or **Conservative**, which ranks by the lower bound of the arena score, so a model with more games outranks one with the same score and fewer (RATING.md §6). |
+| **Results** | `/results` | The ranking. The **Big picture** comes first: a headline naming the best model, with its arena score and rating, then a ranked bar chart with 95 % intervals. Next, the **Model map**: every model on two coefficients you pick (rating, arena score, first-attempt legality, move quality, latency, tokens, cost, forfeit rate). Below it: rating over time, head-to-head matrix, results breakdown, move quality, strength against cost, and a full table. A tournament filter and an **Order** control sit above the Big picture. The order is **Arena score** (the default) or **Conservative**, which ranks by the lower bound of the arena score, so a model with more games outranks one with the same score and fewer (RATING.md §6). A **style filter** (All, then one chip per prompt style that has played) shows only the players of one style: it hides rows and never refits the ratings. The **Prompt styles compared** section, after the full table, gives each model played under two or more styles its rating per style, with the 95 % interval, legality, move quality and cost per game, and each style's verdict against the baseline (see [Prompt styles](#prompt-styles)). |
 | Live game | `/` | Pick a model for each side (or `random`), start a game and follow it. Each side's bar shows its model, whose turn it is, the attempt in progress with its seconds, the pieces it has captured, and its tokens and estimated cost. Below the board, the **move table** lists every move; picking one selects its entries in the **engine log**. The engine log lists every reply the models sent to the engine, newest first: the move, whether it was legal or why it was rejected, the latency, the tokens, the cost, and the model's reasoning when it exposes it. Rejected attempts appear under the board. When the game ends, the **game summary** gives the tokens, AI credits and estimated cost per side, and the PGN can be shown. The **Pace** control sets how far the view runs behind the game: Live, or moves at least 1, 2, 3 or 5 seconds apart. Catch up shows every move at once. The game itself is not slowed. The default pace is 2 s, set by `Arena:Viewer:MinMovePauseSeconds`. |
 | Head-to-head | `/head-to-head` | Two models: relative coefficient with its interval, a plain-language reading, expected score, direct record and direct games. |
 | Tournaments | `/tournaments`, `/tournaments/{id}` | Round-robin creation with the AI-credit and USD estimate shown before you confirm, progress, a per-tournament leaderboard, and cancel. |
@@ -98,6 +99,32 @@ The full formula is in [docs/RATING.md](docs/RATING.md). In short:
 3. **The relative coefficient, RQC(A, B),** is `0.75 × expected score + 0.25 × quality share`. 0.5 means equal, and RQC(A, B) + RQC(B, A) = 1.
 4. **Quality** is legality, plus Stockfish centipawn loss when Stockfish is available. Latency and cost never enter the score; the Results page shows them beside it.
 5. **Every number carries its confidence.** A 95 % bootstrap interval travels with each rating and coefficient. A model with fewer than 20 rated games (or a very wide rating interval) is *provisional*, and a result is called *significant* only when its interval excludes 0.5 and neither model is provisional.
+
+## Prompt styles
+
+The prompt is part of the player. A player id is `model[@effort][~style]`, for example `claude-sonnet-5.5@medium~think`.
+Each id is its own player in the one ranking, so two prompts for the same model are rated against each other on one scale.
+A plain id means `classic`, the prompt the arena has always used, so existing games and ratings keep their meaning. Writing
+`~classic` is refused (write the plain id), and `random` takes no style.
+
+| Style | What the model is sent | What it answers | Conversation |
+|---|---|---|---|
+| `classic` | the FEN, the last ten plies and the legal moves | one SAN move | one per game |
+| `board` | the goal, an ASCII board, each side's pieces, the material, the whole game in PGN, the FEN and the legal moves in sorted order | one SAN move | one per move |
+| `think` | as `board`, plus the plan carried from the last move | a short analysis, then a `Plan:` line and a `Move:` line | one per move |
+
+Board and think open one conversation per move. Each of their prompts already carries the whole game, so one conversation per
+game would resend every earlier prompt. No style gets engine help: nothing says what is attacked, hanging or best, so a style
+measures the model, not Stockfish.
+
+A style costs what its prompt and reply cost. `think` writes more output tokens: on the fake profile it averaged about 43
+output tokens a move, against about 13 for `classic`. The cost estimate uses the player's own token history when it has any,
+else its model's, and it says which one it used.
+
+Every page that starts games has a style picker: Play (one per side), Tournaments and the broadcast planner (a multi-select,
+so every chosen model plays every chosen style), and Benchmark (one for the candidate, one for the opponents). To compare
+styles, run a tournament with two of them and read **Prompt styles compared** on the Results page, or benchmark a styled
+candidate. The method and a recorded fake run are in [docs/BENCHMARK.md §8](docs/BENCHMARK.md#8-prompt-styles-candidates-and-opponents).
 
 ## Broadcast mode (24 h channel)
 
@@ -148,8 +175,9 @@ no configuration, no secrets, no attempts of aborted games.
 
 Benchmark one model, or one model at one reasoning effort (`model@effort`, such as `fake-a@high` on the fake profile), against
 the other models: 30 rated games against each opponent, colours alternating. By default the opponents are every enabled model
-except the candidate's own model (at any effort), the random player included, and Copilot's `auto` model is never one. The result
-is a Markdown report to share, and the same numbers as JSON. The `/benchmark` page runs the same benchmark with a progress view.
+except the candidate's own model (at any effort and style), the random player included, and Copilot's `auto` model is never one.
+The candidate may carry a prompt style too (`--candidate fake-a@high~think`), and so may each opponent. The result is a Markdown
+report to share, and the same numbers as JSON. The `/benchmark` page runs the same benchmark with a progress view.
 Your own model works too, behind any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio).
 
 With the fake profile running (`dotnet run --project src/Chess.AppHost --launch-profile fake`), this writes the report to
@@ -270,7 +298,7 @@ The three skipped tests are the Stockfish integration tests; they run only when 
 The unit tests and the browser journeys run separately:
 
 ```bash
-# Unit tests only: no browser. This is what the CI "build and test" job runs (1 443 pass, 3 skipped).
+# Unit tests only: no browser. This is what the CI "build and test" job runs (1 542 pass, 3 skipped).
 dotnet test Chess.sln --no-build --filter "FullyQualifiedName!~Chess.E2E"
 
 # The browser journeys only, with a Chromium you already have.

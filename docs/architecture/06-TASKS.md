@@ -1069,10 +1069,10 @@ against that contract. Q2 and Q3 test with canned API answers.
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| Q1 | API: prompt styles (`classic`, `board`, `think`), `~style` ids, per-move conversations, `GET /api/prompt-styles` | contract | todo |
-| Q2 | UI: style pickers on Play, Tournaments (models × styles), Benchmark (candidate and opponents), Broadcast planner | contract | todo |
-| Q3 | Results: style filter, "Prompt styles compared" section, the same section on the static site | contract | todo |
-| Q4 | Docs: README, BENCHMARK.md, RATING.md example, a recorded fake run of a style comparison | Q1, Q2, Q3 | todo |
+| Q1 | API: prompt styles (`classic`, `board`, `think`), `~style` ids, per-move conversations, `GET /api/prompt-styles` | contract | done (#104) |
+| Q2 | UI: style pickers on Play, Tournaments (models × styles), Benchmark (candidate and opponents), Broadcast planner | contract | done (#103) |
+| Q3 | Results: style filter, "Prompt styles compared" section, the same section on the static site | contract | done (#102) |
+| Q4 | Docs: README, BENCHMARK.md, RATING.md example, a recorded fake run of a style comparison | Q1, Q2, Q3 | done (this PR) |
 
 ### Q1 — API: prompt styles
 
