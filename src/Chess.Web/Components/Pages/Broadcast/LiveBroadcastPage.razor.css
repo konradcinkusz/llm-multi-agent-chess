@@ -267,3 +267,30 @@
     font-variant-numeric: tabular-nums;
     color: var(--bc-accent);
 }
+
+/* Requests: the queue and the order menu, under the moves and up next. Rows are tighter so both fit the side column. */
+
+.bc-requests {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2cqw;
+    min-height: 0;
+}
+
+.bc-requests .bc-panel li {
+    height: auto;
+    min-height: 3cqh;
+}
+
+.bc-menu li {
+    display: grid;
+    grid-template-columns: 4cqw 1fr auto;
+    gap: 1cqw;
+    height: 3cqh;
+    font-size: 1.5cqw;
+}
+
+.bc-code {
+    font-weight: 700;
+    color: var(--bc-accent);
+}

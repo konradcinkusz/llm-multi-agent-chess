@@ -46,11 +46,30 @@ internal static class SiteDataSet
             "/api/ratings/history" => Body(empty ? new List<RatingHistoryPointDto>() : History(query["model"]!)),
             "/api/results/breakdown" => Body(empty ? new List<ModelResultsDto>() : Breakdown()),
             "/api/tournaments" => Body(empty ? new List<TournamentDto>() : [Spring()]),
+            "/api/requests/menu" => empty ? new HttpResponseMessage(HttpStatusCode.NotFound) : Body(Menu()),
+            "/api/requests/quote" => Body(Quote(query["white"]!, query["black"]!)),
             "/api/games" => Body(GamesPage(empty, int.Parse(query["page"]!, System.Globalization.CultureInfo.InvariantCulture))),
             _ when path.StartsWith("/api/games/", StringComparison.Ordinal) && path.EndsWith("/usage", StringComparison.Ordinal) =>
                 Body(Usage(Guid.Parse(path.Split('/')[3]))),
             _ => SiteGameDataSet.Respond(path, query, empty ? [] : Games()) ?? new HttpResponseMessage(HttpStatusCode.NotFound),
         };
+    }
+
+    /// <summary>Two menu entries, and the three styles of 03 §15.2.</summary>
+    private static RequestMenuDto Menu() => new(
+        [new MenuItemDto("c1", "gpt", "GPT", 0.4), new MenuItemDto("d3", "claude", "Claude", 2.0)],
+        ["classic", "board", "think"], [1, 2, 5, 10, 20, 50], 0.3, "!g <white> vs <black> [style]");
+
+    /// <summary>
+    /// The quote of the test menu: $1 between the two cheap entries, $5 otherwise, and no price for a Claude side in the
+    /// think style, which is above the largest tier.
+    /// </summary>
+    private static QuoteDto Quote(string white, string black)
+    {
+        double? price = black.StartsWith("d3~think", StringComparison.Ordinal) ? null
+            : white.StartsWith("c1", StringComparison.Ordinal) && black.StartsWith("c1", StringComparison.Ordinal) ? 1.0
+            : 5.0;
+        return new QuoteDto(white, black, 1.0, price);
     }
 
     private static HttpResponseMessage Body<T>(T value) =>

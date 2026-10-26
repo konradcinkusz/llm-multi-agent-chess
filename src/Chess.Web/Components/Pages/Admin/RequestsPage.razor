@@ -1,0 +1,305 @@
+@page "/admin/requests"
+@using System.Globalization
+@using System.Net
+@using Chess.Web.Api
+@using Chess.Web.Components.Pages.Broadcast
+@implements IDisposable
+@inject ArenaApiClient Api
+
+<PageTitle>Viewer requests · LLM Chess Arena</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Viewer requests</h1>
+        <p class="page-lede">The Super Chat queue of the 24-hour stream: what is playing, what waits, and what was turned away.</p>
+    </div>
+
+    @if (_queue is null)
+    {
+        <section class="card" aria-labelledby="requests-off">
+            <h2 id="requests-off">No queue</h2>
+            <p class="muted" data-testid="requests-unavailable">
+                Viewer requests are not answering. Requests are off in this configuration, or the API is not reachable.
+            </p>
+        </section>
+    }
+    else
+    {
+        <section class="card stack" aria-labelledby="requests-playing" data-testid="requests-playing">
+            <h2 id="requests-playing">Playing</h2>
+            @if (_queue.Playing is { } playing)
+            {
+                <p>@RequestLine(playing)</p>
+            }
+            else
+            {
+                <p class="muted">Nothing is playing. The stream shows replays while the queue is empty.</p>
+            }
+        </section>
+
+        <section class="card stack" aria-labelledby="requests-queued" data-testid="requests-queued">
+            <h2 id="requests-queued">Queued</h2>
+            @if (_queue.Queued.Count == 0)
+            {
+                <p class="muted">The queue is empty.</p>
+            }
+            else
+            {
+                <p class="muted">Estimated wait: @LiveRequestView.WaitLabel(_queue.EstimatedWaitMinutes)</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Payer</th>
+                                <th scope="col">White</th>
+                                <th scope="col">Black</th>
+                                <th scope="col" class="num">Price</th>
+                                <th scope="col">Received</th>
+                                <th scope="col">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var request in _queue.Queued)
+                            {
+                                <tr data-request="@request.Id">
+                                    <td class="num">@request.QueuePosition</td>
+                                    <td>@request.PayerDisplay</td>
+                                    <td>@request.White</td>
+                                    <td>@request.Black</td>
+                                    <td class="num">@LiveRequestView.Price(request.PriceUsd)</td>
+                                    <td>@Stamp(request.ReceivedAt)</td>
+                                    <td>
+                                        <button type="button" class="btn-danger btn-sm" disabled="@_busy"
+                                                @onclick="() => CancelAsync(request.Id)"
+                                                aria-label="@($"Cancel the request of {request.PayerDisplay}")">Cancel</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="card stack" aria-labelledby="requests-recent" data-testid="requests-recent">
+            <h2 id="requests-recent">Recent</h2>
+            @if (_queue.Recent.Count == 0)
+            {
+                <p class="muted">No request has been received yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th scope="col">Status</th>
+                                <th scope="col">Payer</th>
+                                <th scope="col">Matchup</th>
+                                <th scope="col" class="num">Price</th>
+                                <th scope="col">Reason</th>
+                                <th scope="col">Received</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var request in _queue.Recent)
+                            {
+                                <tr data-request="@request.Id">
+                                    <td><span class="badge @StatusBadge(request.Status)">@request.Status</span></td>
+                                    <td>@request.PayerDisplay</td>
+                                    <td>@request.White vs @request.Black</td>
+                                    <td class="num">@LiveRequestView.Price(request.PriceUsd)</td>
+                                    <td>@(request.Reason ?? "—")</td>
+                                    <td>@Stamp(request.ReceivedAt)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+
+    @if (_simulateAvailable)
+    {
+        <section class="card stack" aria-labelledby="simulate-heading" data-testid="requests-simulate">
+            <h2 id="simulate-heading">Simulate a Super Chat</h2>
+            <p class="muted">
+                Runs the same intake as YouTube. The API accepts it only in Mock mode; elsewhere it answers 403 and this form goes away.
+            </p>
+            <form @onsubmit="SimulateAsync" class="stack">
+                <div class="field-row">
+                    <div class="field">
+                        <label for="sim-payer-id">Payer id</label>
+                        <input id="sim-payer-id" @bind="_payerId" required />
+                    </div>
+                    <div class="field">
+                        <label for="sim-payer-name">Display name</label>
+                        <input id="sim-payer-name" @bind="_payerName" required />
+                    </div>
+                    <div class="field">
+                        <label for="sim-amount">Amount</label>
+                        <input id="sim-amount" type="number" step="0.01" min="0" @bind="_amount" />
+                    </div>
+                    <div class="field">
+                        <label for="sim-currency">Currency</label>
+                        <input id="sim-currency" @bind="_currency" maxlength="3" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="sim-text">Message</label>
+                    <input id="sim-text" @bind="_text" placeholder="!g c1 vs d3 think" required />
+                    <span class="field-hint">Typed text is sent to the intake only. The stream shows the parsed configuration and the display name.</span>
+                </div>
+                <div class="cluster">
+                    <button type="submit" class="btn-primary" disabled="@_busy">Simulate</button>
+                </div>
+            </form>
+        </section>
+    }
+
+    @if (_message is not null)
+    {
+        <p class="callout callout-info" role="status" data-testid="requests-message">@_message</p>
+    }
+    @if (_error is not null)
+    {
+        <p class="callout callout-danger" role="alert" data-testid="requests-error">@_error</p>
+    }
+</div>
+
+@code {
+    private RequestQueueDto? _queue;
+    private bool _simulateAvailable = true;
+    private bool _busy;
+    private string? _message;
+    private string? _error;
+
+    private string _payerId = "";
+    private string _payerName = "";
+    private double? _amount;
+    private string _currency = "USD";
+    private string _text = "";
+
+    private readonly CancellationTokenSource _stop = new();
+    private Task? _refresh;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _queue = await ReadQueueAsync(_stop.Token);
+        _refresh = RefreshAsync();
+    }
+
+    private async Task<RequestQueueDto?> ReadQueueAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await Api.GetRequestQueueAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Without the requests API the page says so; the next refresh tries again.
+            return null;
+        }
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        await RunAsync(async () =>
+        {
+            await Api.CancelRequestAsync(id, _stop.Token);
+            _message = "The request is cancelled and its credit is kept for the payer.";
+        }, "The request was not cancelled");
+    }
+
+    private async Task SimulateAsync()
+    {
+        _error = null;
+        _message = null;
+        _busy = true;
+        try
+        {
+            await Api.SimulateChatAsync(
+                new SimulateChatRequest(_payerId, _payerName, _amount, string.IsNullOrWhiteSpace(_currency) ? null : _currency, _text),
+                _stop.Token);
+            _message = "Sent to the intake. It appears in the queue or as credit on the next refresh.";
+            _text = "";
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Forbidden)
+        {
+            // Mock mode is off: the API refuses the simulate route, so the form is taken away.
+            _simulateAvailable = false;
+            _message = "Simulate is off: the API is not in Mock mode.";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = $"The message was not simulated: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        _queue = await ReadQueueAsync(_stop.Token);
+    }
+
+    private async Task RunAsync(Func<Task> work, string failure)
+    {
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            await work();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = $"{failure}: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        _queue = await ReadQueueAsync(_stop.Token);
+    }
+
+    /// <summary>Re-reads the queue every three seconds, so the page follows the stream without a reload.</summary>
+    private async Task RefreshAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                var queue = await ReadQueueAsync(_stop.Token);
+                await InvokeAsync(() =>
+                {
+                    _queue = queue;
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page closed.
+        }
+    }
+
+    private static string RequestLine(GameRequestDto request) =>
+        $"{request.PayerDisplay}: {request.White} vs {request.Black}, {LiveRequestView.Price(request.PriceUsd)}";
+
+    private static string Stamp(DateTimeOffset at) => at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "played" => "badge-success",
+        "playing" or "queued" => "badge-accent",
+        "failed" or "rejected" => "badge-danger",
+        "cancelled" => "badge-warning",
+        _ => "badge-neutral",
+    };
+
+    public void Dispose() => _stop.Cancel();
+}
