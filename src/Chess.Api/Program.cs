@@ -1,6 +1,7 @@
 using Chess.Api.Benchmarks;
 using Chess.Api.Broadcast;
 using Chess.Api.Requests;
+using Chess.Api.Requests.YouTube;
 using Chess.Api.Usage;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ builder.AddAttempts();
 builder.AddMoveQualityPipeline();
 builder.AddBroadcast();
 builder.AddRequests();
+builder.AddYouTubeIntake();
 
 var app = builder.Build();
 app.UseOriginGuard();
