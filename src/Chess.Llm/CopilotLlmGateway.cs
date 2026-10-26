@@ -108,7 +108,8 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
                 m.DefaultReasoningEffort))
             .ToList();
 
-        copilot.AddRange(_customModels.Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true, Custom: true)));
+        copilot.AddRange(_customModels.Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true,
+            CustomModelPricing.TokenPrices(c, _arena.Cost.UsdPerAiCredit), Custom: true)));
         return copilot;
     }
 

@@ -111,11 +111,21 @@ The owner's live smoke run confirms all three.
   list for Copilot models; the API validates it (B2). `FakeLlmGateway`'s `fake-a` and `fake-b` list `low`,
   `medium` and `high` with `medium` as default, and refuse any other effort with an `ArgumentException`.
 - **Custom models.** Each `Arena:CustomModels:N` entry has `Id`, `DisplayName` (defaults to `Id`), `ProviderType`
-  (`openai` or `azure`), `BaseUrl` (absolute http or https), `Model` (the name the endpoint expects, sent as
+  (`anthropic`, `openai` or `azure`), `BaseUrl` (absolute http or https), `Model` (the name the endpoint expects, sent as
   `ProviderConfig.WireModel`), `WireApi` (default `chat-completions`) and `ApiKey`. A custom model is listed with
   `Custom = true` and started with `SessionConfig.Provider` and no Copilot model id.
+- **Provider types.** `anthropic` is the Anthropic Messages API (`BaseUrl` `https://api.anthropic.com`); the session does
+  not send `WireApi`, which the SDK reads for `openai` and `azure` only. `openai` covers any OpenAI-compatible endpoint:
+  OpenAI (`https://api.openai.com/v1`) and DeepInfra (`https://api.deepinfra.com/v1/openai`) are both `openai`. The
+  telemetry `ModelProvider` is `anthropic`, `openai`, or `azure_openai` for `azure`.
+- **Prices.** A custom model may give a complete pair of prices per million tokens, in US dollars
+  (`UsdPerMillionInput`, `UsdPerMillionOutput`) or in AI credits (`CreditsPerMillionInput`, `CreditsPerMillionOutput`).
+  Credits win when both are given. A USD pair is converted at `Arena:Cost:UsdPerAiCredit` (default `0.01`, the same key the
+  API reads). `CustomModelPricing.TokenPrices` gives the `LlmTokenPrices` the catalog shows, and
+  `CustomModelPricing.MissingPricesMessage` says why a model cannot be quoted; a menu model must pass it.
 - **Validation at startup.** An `Id` may not contain `@` or spaces and must be unique, ignoring case. Every entry needs a
-  valid `ProviderType`, `BaseUrl`, `Model` and `WireApi`. A bad entry stops the host with a message that names it
+  valid `ProviderType`, `BaseUrl` and `Model`; `WireApi` is needed for `openai` and `azure`. Each price is set as a pair,
+  and a price is a finite number of zero or more. A bad entry stops the host with a message that names it
   (`Arena:CustomModels[0].Id 'x@y' must not contain '@' ...`). Messages never quote a URL or a key.
 - **Clash with a Copilot id.** The Copilot ids are known only once the runtime has listed them. A custom id that a
   Copilot model already uses is not listed, and an error is logged naming it. The gateway keeps running.

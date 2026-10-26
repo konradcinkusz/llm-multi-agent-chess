@@ -14,14 +14,23 @@ internal static class CopilotSessionSettings
 
     /// <summary>A custom model: the SDK's bring-your-own-key provider, with no Copilot model id.</summary>
     public static SessionConfig ForCustomModel(LlmConversationOptions options, CustomModelOptions custom) =>
-        Create(options, model: null, provider: new ProviderConfig
+        Create(options, model: null, provider: ProviderFor(custom));
+
+    private static ProviderConfig ProviderFor(CustomModelOptions custom)
+    {
+        var type = custom.ProviderType.ToLowerInvariant();
+        return new ProviderConfig
         {
-            Type = custom.ProviderType.ToLowerInvariant(),
-            WireApi = custom.WireApi,
+            Type = type,
+            // Telemetry only. OpenAI and DeepInfra are both type openai, so they report as openai.
+            ModelProvider = type == "azure" ? "azure_openai" : type,
+            // The Messages API has no wire format of its own; the SDK reads WireApi for openai and azure only.
+            WireApi = type == "anthropic" ? null : custom.WireApi,
             BaseUrl = custom.BaseUrl,
             ApiKey = custom.ApiKey,
             WireModel = custom.Model,
-        });
+        };
+    }
 
     /// <summary>The reasoning efforts a model lists, or null when it lists none.</summary>
     public static IReadOnlyList<string>? ListedEfforts(IEnumerable<string>? efforts) =>
