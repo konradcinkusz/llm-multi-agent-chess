@@ -19,6 +19,11 @@ public static class GameTermination
 
     private const string Draw = "1/2-1/2";
 
+    /// <summary>The termination of a game that reached its budget (03 §15.2). Adjudicated like <c>MaxPlies</c>.</summary>
+    public const string BudgetReached = "budget";
+
+    public const string Adjudicated = "adjudicated";
+
     public static readonly GameEnd Aborted = new("*", "aborted");
 
     /// <summary>The end the engine reports for this position, or null when the game goes on.</summary>
@@ -39,16 +44,16 @@ public static class GameTermination
         : new("1-0", "forfeit-black");
 
     /// <summary>
-    /// The verdict at <c>MaxPlies</c>. <paramref name="whiteCentipawns"/> is Stockfish's evaluation from White's point
-    /// of view, or null when there is none, in which case the material difference decides.
+    /// The verdict at <c>MaxPlies</c> (or at a budget, with its own <paramref name="termination"/>). <paramref name="whiteCentipawns"/>
+    /// is Stockfish's evaluation from White's point of view, or null when there is none, in which case the material difference decides.
     /// </summary>
-    public static GameEnd Adjudicate(ChessBoard board, int? whiteCentipawns)
+    public static GameEnd Adjudicate(ChessBoard board, int? whiteCentipawns, string termination = Adjudicated)
     {
         var lead = whiteCentipawns is { } centipawns
             ? Lead(centipawns, AdjudicationCentipawns)
             : Lead(MaterialDifference(board), AdjudicationMaterialPoints);
 
-        return new(lead > 0 ? "1-0" : lead < 0 ? "0-1" : Draw, "adjudicated");
+        return new(lead > 0 ? "1-0" : lead < 0 ? "0-1" : Draw, termination);
     }
 
     private static int Lead(int difference, int threshold) =>

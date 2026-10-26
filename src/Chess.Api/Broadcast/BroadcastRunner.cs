@@ -2,6 +2,7 @@ using Chess.Api.Games;
 using Chess.Api.Persistence;
 using Chess.Api.Persistence.Entities;
 using Chess.Api.Players;
+using Chess.Api.Requests;
 using Chess.Engine;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -10,16 +11,17 @@ using Microsoft.Extensions.Logging;
 namespace Chess.Api.Broadcast;
 
 /// <summary>
-/// Plays the slots of the running broadcast schedule one game at a time, paced for viewers (03 §9.1, ADR-011). It waits for
-/// each slot's planned start, creates the game as a rated game, plays it with the schedule's move delay, then waits the game
-/// gap. A game that gets no reply from the model is retried after a back-off; after <see cref="MaxAttempts"/> the slot is
-/// skipped and the schedule moves on. Nothing that happens to one game ends the stream, and nothing escapes
-/// <see cref="ExecuteAsync"/>.
+/// Plays the broadcast one game at a time, paced for viewers (03 §9.1, ADR-011). A paid request in the queue goes first, and it
+/// is played even with no schedule running (03 §15.1). Otherwise it plays the slots of the running schedule: it waits for each
+/// slot's planned start, creates the game as a rated game, plays it with the schedule's move delay, then waits the game gap. A
+/// game that gets no reply from the model is retried after a back-off; after <see cref="MaxAttempts"/> the slot is skipped and
+/// the schedule moves on. Nothing that happens to one game ends the stream, and nothing escapes <see cref="ExecuteAsync"/>.
 /// </summary>
 public sealed class BroadcastRunner(
     IDbContextFactory<ArenaDbContext> factory,
     GameRunner games,
     IChessPlayerFactory players,
+    BroadcastRequests requests,
     BroadcastRunnerSignals signals,
     TimeProvider clock,
     DatabaseReadiness readiness,
@@ -35,6 +37,9 @@ public sealed class BroadcastRunner(
     private static readonly TimeSpan MaxWait = TimeSpan.FromSeconds(30);
 
     private static readonly TimeSpan ErrorPause = TimeSpan.FromSeconds(10);
+
+    /// <summary>The pacing of a request game when no schedule is running: the defaults of 03 §9.1.</summary>
+    private static readonly PacingProfile DefaultPacing = new(MoveDelayMs: 4000, GameGapSeconds: 20);
 
     private const string InterruptedNote = "interrupted by a restart";
     private const string StoppedNote = "stopped by the operator";
@@ -76,27 +81,41 @@ public sealed class BroadcastRunner(
         }
     }
 
-    /// <summary>One decision of the loop: wait, finish the schedule, or play the next slot.</summary>
+    /// <summary>
+    /// One decision of the loop: wait, finish the schedule, play the next paid request, or play the next slot. A paused broadcast
+    /// holds both. A request goes before the next planned slot, and it is taken with no schedule running too (03 §15.1).
+    /// </summary>
     private async Task StepAsync(CancellationToken ct)
     {
-        Guid scheduleId;
+        var active = await ActiveScheduleAsync(ct);
+        if (active?.Status == ScheduleStatus.Paused)
+        {
+            await WaitAsync(clock.GetUtcNow() + MaxWait, ct);
+            return;
+        }
+
+        if (await requests.TakeNextAsync(ct) is { } request)
+        {
+            await PlayRequestAsync(request, active?.Pacing ?? DefaultPacing, ct);
+            return;
+        }
+
+        if (active is null)
+        {
+            await WaitAsync(clock.GetUtcNow() + MaxWait, ct);
+            return;
+        }
+
         Guid slotId;
         {
             await using var db = await factory.CreateDbContextAsync(ct);
-            var schedule = await db.BroadcastSchedules
-                .FirstOrDefaultAsync(s => s.Status == ScheduleStatus.Running || s.Status == ScheduleStatus.Paused, ct);
-            if (schedule is null || schedule.Status == ScheduleStatus.Paused)
-            {
-                await WaitAsync(clock.GetUtcNow() + MaxWait, ct);
-                return;
-            }
-
             var slot = await db.BroadcastSlots
-                .Where(s => s.ScheduleId == schedule.Id && s.State == SlotState.Pending)
+                .Where(s => s.ScheduleId == active.Id && s.State == SlotState.Pending)
                 .OrderBy(s => s.Index)
                 .FirstOrDefaultAsync(ct);
             if (slot is null)
             {
+                var schedule = await db.BroadcastSchedules.SingleAsync(s => s.Id == active.Id, ct);
                 schedule.Status = ScheduleStatus.Finished;
                 schedule.FinishedAt = clock.GetUtcNow();
                 await db.SaveChangesAsync(ct);
@@ -111,11 +130,91 @@ public sealed class BroadcastRunner(
                 return;
             }
 
-            scheduleId = schedule.Id;
             slotId = slot.Id;
         }
 
-        await PlaySlotAsync(scheduleId, slotId, ct);
+        await PlaySlotAsync(active.Id, slotId, ct);
+    }
+
+    /// <summary>
+    /// Plays one paid request as a rated game, paced like the broadcast and budgeted to its net price (03 §15.1, §15.2). The game
+    /// is never interrupted by a request that arrives meanwhile. A game with no reply fails the request: the queue requeues it
+    /// once, then credits it.
+    /// </summary>
+    private async Task PlayRequestAsync(QueuedRequest request, PacingProfile pacing, CancellationToken ct)
+    {
+        await signals.WaitWhilePausedAsync(ct);
+
+        RequestGame? game;
+        try
+        {
+            game = await requests.StartAsync(request, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogError(ex, "Request {RequestId} could not be started and is failed", request.Id);
+            await requests.FailedAsync(request.Id, "could not be started", ct);
+            await HoldAsync(null, clock.GetUtcNow() + FirstBackoff, ct);
+            return;
+        }
+
+        // A refused request was credited when it was refused, so the stream moves on at once.
+        if (game is null)
+        {
+            return;
+        }
+
+        signals.Notice = null;
+        signals.Publish();
+
+        GameEnd? end;
+        bool stopped;
+        using (var abort = new CancellationTokenSource())
+        {
+            signals.BeginGame(abort);
+            try
+            {
+                var hooks = new GameRunHooks(
+                    new TechnicalFailurePlayers(players),
+                    new BroadcastPacer(TimeSpan.FromMilliseconds(pacing.MoveDelayMs), signals, clock),
+                    game.Budget);
+                end = await games.PlayToEndAsync(game.GameId, hooks, abort.Token, ct);
+            }
+            finally
+            {
+                signals.EndGame(abort);
+            }
+
+            stopped = abort.IsCancellationRequested;
+        }
+
+        // The host stopping leaves the request playing; the start-up recovery closes it through the queue.
+        ct.ThrowIfCancellationRequested();
+
+        if (!stopped && end is not null && end.Termination != GameTermination.Aborted.Termination)
+        {
+            await requests.PlayedAsync(request.Id, ct);
+            await HoldAsync(null, clock.GetUtcNow() + TimeSpan.FromSeconds(pacing.GameGapSeconds), ct);
+            return;
+        }
+
+        var reason = stopped ? StoppedNote : "the model gave no reply";
+        await requests.FailedAsync(request.Id, reason, ct);
+        logger.LogWarning("Request {RequestId} failed ({Reason}); the queue requeues it once, then credits it", request.Id, reason);
+        signals.Notice = $"Technical break: a paid game could not be played. The next game starts in {(int)FirstBackoff.TotalSeconds} s.";
+        signals.Publish();
+        await HoldAsync(null, clock.GetUtcNow() + FirstBackoff, ct);
+    }
+
+    /// <summary>The schedule that is running or paused, with its pacing, or null when there is none.</summary>
+    private async Task<ActiveSchedule?> ActiveScheduleAsync(CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var schedule = await db.BroadcastSchedules.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Status == ScheduleStatus.Running || s.Status == ScheduleStatus.Paused, ct);
+        return schedule is null
+            ? null
+            : new ActiveSchedule(schedule.Id, schedule.Status, new PacingProfile(schedule.MoveDelayMs, schedule.GameGapSeconds));
     }
 
     /// <summary>
@@ -277,10 +376,13 @@ public sealed class BroadcastRunner(
         }
     }
 
-    /// <summary>Holds until the time, while the schedule is still Running or Paused. A stop releases the hold at once.</summary>
-    private async Task HoldAsync(Guid scheduleId, DateTimeOffset until, CancellationToken ct)
+    /// <summary>
+    /// Holds until the time, while the schedule is still Running or Paused. A stop releases the hold at once. With no schedule
+    /// (a request played alone) the hold runs to the time.
+    /// </summary>
+    private async Task HoldAsync(Guid? scheduleId, DateTimeOffset until, CancellationToken ct)
     {
-        while (clock.GetUtcNow() < until && await ActiveAsync(scheduleId, ct))
+        while (clock.GetUtcNow() < until && (scheduleId is null || await ActiveAsync(scheduleId.Value, ct)))
         {
             await WaitAsync(until, ct);
         }
@@ -326,4 +428,7 @@ public sealed class BroadcastRunner(
 
     /// <summary>What a slot attempt needs once its game exists.</summary>
     private sealed record Attempt(Guid GameId, int SlotAttempts, TimeSpan MoveDelay, TimeSpan Gap);
+
+    /// <summary>The schedule the runner is playing: running or paused, with its pacing.</summary>
+    private sealed record ActiveSchedule(Guid Id, string Status, PacingProfile Pacing);
 }

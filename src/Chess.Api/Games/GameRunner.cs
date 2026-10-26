@@ -4,6 +4,7 @@ using Chess.Analysis;
 using Chess.Api.Persistence;
 using Chess.Api.Persistence.Entities;
 using Chess.Api.Players;
+using Chess.Engine;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -199,8 +200,8 @@ public sealed class GameRunner(
                 return null;
             }
 
-            var run = new GameRun(db, game, hooks?.Players ?? players, analyzer, events, options.Value, clock, hooks?.Pacer);
-            var end = await PlayOrEndAsync(run, gameId, slot, stoppingToken, cancellation.Token);
+            var run = new GameRun(db, game, hooks?.Players ?? players, analyzer, events, options.Value, clock, PacerOf(hooks, gameId));
+            var end = await PlayOrEndAsync(run, game, slot, stoppingToken, cancellation.Token);
             if (end is null)
             {
                 return null;
@@ -216,10 +217,15 @@ public sealed class GameRunner(
         }
     }
 
+    /// <summary>The pacer of a game: the hook's pacer, with the budget checked after every move before the pause.</summary>
+    private static IGamePacer? PacerOf(GameRunHooks? hooks, Guid gameId) =>
+        hooks?.Budget is { } budget ? new BudgetedPacer(hooks.Pacer, budget, gameId) : hooks?.Pacer;
+
     /// <returns>The end to record, or null when the host is stopping and the game must be left as it is.</returns>
     private async Task<GameEnd?> PlayOrEndAsync(
-        GameRun run, Guid gameId, GameSlot slot, CancellationToken stoppingToken, CancellationToken ct)
+        GameRun run, GameEntity game, GameSlot slot, CancellationToken stoppingToken, CancellationToken ct)
     {
+        var gameId = game.Id;
         try
         {
             return await run.PlayAsync(ct);
@@ -228,6 +234,15 @@ public sealed class GameRunner(
         {
             logger.LogWarning("Game {GameId} was cut off by the host stopping; it is closed as interrupted at the next start", gameId);
             return null;
+        }
+        catch (GameBudgetExhaustedException) when (stoppingToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (GameBudgetExhaustedException)
+        {
+            logger.LogInformation("Game {GameId} reached its budget and is adjudicated", gameId);
+            return await BudgetEndAsync(game, stoppingToken);
         }
         catch (OperationCanceledException) when (slot.AbortRequested)
         {
@@ -239,6 +254,23 @@ public sealed class GameRunner(
             logger.LogError(ex, "Game {GameId} failed and is closed as aborted", gameId);
             return GameTermination.Aborted;
         }
+    }
+
+    /// <summary>
+    /// The end of a game that reached its budget (03 §15.2): a position that already ends the game keeps its end; otherwise the
+    /// game is adjudicated at the board, as at <c>MaxPlies</c>, with the <c>budget</c> termination.
+    /// </summary>
+    private async Task<GameEnd> BudgetEndAsync(GameEntity game, CancellationToken ct)
+    {
+        var board = new ChessBoard();
+        board.LoadFen(game.CurrentFen);
+        if (GameTermination.FromStatus(board) is { } ending)
+        {
+            return ending;
+        }
+
+        int? whiteCentipawns = analyzer.IsAvailable ? await analyzer.EvaluateAsync(board.ToFen(), ct) : null;
+        return GameTermination.Adjudicate(board, whiteCentipawns, GameTermination.BudgetReached);
     }
 
     private async Task FinishAsync(GameRun run, GameEnd end, Guid gameId, GameSlot slot, CancellationToken stoppingToken)
@@ -257,6 +289,26 @@ public sealed class GameRunner(
             // reacts to GameFinished by aborting is told the game is no longer running.
             slot.MarkFinished();
             events.Publish(new GameFinished(gameId, clock.GetUtcNow(), end.Result, end.Termination));
+        }
+    }
+
+    /// <summary>
+    /// Checks the budget after each move, then paces the game as its pacer says. Only a game with a budget hook gets it, so
+    /// an ordinary game passes straight through to its pacer.
+    /// </summary>
+    private sealed class BudgetedPacer(IGamePacer? pacer, IGameBudget budget, Guid gameId) : IGamePacer
+    {
+        public async Task AfterMoveAsync(CancellationToken ct)
+        {
+            if (await budget.IsExhaustedAsync(gameId, ct))
+            {
+                throw new GameBudgetExhaustedException(gameId);
+            }
+
+            if (pacer is not null)
+            {
+                await pacer.AfterMoveAsync(ct);
+            }
         }
     }
 
