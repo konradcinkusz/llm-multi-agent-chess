@@ -219,13 +219,131 @@ public class ResultsPageTests
         cut.WaitForAssertion(() => Assert.Contains("Results unavailable", cut.Find(".results-error").TextContent));
     }
 
-    private static FakeHandler Respond(string board, string pair, string tournaments = "[]", string? breakdown = null)
+    // gpt@high under classic and think, and claude under classic: the one styled configuration on the page.
+    private const string StyledBoard =
+        """
+        {"models":[
+          {"model":"gpt@high~think","rating":130,"ciLow":110,"ciHigh":150,"games":30,"score":0.7,"legality":0.99,"moveQuality":null,"quality":0.99,"arenaScore":66,"provisional":false},
+          {"model":"gpt@high","rating":120,"ciLow":100,"ciHigh":140,"games":30,"score":0.6,"legality":0.97,"moveQuality":null,"quality":0.97,"arenaScore":60,"provisional":false},
+          {"model":"claude","rating":90,"ciLow":70,"ciHigh":110,"games":30,"score":0.3,"legality":0.95,"moveQuality":null,"quality":0.95,"arenaScore":34,"provisional":false}],
+         "whiteAdvantage":12,"games":90,"moveQualityAvailable":false}
+        """;
+
+    // The map places a model only when its breakdown holds cost, tokens and forfeits (03 §13).
+    private const string StyledBreakdown =
+        """
+        [{"model":"gpt@high~think","games":30,"wins":20,"draws":2,"losses":8,"forfeitLosses":0,"moves":400,"firstAttemptLegalRate":0.99,"avgLatencyMs":1500,"avgInputTokens":900,"avgOutputTokens":100,"averageCentipawnLoss":null,"avgEstimatedUsdPerGame":0.02,"forfeitRate":0},
+          {"model":"gpt@high","games":30,"wins":18,"draws":2,"losses":10,"forfeitLosses":0,"moves":400,"firstAttemptLegalRate":0.97,"avgLatencyMs":1000,"avgInputTokens":800,"avgOutputTokens":90,"averageCentipawnLoss":null,"avgEstimatedUsdPerGame":0.01,"forfeitRate":0},
+          {"model":"claude","games":30,"wins":9,"draws":2,"losses":19,"forfeitLosses":0,"moves":400,"firstAttemptLegalRate":0.95,"avgLatencyMs":800,"avgInputTokens":700,"avgOutputTokens":80,"averageCentipawnLoss":null,"avgEstimatedUsdPerGame":0.005,"forfeitRate":0}]
+        """;
+
+    private const string StyledMatrix =
+        """
+        {"models":["gpt@high~think","gpt@high","claude"],"cells":[
+          {"a":"gpt@high~think","b":"gpt@high","expectedScore":0.6,"qualityShare":0.5,"rqc":0.61,"rqcLow":0.55,"rqcHigh":0.70,"eloEquivalent":70,"headToHeadGames":5,"headToHeadScore":0.6},
+          {"a":"gpt@high","b":"gpt@high~think","expectedScore":0.4,"qualityShare":0.5,"rqc":0.39,"rqcLow":0.30,"rqcHigh":0.45,"eloEquivalent":-70,"headToHeadGames":5,"headToHeadScore":0.4},
+          {"a":"gpt@high~think","b":"claude","expectedScore":0.8,"qualityShare":0.5,"rqc":0.80,"rqcLow":0.70,"rqcHigh":0.90,"eloEquivalent":240,"headToHeadGames":5,"headToHeadScore":0.8},
+          {"a":"claude","b":"gpt@high~think","expectedScore":0.2,"qualityShare":0.5,"rqc":0.20,"rqcLow":0.10,"rqcHigh":0.30,"eloEquivalent":-240,"headToHeadGames":5,"headToHeadScore":0.2},
+          {"a":"gpt@high","b":"claude","expectedScore":0.7,"qualityShare":0.5,"rqc":0.70,"rqcLow":0.60,"rqcHigh":0.80,"eloEquivalent":150,"headToHeadGames":5,"headToHeadScore":0.7},
+          {"a":"claude","b":"gpt@high","expectedScore":0.3,"qualityShare":0.5,"rqc":0.30,"rqcLow":0.20,"rqcHigh":0.40,"eloEquivalent":-150,"headToHeadGames":5,"headToHeadScore":0.3}]}
+        """;
+
+    private static readonly string[] SectionOrderWithStyles =
+        ["big-picture", "model-map", "rating-history", "head-to-head", "breakdown", "move-quality", "strength-cost", "table", "prompt-styles"];
+
+    [Fact]
+    public void ThePromptStyleSectionIsHiddenWhenEveryPlayerIsClassic()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: TwoModels, pair: Pair(0.52, 0.68)));
+
+        cut.WaitForAssertion(() => Assert.Equal(SectionOrder,
+            cut.FindAll("section[data-section]").Select(s => s.GetAttribute("data-section"))));
+        Assert.Empty(cut.FindAll(".chip"));
+    }
+
+    [Fact]
+    public void PromptStylesComparedIsTheLastSectionAndListsEachStyleOfAModelEffort()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: StyledBoard, pair: Pair(0.52, 0.68), matrix: StyledMatrix, breakdown: StyledBreakdown));
+
+        cut.WaitForAssertion(() => Assert.Equal(SectionOrderWithStyles,
+            cut.FindAll("section[data-section]").Select(s => s.GetAttribute("data-section"))));
+        var rows = cut.FindAll("section[data-section='prompt-styles'] tbody[data-configuration='gpt@high'] tr");
+        Assert.Equal(["classic", "think"], rows.Select(r => r.Children[1].TextContent));
+        Assert.Equal("Baseline", rows[0].Children[8].TextContent);
+        Assert.Equal("Significantly ahead of classic: RQC 0.61, 95 % interval 0.55 to 0.70.", rows[1].Children[8].TextContent);
+    }
+
+    [Fact]
+    public void TheStyleChipsListOnlyTheStylesPresent()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: StyledBoard, pair: Pair(0.52, 0.68), matrix: StyledMatrix, breakdown: StyledBreakdown));
+
+        cut.WaitForAssertion(() => Assert.Equal(["All", "classic", "think"],
+            cut.FindAll(".chip").Select(c => c.TextContent.Trim())));
+    }
+
+    [Fact]
+    public void ChoosingAStyleHidesTheRowsOfOtherStylesInTheTableMapAndMatrix()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: StyledBoard, pair: Pair(0.52, 0.68), matrix: StyledMatrix, breakdown: StyledBreakdown));
+        cut.WaitForAssertion(() => Assert.Equal(3, LeaderboardRows(cut).Count));
+
+        cut.Find("input[name='results-style'][value='classic']").Change("classic");
+
+        cut.WaitForAssertion(() => Assert.Equal(["gpt@high", "claude"],
+            LeaderboardRows(cut).Select(tr => tr.Children[1].TextContent)));
+        // The rank is the rank in the full ranking, so the classic players keep their places 2 and 3.
+        Assert.Equal(["2", "3"], LeaderboardRows(cut).Select(tr => tr.Children[0].TextContent));
+        Assert.Equal(["gpt@high", "claude"],
+            cut.FindAll("section[data-section='model-map'] g.model-map-mark").Select(g => g.GetAttribute("data-point")));
+        Assert.Equal(
+            [("gpt@high", "claude"), ("claude", "gpt@high")],
+            cut.FindAll("section[data-section='head-to-head'] g.chart-cell")
+                .Select(c => (c.GetAttribute("data-row")!, c.GetAttribute("data-column")!)));
+    }
+
+    [Fact]
+    public void AStyleWithOnePlayerLeavesNoPairsInTheMatrix()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: StyledBoard, pair: Pair(0.52, 0.68), matrix: StyledMatrix, breakdown: StyledBreakdown));
+        cut.WaitForAssertion(() => Assert.Equal(3, LeaderboardRows(cut).Count));
+
+        cut.Find("input[name='results-style'][value='think']").Change("think");
+
+        cut.WaitForAssertion(() => Assert.Single(LeaderboardRows(cut)));
+        Assert.Empty(cut.FindAll("section[data-section='head-to-head'] g.chart-cell"));
+    }
+
+    [Fact]
+    public void ChoosingAllAgainShowsEveryPlayer()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: StyledBoard, pair: Pair(0.52, 0.68), matrix: StyledMatrix, breakdown: StyledBreakdown));
+        cut.WaitForAssertion(() => Assert.Equal(3, LeaderboardRows(cut).Count));
+        cut.Find("input[name='results-style'][value='think']").Change("think");
+        cut.WaitForAssertion(() => Assert.Single(LeaderboardRows(cut)));
+
+        cut.Find("input[name='results-style'][value='']").Change("");
+
+        cut.WaitForAssertion(() => Assert.Equal(3, LeaderboardRows(cut).Count));
+    }
+
+    private static List<AngleSharp.Dom.IElement> LeaderboardRows(IRenderedComponent<ResultsPage> cut) =>
+        cut.FindAll("section[data-section='table'] .results-table tbody tr").ToList();
+
+    private static FakeHandler Respond(string board, string pair, string tournaments = "[]", string? breakdown = null, string? matrix = null)
     {
         var bodies = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["/api/tournaments"] = tournaments,
             ["/api/ratings"] = board,
-            ["/api/ratings/matrix"] = Matrix,
+            ["/api/ratings/matrix"] = matrix ?? Matrix,
             ["/api/ratings/pairwise"] = pair,
             ["/api/ratings/history"] = "[]",
             ["/api/results/breakdown"] = breakdown ?? Breakdown,

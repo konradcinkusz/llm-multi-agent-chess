@@ -139,6 +139,15 @@
                     </table>
                 </div>
             </section>
+
+            @* 8. Prompt styles compared: only when some model@effort played under two or more styles (03 §6.1, item 8). *@
+            @if (Report.StyleGroups.Count > 0)
+            {
+                <section class="card results-card" data-section="prompt-styles" aria-labelledby="prompt-styles-heading">
+                    <h2 id="prompt-styles-heading" class="card-title">Prompt styles compared</h2>
+                    <StyleComparisonTable Groups="Report.StyleGroups" />
+                </section>
+            }
         </div>
     }
 </SiteLayout>

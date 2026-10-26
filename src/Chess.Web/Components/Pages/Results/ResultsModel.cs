@@ -27,7 +27,9 @@ public sealed record ResultsReport(
     IReadOnlyList<CategoryValue> Legality,
     IReadOnlyList<CategoryValue>? Acpl,
     IReadOnlyList<ScatterPoint> Scatter,
-    IReadOnlyList<MapModel> MapModels);
+    IReadOnlyList<MapModel> MapModels,
+    IReadOnlyList<string> Styles,                              // the prompt styles present in the scope; the filter's chips
+    IReadOnlyList<StyleGroup> StyleGroups);                    // "Prompt styles compared" (03 §14.5); empty when none
 
 /// <summary>
 /// The two leaderboard orders of the Results page (RATING.md §6). The values are the API's <c>order</c> parameter.
@@ -188,7 +190,9 @@ public static class ResultsModel
             legality,
             acpl,
             scatter,
-            mapModels);
+            mapModels,
+            PromptStyles.Present(ranking.Select(r => r.Model)),
+            PromptStyleComparison.Build(ranking, input.Matrix.Cells, breakdown));
     }
 
     /// <summary>
