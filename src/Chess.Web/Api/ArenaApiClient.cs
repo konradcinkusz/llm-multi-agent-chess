@@ -105,6 +105,28 @@ public sealed class ArenaApiClient(HttpClient http)
     public Task CancelBenchmarkAsync(Guid id, CancellationToken ct = default) =>
         EnsureSuccessAsync(http.PostAsync($"/api/benchmarks/{id}/cancel", null, ct), ct);
 
+    /// <summary>03 §15.4: the menu, its styles, the tiers and the command help. Pages treat a failure as "requests are off".</summary>
+    public Task<RequestMenuDto> GetRequestMenuAsync(CancellationToken ct = default) =>
+        GetJsonAsync<RequestMenuDto>("/api/requests/menu", ct);
+
+    /// <summary>The price of one matchup. Codes may carry a <c>~style</c>, as in a Super Chat command. PriceUsd null: not offered.</summary>
+    public Task<QuoteDto> GetRequestQuoteAsync(string white, string black, CancellationToken ct = default) =>
+        GetJsonAsync<QuoteDto>(WithQuery("/api/requests/quote", ("white", white), ("black", black)), ct);
+
+    /// <summary>The running request, the queue and the recent requests. A 404 means viewer-paid games are not on.</summary>
+    public Task<RequestQueueDto> GetRequestQueueAsync(CancellationToken ct = default) =>
+        GetJsonAsync<RequestQueueDto>("/api/requests/queue", ct);
+
+    /// <summary>
+    /// Runs a chat message through the intake as YouTube would. Only in Mock mode: any other mode answers 403, which
+    /// surfaces as an <see cref="HttpRequestException"/> whose <see cref="HttpRequestException.StatusCode"/> is 403.
+    /// </summary>
+    public Task SimulateChatAsync(SimulateChatRequest request, CancellationToken ct = default) =>
+        EnsureSuccessAsync(http.PostAsJsonAsync("/api/requests/simulate", request, JsonOptions, ct), ct);
+
+    public Task CancelRequestAsync(Guid id, CancellationToken ct = default) =>
+        EnsureSuccessAsync(http.PostAsync($"/api/requests/{id:D}/cancel", null, ct), ct);
+
     private async Task<T> GetJsonAsync<T>(string url, CancellationToken ct) =>
         await ReadJsonAsync<T>(await http.GetAsync(url, ct), ct);
 

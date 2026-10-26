@@ -21,6 +21,7 @@
                 <a href="@Frame.Link(SitePaths.HeadToHead)" class="@Current("head-to-head")" aria-current="@Page("head-to-head")">Head-to-head</a>
                 <a href="@Frame.Link(SitePaths.Tournaments)" class="@Current("tournaments")" aria-current="@Page("tournaments")">Tournaments</a>
                 <a href="@Frame.Link(SitePaths.Games)" class="@Current("games")" aria-current="@Page("games")">Games</a>
+                <a href="@Frame.Link(SitePaths.Menu)" class="@Current("menu")" aria-current="@Page("menu")">Menu</a>
                 <a href="@Frame.Link(SitePaths.About)" class="@Current("about")" aria-current="@Page("about")">About</a>
             </nav>
         </header>
@@ -65,7 +66,7 @@
     [Parameter, EditorRequired]
     public SiteFrame Frame { get; set; } = null!;
 
-    /// <summary>Which navigation item is the current page: results, head-to-head, tournaments, games or about.</summary>
+    /// <summary>Which navigation item is the current page: results, head-to-head, tournaments, games, menu or about.</summary>
     [Parameter]
     public string? Active { get; set; }
 

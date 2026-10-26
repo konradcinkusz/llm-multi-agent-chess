@@ -40,6 +40,18 @@ internal sealed class LiveBroadcastServer
     /// <summary>What GET /api/games/{id} answers. The page loads it right after it opens the stream.</summary>
     public string GameDetail { get; set; } = LiveFixtures.Detail("running", "*", null);
 
+    /// <summary>What GET /api/requests/queue answers. Null (the default) is an API without requests: a 404.</summary>
+    public string? Queue { get; set; }
+
+    /// <summary>When true, GET /api/requests/queue answers 500: an API that is up but failing.</summary>
+    public bool QueueFails { get; set; }
+
+    /// <summary>What GET /api/requests/menu answers. Null is a 404.</summary>
+    public string? Menu { get; set; }
+
+    /// <summary>What GET /api/games answers, for the replays. Null is a 404.</summary>
+    public string? Games { get; set; }
+
     /// <summary>How many times the page has opened the event stream.</summary>
     public int StreamRequests => Volatile.Read(ref _streamRequests);
 
@@ -79,6 +91,26 @@ internal sealed class LiveBroadcastServer
         if (route == "GET /api/models")
         {
             return Canned.Json(Models);
+        }
+
+        if (route == "GET /api/requests/queue")
+        {
+            if (QueueFails)
+            {
+                return Canned.Json("{}", HttpStatusCode.InternalServerError);
+            }
+
+            return Queue is null ? Canned.Json("{}", HttpStatusCode.NotFound) : Canned.Json(Queue);
+        }
+
+        if (route == "GET /api/requests/menu")
+        {
+            return Menu is null ? Canned.Json("{}", HttpStatusCode.NotFound) : Canned.Json(Menu);
+        }
+
+        if (request.Method == "GET" && request.Target.StartsWith("/api/games?", StringComparison.Ordinal))
+        {
+            return Games is null ? Canned.Json("{}", HttpStatusCode.NotFound) : Canned.Json(Games);
         }
 
         if (route == $"GET {GameTarget}")
@@ -131,6 +163,27 @@ internal static class LiveFixtures
 
     public static string Schedules(string status, int total, int finished) =>
         $$"""[{"id":"66666666-6666-6666-6666-666666666666","name":"Day one","status":"{{status}}","slotsTotal":{{total}},"slotsFinished":{{finished}}}]""";
+
+    /// <summary>A schedule with its pacing, so a replay test runs in milliseconds rather than at the broadcast pace.</summary>
+    public static string PacedSchedules(string status, int total, int finished, int moveDelayMs, int gameGapSeconds)
+    {
+        var pacing = $"{{\"moveDelayMs\":{moveDelayMs},\"gameGapSeconds\":{gameGapSeconds}}}";
+        return $"[{{\"id\":\"66666666-6666-6666-6666-666666666666\",\"name\":\"Day one\",\"status\":\"{status}\",\"slotsTotal\":{total},\"slotsFinished\":{finished},\"pacing\":{pacing}}}]";
+    }
+
+    public static string Menu(params (string Code, string Label, double PerSide)[] items) =>
+        $$"""{"items":[{{string.Join(',', items.Select(i => $$"""{"code":"{{i.Code}}","playerId":"{{i.Label}}","label":"{{i.Label}}","estimatedUsdPerSide":{{i.PerSide.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}"""))}}],"styles":["classic","board","think"],"tiersUsd":[1,2,5,10],"feeShare":0.3,"commandHelp":"Super Chat: !g <white> vs <black> [style]"}""";
+
+    /// <summary>One request as GET /api/requests/queue reports it. The text is the parsed configuration only, never free text.</summary>
+    public static string Request(string payer, string white, string black, string status, int? position = null,
+        Guid? gameId = null, string? reason = null) =>
+        $$"""{"id":"{{Guid.NewGuid()}}","source":"youtube","payerDisplay":"{{payer}}","white":"{{white}}","black":"{{black}}","priceUsd":1,"status":"{{status}}","reason":{{(reason is null ? "null" : $"\"{reason}\"")}},"gameId":{{(gameId is null ? "null" : $"\"{gameId}\"")}},"receivedAt":"2026-10-24T18:00:00Z","queuePosition":{{(position is null ? "null" : position)}} }""";
+
+    public static string Queue(string? playing = null, string queued = "", string recent = "", int? wait = null) =>
+        $$"""{"playing":{{playing ?? "null"}},"queued":[{{queued}}],"recent":[{{recent}}],"estimatedWaitMinutes":{{(wait is null ? "null" : wait)}} }""";
+
+    public static string Page(params string[] games) =>
+        $$"""{"items":[{{string.Join(',', games)}}],"page":1,"pageSize":50,"total":{{games.Length}}}""";
 
     public static string Summary(string state, string result, string? termination, int plies) =>
         $$"""{"id":"{{LiveBroadcastServer.GameId}}","tournamentId":null,"white":{"kind":"llm","modelId":"gpt"},"black":{"kind":"llm","modelId":"claude"},"rated":true,"state":"{{state}}","result":"{{result}}","termination":{{(termination is null ? "null" : $"\"{termination}\"")}},"plyCount":{{plies}},"createdAt":"2026-10-24T18:00:00Z","finishedAt":null}""";

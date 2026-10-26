@@ -1,0 +1,91 @@
+@using Chess.Web.Site
+
+@* The menu and its price matrix (03 §15.6): every matchup of the menu, in each style, so a viewer can check a price before
+   paying. Plain HTML, like the other pages of the export. *@
+<SiteLayout Title="Menu and prices" Frame="Frame" Active="menu">
+    <div class="page-header">
+        <h1>Order a game: the menu and its prices</h1>
+        <p class="page-lede">
+            A game between two menu entries costs the Super Chat shown where they meet. Send a Super Chat that starts with
+            <code>!g</code>, the two codes and a style: for example <code>!g c1 vs d3 think</code>.
+        </p>
+    </div>
+
+    @if (PriceMenu is not { } menu)
+    {
+        <section class="card" aria-labelledby="menu-off">
+            <h2 id="menu-off" class="card-title">Not open</h2>
+            <p>Viewer-paid games are not open on this arena, so there is no menu or price list yet.</p>
+        </section>
+    }
+    else
+    {
+        <div class="stack-lg">
+            <section class="card" aria-labelledby="menu-entries">
+                <h2 id="menu-entries" class="card-title">The menu</h2>
+                <div class="table-wrap">
+                    <table class="table-compact">
+                        <thead>
+                            <tr><th scope="col">Code</th><th scope="col">Model</th><th scope="col" class="num">Per side</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in menu.Menu.Items)
+                            {
+                                <tr data-code="@item.Code">
+                                    <td><code>@item.Code</code></td>
+                                    <td>@item.Label</td>
+                                    <td class="num">@SitePriceFormat.Usd(item.EstimatedUsdPerSide) a side</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="muted">The tiers are @string.Join(", ", menu.Menu.TiersUsd.Select(SitePriceFormat.Usd)). YouTube keeps @SitePriceFormat.Percent(menu.Menu.FeeShare) of a Super Chat.</p>
+            </section>
+
+            @foreach (var style in SitePriceMenu.Styles)
+            {
+                <section class="card" aria-labelledby="matrix-@style" data-style="@style">
+                    <h2 id="matrix-@style" class="card-title">Price matrix: @style</h2>
+                    <p class="muted">Rows are the white side, columns the black side. A blank cell is not offered.</p>
+                    <div class="table-wrap">
+                        <table class="table-compact">
+                            <thead>
+                                <tr>
+                                    <th scope="col">White ↓ / Black →</th>
+                                    @foreach (var black in menu.Menu.Items)
+                                    {
+                                        <th scope="col" class="num"><code>@black.Code</code></th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var white in menu.Menu.Items)
+                                {
+                                    <tr>
+                                        <th scope="row"><code>@white.Code</code></th>
+                                        @foreach (var black in menu.Menu.Items)
+                                        {
+                                            var price = menu.Cell(style, white.Code, black.Code)?.PriceUsd;
+                                            <td class="num" data-white="@white.Code" data-black="@black.Code" data-price="@(price is null ? "none" : SitePriceFormat.Usd(price.Value))">
+                                                @(price is null ? "" : SitePriceFormat.Usd(price.Value))
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            }
+        </div>
+    }
+</SiteLayout>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteFrame Frame { get; set; } = null!;
+
+    [Parameter]
+    public SitePriceMenu? PriceMenu { get; set; }
+}

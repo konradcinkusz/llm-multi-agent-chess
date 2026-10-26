@@ -1,5 +1,6 @@
 extern alias ChessWeb;
 
+using Chess.Web.Site;
 using Xunit;
 
 namespace Chess.Web.Tests.Site;
@@ -8,12 +9,19 @@ namespace Chess.Web.Tests.Site;
 public class SiteEmptyArchiveTests(EmptySiteFixture site) : IClassFixture<EmptySiteFixture>
 {
     [Fact]
+    public void The_menu_says_it_is_not_open_when_the_requests_API_has_no_menu()
+    {
+        Assert.Contains("Not open", site.Pages[SitePaths.Menu]);
+        Assert.DoesNotContain("data-style=", site.Pages[SitePaths.Menu]);
+    }
+
+    [Fact]
     public void The_empty_export_writes_only_the_pages_that_do_not_depend_on_a_game()
     {
         var pages = site.Pages.Keys.OrderBy(page => page, StringComparer.Ordinal).ToArray();
 
         Assert.Equal(
-            ["about/index.html", "games/index.html", "head-to-head/index.html", "index.html", "tournaments/index.html"],
+            ["about/index.html", "games/index.html", "head-to-head/index.html", "index.html", "menu/index.html", "tournaments/index.html"],
             pages);
     }
 

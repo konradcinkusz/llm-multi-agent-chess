@@ -15,7 +15,8 @@ public sealed record SiteSnapshot(
     IReadOnlyList<TournamentDto> Tournaments,
     IReadOnlyDictionary<Guid, LeaderboardDto> TournamentBoards,
     IReadOnlyList<GameSummaryDto> Games,                                       // finished, newest first
-    IReadOnlyDictionary<Guid, GameUsageDto> Usage);                            // by game id, for the finished games
+    IReadOnlyDictionary<Guid, GameUsageDto> Usage,                             // by game id, for the finished games
+    SitePriceMenu? PriceMenu);                                                 // null when viewer-paid games are not on
 
 /// <summary>The snapshot as <c>data/snapshot.json</c>: when it was taken and what it counts.</summary>
 public sealed record SiteSnapshotJson(DateTimeOffset TakenAt, int RatedGames, int Models, int Tournaments, int Games);

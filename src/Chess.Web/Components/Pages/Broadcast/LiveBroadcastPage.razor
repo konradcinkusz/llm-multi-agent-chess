@@ -42,7 +42,7 @@
                     <p>@notice</p>
                 </div>
             }
-            else if (_now is { Current: null })
+            else if (_now is { Current: null } && !ShowsRequestOrReplay)
             {
                 <div class="bc-card" data-testid="broadcast-intermission" role="status">
                     <h2>@InterludeTitle</h2>
@@ -121,6 +121,55 @@
                 }
             </section>
         </div>
+
+        @* The viewer requests (03 §15.6). Without the requests API none of this is drawn, and nothing else moves. *@
+        @if (_queue is not null || _menu is not null)
+        {
+            <div class="bc-requests">
+                <section class="bc-panel" data-testid="broadcast-queue" aria-label="Requests">
+                    <h2>Requests</h2>
+                    @if (_queue is { Queued.Count: > 0 } queue)
+                    {
+                        <ol class="bc-next">
+                            @foreach (var request in queue.Queued.Take(LiveRequestView.MaxQueued))
+                            {
+                                <li data-request="@request.Id">
+                                    <span class="bc-time">@request.QueuePosition</span>
+                                    <span class="bc-name">@request.PayerDisplay · @ModelName(request.White) vs @ModelName(request.Black)</span>
+                                </li>
+                            }
+                        </ol>
+                        <p class="bc-muted" data-testid="broadcast-wait">@LiveRequestView.WaitLabel(queue.EstimatedWaitMinutes)</p>
+                    }
+                    else if (_queue is not null)
+                    {
+                        <p class="bc-muted">No requests waiting. Order one with a Super Chat.</p>
+                    }
+                    @foreach (var line in LiveRequestView.RejectionLines(_queue))
+                    {
+                        <p class="bc-muted" data-testid="broadcast-rejection">@line</p>
+                    }
+                </section>
+
+                <section class="bc-panel" data-testid="broadcast-menu" aria-label="Order a game">
+                    <h2>Order a game</h2>
+                    @if (_menu is { } menu)
+                    {
+                        <ol class="bc-menu">
+                            @foreach (var item in menu.Items)
+                            {
+                                <li data-code="@item.Code">
+                                    <span class="bc-code">@item.Code</span>
+                                    <span class="bc-name">@item.Label</span>
+                                    <span class="bc-num">@LiveRequestView.Price(item.EstimatedUsdPerSide) a side</span>
+                                </li>
+                            }
+                        </ol>
+                        <p class="bc-muted" data-testid="broadcast-order">@menu.CommandHelp</p>
+                    }
+                </section>
+            </div>
+        }
     </aside>
 </div>
 
@@ -133,6 +182,10 @@
 
     /// <summary>The first wait before reconnecting a stream that closed early. It doubles up to <see cref="MaxReconnectDelay"/>.</summary>
     private static readonly TimeSpan MaxReconnectDelay = TimeSpan.FromSeconds(30);
+
+    /// <summary>The replay pace when the schedule sends none: one move every three seconds, ten seconds between games.</summary>
+    private const int DefaultMoveDelayMs = 3000;
+    private const int DefaultGameGapSeconds = 10;
 
     /// <summary>The <c>?theme=</c> option: <c>light</c> for a light background, anything else is the dark default.</summary>
     [Parameter, SupplyParameterFromQuery(Name = "theme")]
@@ -162,8 +215,25 @@
     private LiveSlot? _slot;
     private LiveGame? _live;
     private int? _totalGames;
+    private RequestQueueDto? _queue;
+
+    /// <summary>True once the queue has been read, even when the read failed. A replay waits for it, so an empty queue is never assumed.</summary>
+    private bool _queueKnown;
+    private RequestMenuDto? _menu;
+    private PacingProfile? _pacing;
+
+    /// <summary>The replay loop while the queue is empty. Null when no replay is wanted or the API gave none.</summary>
+    private CancellationTokenSource? _replays;
+
+    /// <summary>True while a stored game is on the board, so the game header and status say it is a replay.</summary>
+    private bool _replaying;
+
+    private Guid? _lastReplay;
 
     private bool IsLight => string.Equals(Theme, "light", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A request or a replay is on the board, so the intermission card must not cover it.</summary>
+    private bool ShowsRequestOrReplay => _replays is not null || _queue?.Playing?.GameId is not null;
 
     private string ThemeClass => IsLight ? "bc-light" : "bc-dark";
 
@@ -182,13 +252,27 @@
 
     private string LinkText => _now is null && _linkError is null ? "Connecting to the arena…" : "Reconnecting to the arena…";
 
-    private string StatusLine => _live switch
+    private string StatusLine
     {
-        null => string.Empty,
-        { Outcome: { } outcome } => $"Result {outcome.Result}",
-        { Thinking: { } thinking } => $"Move {(thinking.Ply + 1) / 2} · {ModelName(thinking.ModelId)} is thinking…",
-        _ => "Game in progress.",
-    };
+        get
+        {
+            if (_replaying)
+            {
+                return "Replay of a past game";
+            }
+
+            var line = _live switch
+            {
+                null => string.Empty,
+                { Outcome: { } outcome } => $"Result {outcome.Result}",
+                { Thinking: { } thinking } => $"Move {(thinking.Ply + 1) / 2} · {ModelName(thinking.ModelId)} is thinking…",
+                _ => "Game in progress.",
+            };
+            return LiveRequestView.RequestedBy(_queue, _live?.GameId) is { } payer && line.Length > 0
+                ? $"Requested by {payer} · {line}"
+                : line;
+        }
+    }
 
     /// <summary>The heading of the card shown while no game is on: off air, paused, or between two games.</summary>
     private string InterludeTitle => _now?.Status switch
@@ -243,6 +327,7 @@
             do
             {
                 await RefreshNowAsync(ct);
+                await RefreshRequestsAsync(ct);
             }
             while (await timer.WaitForNextTickAsync(ct));
         }
@@ -297,19 +382,33 @@
             FollowGame(current, gameId);
         }
 
+        Reconcile();
         StateHasChanged();
     }
 
     private void FollowGame(LiveSlot slot, Guid gameId)
     {
+        _slot = slot;
+        Follow(gameId, slot.White, slot.Black, slot.PlannedStart);
+    }
+
+    /// <summary>
+    /// Follows a game of the request queue that is not in the schedule, so it has no slot and the title keeps the channel name.
+    /// </summary>
+    private void FollowRequest(GameRequestDto playing, Guid gameId)
+    {
+        _slot = null;
+        Follow(gameId, new PlayerSpec("llm", playing.White), new PlayerSpec("llm", playing.Black), playing.ReceivedAt);
+    }
+
+    private void Follow(Guid gameId, PlayerSpec white, PlayerSpec black, DateTimeOffset startedAt)
+    {
         // Cancel only: the previous game's readers may still hold its token.
         _follow?.Cancel();
         _follow = new CancellationTokenSource();
 
-        _slot = slot;
         // The placeholder summary carries the players from the slot; the load replaces it with the server's.
-        _live = new LiveGame(new GameSummaryDto(gameId, null, slot.White, slot.Black, true, "running", "*", null, 0,
-            slot.PlannedStart, null));
+        _live = new LiveGame(new GameSummaryDto(gameId, null, white, black, true, "running", "*", null, 0, startedAt, null));
         _ = FollowAsync(gameId, _follow.Token);
         _ = RefreshScheduleAsync(_follow.Token);
     }
@@ -438,6 +537,7 @@
             await InvokeAsync(() =>
             {
                 _totalGames = active?.SlotsTotal;
+                _pacing = active?.Pacing;
                 StateHasChanged();
             });
         }
@@ -446,6 +546,151 @@
             // The header keeps the last game count it had.
         }
     }
+
+    /// <summary>
+    /// Reads the menu once it is there, and the queue on every poll. Each read stands alone: a missing menu does not
+    /// hide the queue, and an API without requests leaves both null, so the panels are not drawn and nothing is logged.
+    /// </summary>
+    private async Task RefreshRequestsAsync(CancellationToken ct)
+    {
+        var menu = _menu ?? await TryReadAsync(() => Api.GetRequestMenuAsync(ct), ct);
+        var queue = await TryReadAsync(() => Api.GetRequestQueueAsync(ct), ct);
+        await InvokeAsync(() =>
+        {
+            _menu ??= menu;
+            ApplyRequests(queue);
+        });
+    }
+
+    private static async Task<T?> TryReadAsync<T>(Func<Task<T>> read, CancellationToken ct) where T : class
+    {
+        try
+        {
+            return await read();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Runs on the render thread. A running request is followed, as a schedule game is, unless a schedule game is on.</summary>
+    private void ApplyRequests(RequestQueueDto? queue)
+    {
+        _queue = queue;
+        _queueKnown = true;
+        if (queue?.Playing is { GameId: { } gameId } playing && _now?.Current is null && gameId != _live?.GameId)
+        {
+            FollowRequest(playing, gameId);
+        }
+
+        Reconcile();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Starts or stops the replay loop from the state the page has: a replay runs only while the broadcast is running, no
+    /// game is scheduled, and nothing is queued or playing (03 §15.6). Runs on the render thread.
+    /// </summary>
+    private void Reconcile()
+    {
+        var replayWanted = _queueKnown && _now is { Status: "running", Current: null } && !LiveRequestView.HasWaiting(_queue);
+        if (!replayWanted)
+        {
+            StopReplays();
+        }
+        else if (_replays is null)
+        {
+            var replays = new CancellationTokenSource();
+            _replays = replays;
+            _ = PlayReplaysAsync(replays);
+        }
+    }
+
+    private void StopReplays()
+    {
+        if (_replays is null)
+        {
+            return;
+        }
+
+        _replays.Cancel();
+        _replays = null;
+        _replaying = false;
+    }
+
+    /// <summary>
+    /// Plays stored games one after another at the broadcast's pace: one move per move delay, then the game gap. The stored
+    /// games come from the finished list, the best-rated pick first. With none to play the loop ends and the intermission shows.
+    /// </summary>
+    private async Task PlayReplaysAsync(CancellationTokenSource replays)
+    {
+        var ct = replays.Token;
+        try
+        {
+            // The pace comes from the schedule, which is read only when a game is followed: read it for the replays too.
+            await RefreshScheduleAsync(ct);
+            while (!ct.IsCancellationRequested)
+            {
+                var recent = await Api.GetGamesAsync(1, ReplayPicker.Pool, null, "finished", ct);
+                var pick = ReplayPicker.Pick(recent.Items, _leaderboard, _lastReplay);
+                if (pick is null)
+                {
+                    return;
+                }
+
+                var game = await Api.GetGameAsync(pick.Id, ct);
+                _lastReplay = pick.Id;
+                await InvokeAsync(() => ShowReplay(replays, game, 0));
+                for (var ply = 1; ply <= game.Moves.Count; ply++)
+                {
+                    await Task.Delay(MovePace, ct);
+                    await InvokeAsync(() => ShowReplay(replays, game, ply));
+                }
+
+                await Task.Delay(GameGap, ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The queue or the schedule moved on, or the page has gone.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A replay is optional: without one the broadcast shows its intermission card.
+        }
+        finally
+        {
+            await InvokeAsync(() =>
+            {
+                if (ReferenceEquals(_replays, replays))
+                {
+                    _replays = null;
+                    _replaying = false;
+                    StateHasChanged();
+                }
+            });
+        }
+    }
+
+    /// <summary>Runs on the render thread. Shows the stored game after <paramref name="ply"/> plies, unless its loop has been stopped.</summary>
+    private void ShowReplay(CancellationTokenSource replays, GameDetailDto game, int ply)
+    {
+        if (replays.IsCancellationRequested || !ReferenceEquals(_replays, replays))
+        {
+            return;
+        }
+
+        _replaying = true;
+        _slot = null;
+        _live = new LiveGame(game.Summary);
+        _live.Load(ReplayPicker.UpTo(game, ply));
+        StateHasChanged();
+    }
+
+    private TimeSpan MovePace => TimeSpan.FromMilliseconds(_pacing?.MoveDelayMs ?? DefaultMoveDelayMs);
+
+    private TimeSpan GameGap => TimeSpan.FromSeconds(_pacing?.GameGapSeconds ?? DefaultGameGapSeconds);
 
     private string PlayerName(PlayerSpec? player) => player is null ? "—" : ModelName(player.ModelId);
 
@@ -459,5 +704,6 @@
         // Cancel only: disposing a source a reader may still hold a token from can throw in those readers.
         _lifetime.Cancel();
         _follow?.Cancel();
+        _replays?.Cancel();
     }
 }
