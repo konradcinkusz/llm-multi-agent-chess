@@ -33,6 +33,19 @@
             <span class="muted" role="status">Loading…</span>
         }
     </div>
+    @if (_report is { Styles.Count: > 1 })
+    {
+        <div class="field">
+            <span class="field-label" id="results-style-label">Prompt style</span>
+            <div class="chips" role="radiogroup" aria-labelledby="results-style-label">
+                <label class="chip"><input type="radio" name="results-style" value="" checked="@(_style is null)" @onchange="OnStyleChanged" /> All</label>
+                @foreach (var style in _report.Styles)
+                {
+                    <label class="chip"><input type="radio" name="results-style" value="@style" checked="@(_style == style)" @onchange="OnStyleChanged" /> @style</label>
+                }
+            </div>
+        </div>
+    }
 </div>
 
 @if (_error is not null)
@@ -82,7 +95,7 @@ else
             <h2 id="model-map-heading" class="card-title">Model map</h2>
             <ModelMap Title="Two coefficients for every model"
                       Description="Each bubble is one model, placed by its values on the two axes you choose; its area is its rated games. Dashed lines mark the median of each axis, and the corners name the quadrants by the better direction of each axis. Hatched bubbles are provisional. Hover a bubble for all its coefficients."
-                      Models="_report.MapModels" MoveQualityAvailable="_board!.MoveQualityAvailable" />
+                      Models="VisibleMapModels()" MoveQualityAvailable="_board!.MoveQualityAvailable" />
         </section>
 
         @* 3. Rating over time. *@
@@ -110,7 +123,7 @@ else
             <h2 id="head-to-head-heading" class="card-title">Head-to-head matrix</h2>
             <Heatmap Title="RQC for every pairing"
                      Description="Row model against column model. Above 0.50 the row model is stronger. Muted cells have an interval that includes 0.50, so the difference is not significant."
-                     Labels="_report.HeatLabels" Cells="_report.Heat" Midpoint="0.5" Min="0" Max="1" ValueFormat="0.00" />
+                     Labels="VisibleLabels()" Cells="VisibleCells()" Midpoint="0.5" Min="0" Max="1" ValueFormat="0.00" />
         </section>
 
         @* 5. Results breakdown. *@
@@ -167,11 +180,10 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @for (var i = 0; i < _report.Ranking.Count; i++)
+                        @foreach (var (row, rank) in VisibleRows())
                         {
-                            var row = _report.Ranking[i];
                             <tr>
-                                <td class="num">@(i + 1)</td>
+                                <td class="num">@rank</td>
                                 <td>@row.Model</td>
                                 <td class="num">@ResultsModel.Number(row.ArenaScore, "0.0")</td>
                                 <td class="num">@ResultsModel.Number(row.Rating, "0")</td>
@@ -187,6 +199,15 @@ else
                 </table>
             </div>
         </section>
+
+        @* 9. Prompt styles compared: only when some model@effort played under two or more styles (03 §6.1, item 8). *@
+        @if (_report.StyleGroups.Count > 0)
+        {
+            <section class="card results-card" data-section="prompt-styles" aria-labelledby="prompt-styles-heading">
+                <h2 id="prompt-styles-heading" class="card-title">Prompt styles compared</h2>
+                <StyleComparisonTable Groups="_report.StyleGroups" />
+            </section>
+        }
     </div>
 }
 
@@ -200,6 +221,7 @@ else
     private string? _error;
     private bool _loading;
     private bool _showFolded;
+    private string? _style;
     private CancellationTokenSource? _cts;
 
     protected override Task OnInitializedAsync()
@@ -215,6 +237,29 @@ else
         _showFolded = false;
         return LoadAsync(selected);
     }
+
+    /// <summary>The style filter: "All" (an empty value) or one style. It hides rows and never refits (03 §14.5).</summary>
+    private void OnStyleChanged(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+        _style = string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    private IEnumerable<(ModelRating Row, int Rank)> VisibleRows() =>
+        _report!.Ranking
+            .Select((row, index) => (Row: row, Rank: index + 1))
+            .Where(item => PromptStyles.Includes(item.Row.Model, _style));
+
+    private IReadOnlyList<MapModel> VisibleMapModels() =>
+        _report!.MapModels.Where(model => PromptStyles.Includes(model.Model, _style)).ToList();
+
+    private IReadOnlyList<string> VisibleLabels() =>
+        _report!.HeatLabels.Where(label => PromptStyles.Includes(label, _style)).ToList();
+
+    private IReadOnlyList<HeatCell> VisibleCells() =>
+        _report!.Heat
+            .Where(cell => PromptStyles.Includes(cell.Row, _style) && PromptStyles.Includes(cell.Column, _style))
+            .ToList();
 
     private Task OnOrderChanged(ChangeEventArgs args)
     {
@@ -255,6 +300,8 @@ else
             _board = board;
             _report = ResultsModel.Build(new ResultsInputs(board, models, matrix, breakdown, leaderVsSecond,
                 histories.ToDictionary(h => h.Model, h => h.Points, StringComparer.Ordinal)));
+            // A scope that has no players of the chosen style shows All again, rather than an empty table.
+            if (_style is not null && !_report.Styles.Contains(_style, StringComparer.Ordinal)) _style = null;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

@@ -268,13 +268,17 @@ public sealed class TournamentService(
     {
         var listing = await catalog.GetModelsAsync(ct);
         var inputs = await costs.ForAsync(listing, ct);
+        var history = await costs.HistoryAsync(ct);
         return models
             .Select(id =>
             {
                 var model = ModelVariant.BaseOf(id);
                 var gamesOfModel = pairings.Count(p => p.White == id || p.Black == id);
+                var playerInputs = inputs.GetValueOrDefault(model) is { } modelInputs
+                    ? CostInputs.For(id, modelInputs, history)
+                    : null;
                 var cost = CostEstimator.Estimate(model, gamesOfModel * CostEstimator.MovesPerSidePerGame,
-                    inputs.GetValueOrDefault(model), costs.UsdPerAiCredit);
+                    playerInputs, costs.UsdPerAiCredit);
                 return new ModelPremiumEstimateDto(id, Estimate(listing, model, gamesOfModel),
                     cost.AiCredits, cost.Usd, cost.Basis, cost.SampleMoves);
             })
