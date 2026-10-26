@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": 403,
+    "message": "The live chat has ended.",
+    "errors": [
+      {
+        "message": "The live chat has ended.",
+        "domain": "youtube.liveChat",
+        "reason": "liveChatEnded"
+      }
+    ],
+    "status": "PERMISSION_DENIED"
+  }
+}

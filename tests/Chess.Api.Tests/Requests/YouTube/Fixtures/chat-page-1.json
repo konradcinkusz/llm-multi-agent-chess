@@ -1,0 +1,158 @@
+{
+  "kind": "youtube#liveChatMessageListResponse",
+  "etag": "fixture-etag-chat-page-1",
+  "nextPageToken": "page-2",
+  "pollingIntervalMillis": 60000,
+  "pageInfo": { "totalResults": 6, "resultsPerPage": 6 },
+  "items": [
+    {
+      "kind": "youtube#liveChatMessage",
+      "etag": "fixture-etag-message-1",
+      "id": "LCC.fixture-superchat-command",
+      "snippet": {
+        "type": "superChatEvent",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "authorChannelId": "UCfixturepayer0001",
+        "publishedAt": "2026-10-26T10:15:00.000000+00:00",
+        "hasDisplayContent": true,
+        "displayMessage": "Ada sent $5.00 (!g c1 vs d3 think)",
+        "superChatDetails": {
+          "amountMicros": "5000000",
+          "currency": "USD",
+          "amountDisplayString": "$5.00",
+          "userComment": "!g c1 vs d3 think",
+          "tier": 4
+        }
+      },
+      "authorDetails": {
+        "channelId": "UCfixturepayer0001",
+        "displayName": "Ada",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": false,
+        "isChatModerator": false
+      }
+    },
+    {
+      "kind": "youtube#liveChatMessage",
+      "etag": "fixture-etag-message-2",
+      "id": "LCC.fixture-superchat-plain",
+      "snippet": {
+        "type": "superChatEvent",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "authorChannelId": "UCfixturepayer0002",
+        "publishedAt": "2026-10-26T10:16:30.000000+00:00",
+        "hasDisplayContent": true,
+        "displayMessage": "Ben sent €2.00",
+        "superChatDetails": {
+          "amountMicros": "2000000",
+          "currency": "EUR",
+          "amountDisplayString": "€2.00",
+          "userComment": "Thanks for the stream",
+          "tier": 2
+        }
+      },
+      "authorDetails": {
+        "channelId": "UCfixturepayer0002",
+        "displayName": "Ben",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": false,
+        "isChatModerator": false
+      }
+    },
+    {
+      "kind": "youtube#liveChatMessage",
+      "etag": "fixture-etag-message-3",
+      "id": "LCC.fixture-text-command",
+      "snippet": {
+        "type": "textMessageEvent",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "authorChannelId": "UCfixturepayer0001",
+        "publishedAt": "2026-10-26T10:18:00.000000+00:00",
+        "hasDisplayContent": true,
+        "displayMessage": "!g c1 vs d3",
+        "textMessageDetails": { "messageText": "!g c1 vs d3" }
+      },
+      "authorDetails": {
+        "channelId": "UCfixturepayer0001",
+        "displayName": "Ada",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": false,
+        "isChatModerator": false
+      }
+    },
+    {
+      "kind": "youtube#liveChatMessage",
+      "etag": "fixture-etag-message-4",
+      "id": "LCC.fixture-text-chat",
+      "snippet": {
+        "type": "textMessageEvent",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "authorChannelId": "UCfixturepayer0003",
+        "publishedAt": "2026-10-26T10:19:00.000000+00:00",
+        "hasDisplayContent": true,
+        "displayMessage": "hello chat",
+        "textMessageDetails": { "messageText": "hello chat" }
+      },
+      "authorDetails": {
+        "channelId": "UCfixturepayer0003",
+        "displayName": "Cy",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": false,
+        "isChatModerator": false
+      }
+    },
+    {
+      "kind": "youtube#liveChatMessage",
+      "etag": "fixture-etag-message-5",
+      "id": "LCC.fixture-sponsor",
+      "snippet": {
+        "type": "newSponsorEvent",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "authorChannelId": "UCfixturepayer0004",
+        "publishedAt": "2026-10-26T10:20:00.000000+00:00",
+        "hasDisplayContent": true,
+        "displayMessage": "Dee became a member",
+        "newSponsorDetails": { "isUpgrade": false, "memberLevelName": "Fixture level" }
+      },
+      "authorDetails": {
+        "channelId": "UCfixturepayer0004",
+        "displayName": "Dee",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": true,
+        "isChatModerator": false
+      }
+    },
+    {
+      "kind": "youtube#liveChatMessage",
+      "etag": "fixture-etag-message-6",
+      "id": "LCC.fixture-superchat-no-currency",
+      "snippet": {
+        "type": "superChatEvent",
+        "liveChatId": "KicKGFVDZml4dHVyZWNoYW5uZWwwMDAxFixtureChat01",
+        "authorChannelId": "UCfixturepayer0005",
+        "publishedAt": "2026-10-26T10:21:00.000000+00:00",
+        "hasDisplayContent": true,
+        "displayMessage": "Eve sent a Super Chat",
+        "superChatDetails": {
+          "amountMicros": "1000000",
+          "amountDisplayString": "1.00",
+          "userComment": "!g c1 vs d3",
+          "tier": 1
+        }
+      },
+      "authorDetails": {
+        "channelId": "UCfixturepayer0005",
+        "displayName": "Eve",
+        "isVerified": false,
+        "isChatOwner": false,
+        "isChatSponsor": false,
+        "isChatModerator": false
+      }
+    }
+  ]
+}

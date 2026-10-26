@@ -208,7 +208,8 @@ public class ArenaDbContextMappingTests
         Assert.Equal(
             new[]
             {
-                "broadcast_schedules", "broadcast_slots", "games", "move_attempts", "moves", "rating_snapshots", "tournaments",
+                "broadcast_schedules", "broadcast_slots", "game_requests", "games", "move_attempts", "moves", "payer_ledger",
+                "rating_snapshots", "tournaments",
             },
             entities.Select(e => e.GetTableName()).OrderBy(n => n).ToArray());
 
