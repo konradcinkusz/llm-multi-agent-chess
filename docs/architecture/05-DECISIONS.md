@@ -254,3 +254,31 @@ whole game. (4) No style gets engine help. (5) RATING.md §1 reads "the rated pr
 output tokens; the estimate uses the player's own history once it exists. One conversation per move means one session
 start per move; if that is slow on Copilot, it shows in the latency columns and the smoke run. Whether a style helps is
 measured, not assumed: the "Prompt styles compared" section and a benchmark of the same model under two styles.
+
+## ADR-016 — Viewer-paid games: YouTube Super Chat, API keys, tiered prices
+
+**Status:** Accepted (2026-10-26).
+
+**Context.** The owner streams 24 hours a day and wants viewers to pay for the games they choose, so that the stream
+does not spend the owner's money. Games played for others on the owner's personal Copilot subscription may breach its
+terms. The app runs on localhost only.
+
+**Decision.**
+
+1. Payment is a YouTube Super Chat. Google is the seller, so there is no payment provider, no card data and no VAT
+   handling in the app (merchant-of-record rule of the payments standard).
+2. Paid games run only on the owner's API keys at Anthropic (provider type `anthropic`), OpenAI and DeepInfra (both
+   provider type `openai`), through the SDK's bring-your-own-key configuration. ADR-004 still holds: the Copilot SDK
+   stays the only gateway.
+3. Prices come in tiers derived from the cost estimator, so a cheap matchup costs the minimum. Each game is capped at
+   the net amount received.
+4. Payments are read by outbound polling of the YouTube Live Chat API, not by webhooks, so nothing is exposed to the
+   internet. The payments standard's webhook rules still apply to the polled events: each is recorded once by its
+   provider id, amounts are validated on the server, and the provider vocabulary stops at the boundary.
+5. A payment is never lost: it is played or kept as credit.
+6. Request games are ordinary rated games, played one at a time by the broadcast runner.
+
+**Consequences.** YouTube keeps about 30 % of a Super Chat, which the tiers include. Exchange rates are configuration,
+not live data. Super Chat cannot refund, so failures become credit. The YouTube Data API quota bounds the poll rate. A
+request game that hits its budget is adjudicated. Before going live, the owner checks the YouTube Super Chat policy and
+the tax treatment of the income.

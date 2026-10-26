@@ -126,7 +126,8 @@ internal sealed class GameHarness : IAsyncDisposable
         IChessPlayerFactory players,
         IMoveQualityAnalyzer? analyzer = null,
         int maxPlies = 200,
-        int maxConcurrentGames = 2)
+        int maxConcurrentGames = 2,
+        Action<IGameEvent>? onPublish = null)
     {
         // The same registration the app uses, over a database nobody else sees.
         var services = new ServiceCollection();
@@ -139,7 +140,7 @@ internal sealed class GameHarness : IAsyncDisposable
             Factory,
             players,
             analyzer ?? new StubAnalyzer(),
-            Events,
+            onPublish is null ? Events : new ObservedEventStream(Events, onPublish),
             Options.Create(new GameRunnerOptions { MaxConcurrentGames = maxConcurrentGames, MaxPlies = maxPlies }),
             TimeProvider.System,
             Readiness,
@@ -247,4 +248,19 @@ internal sealed class GameHarness : IAsyncDisposable
         await Runner.StopAsync(stop.Token);
         await _services.DisposeAsync();
     }
+}
+
+/// <summary>
+/// Calls an observer synchronously inside <see cref="IGameEventStream.Publish"/>, on the runner's own thread, before the
+/// event reaches the subscribers. A test uses it to act at the exact moment an event is published.
+/// </summary>
+internal sealed class ObservedEventStream(IGameEventStream inner, Action<IGameEvent> observer) : IGameEventStream
+{
+    public void Publish(IGameEvent e)
+    {
+        observer(e);
+        inner.Publish(e);
+    }
+
+    public IAsyncEnumerable<IGameEvent> SubscribeAsync(Guid gameId, CancellationToken ct) => inner.SubscribeAsync(gameId, ct);
 }

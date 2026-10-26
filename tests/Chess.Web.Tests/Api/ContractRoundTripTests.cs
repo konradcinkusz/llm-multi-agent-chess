@@ -98,6 +98,17 @@ public class ContractRoundTripTests
             new ApiDto.ModelDto("mystery", "Mystery", null, true, new ApiDto.ModelPricingDto(null, null, null)));
         AssertRoundTrip<ApiDto.PromptStyleDto, WebDto.PromptStyleDto>(
             new ApiDto.PromptStyleDto("think", "Think, then move", "An analysis, a plan and one move.", true, "sha256:0123456789ab"));
+        AssertRoundTrip<ApiDto.RequestMenuDto, WebDto.RequestMenuDto>(new ApiDto.RequestMenuDto(
+            [new ApiDto.MenuItemDto("c1", "claude-haiku@low", "Claude Haiku", 0.04), new ApiDto.MenuItemDto("d3", "llama-70b", "Llama 70B", 0.006)],
+            ["classic", "board", "think"], [1, 2, 5, 10, 20, 50], 0.3, "!g <white> vs <black> [style]"));
+        AssertRoundTrip<ApiDto.QuoteDto, WebDto.QuoteDto>(new ApiDto.QuoteDto("c1", "d3~think", 0.07, 1));
+        AssertRoundTrip<ApiDto.QuoteDto, WebDto.QuoteDto>(new ApiDto.QuoteDto("o9~think", "o9~think", 40, null));
+        var request = new ApiDto.GameRequestDto(Id, "youtube", "Viewer", "c1", "d3", 1, "queued", null, null, At, 2);
+        AssertRoundTrip<ApiDto.GameRequestDto, WebDto.GameRequestDto>(request);
+        AssertRoundTrip<ApiDto.RequestQueueDto, WebDto.RequestQueueDto>(new ApiDto.RequestQueueDto(
+            request with { Status = "playing", GameId = Id, QueuePosition = null }, [request], [], 12));
+        AssertRoundTrip<ApiDto.SimulateChatRequest, WebDto.SimulateChatRequest>(
+            new ApiDto.SimulateChatRequest("UC123", "Viewer", 5, "USD", "!g c1 vs d3 think"));
         AssertRoundTrip<ApiDto.AttemptDto, WebDto.AttemptDto>(
             new ApiDto.AttemptDto(Id, 14, 1, "claude-sonnet", "Legal moves: ...", "The main line is 7...h6. h6", null, false,
                 41000, "Unparseable: the reply is not one move.", At, "Keres Attack: h6 stops g5.", 1200, 310, 240, 0.0057,

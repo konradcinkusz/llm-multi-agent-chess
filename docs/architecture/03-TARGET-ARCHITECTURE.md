@@ -815,3 +815,118 @@ candidate's style version.
   under two or more styles, it gives the rating with its 95 % interval per style, the first-attempt legality, the move
   quality when Stockfish data exists, and the average cost per game. Significance uses the one rule in `Significance.cs`.
   The static site renders the same section.
+
+## 15. Viewer-paid games on the 24-hour stream (owner decision 2026-10-26, ADR-016)
+
+The owner streams 24 hours a day and does not want to pay for the games. A viewer pays with a **YouTube Super Chat**,
+chooses the configuration in the Super Chat's message, and the game plays on the stream. Paid games run only on the
+**owner's API keys** at Anthropic, OpenAI and DeepInfra, not on the Copilot subscription. Prices come in **tiers**, and a
+cheap configuration costs little.
+
+### 15.1 Flow
+
+1. A viewer sends a Super Chat with a command, for example `!g c1 vs d3 think`.
+2. The YouTube intake (outbound polling of the Live Chat API; nothing is exposed to the internet) turns each chat
+   message into a `ChatEvent` (§15.4). The intake service records a Super Chat as a **deposit** on the payer's balance,
+   in US dollars, gross. Each message is recorded once, by its YouTube message id.
+3. If the message carries a command, it is parsed and **quoted**:
+   - When the payer's balance covers the price, the request is **queued** and the price is spent from the balance.
+   - Otherwise the request is **rejected**, and the deposit stays as credit.
+   - A later plain chat message with a command from the same channel spends that credit. There are no refunds through
+     Super Chat, so a payment is never lost: it is either played or kept as credit.
+4. The broadcast runner plays queued requests one at a time, oldest first, at the broadcast pace. A playing game is
+   never interrupted.
+5. When the queue is empty, the stream shows replays of past games, which cost nothing, and the menu with its prices.
+
+### 15.2 Menu, prices and the budget
+
+- **Menu** (`Arena:Requests:Menu`): entries `{ Code, PlayerId, Label }`, where `PlayerId` may carry `@effort`.
+  - A command names two menu codes. A side may add `~style`, or the command ends with one style for both sides.
+  - With `Arena:Requests:RequireApiKeyModels = true` (the default), every menu entry must be a custom (bring-your-own-key)
+    model, and the runner checks this again before it starts a request. Startup fails otherwise.
+  - Every menu model must have prices, or it cannot be quoted. Startup fails otherwise.
+- **Quote:**
+  - `estimate(side)` is the cost of one side of one game, from `CostEstimator`: 40 moves a side, and tokens a move taken
+    from the full player id's history, then the model's, then the style's assumption.
+  - The style assumptions, in input/output tokens a move, are: classic 700/300, board 1 600/300, think 2 000/900.
+  - `needed = (estimate(white) + estimate(black)) × SafetyFactor / (1 − FeeShare)`.
+  - `price` is the smallest of `Tiers` that is ≥ `needed`. A matchup above the largest tier is not offered.
+  - Defaults: `Tiers = [1, 2, 5, 10, 20, 50]` USD, `FeeShare = 0.30` (YouTube's share of a Super Chat), and
+    `SafetyFactor = 1.5`. Two cheap models therefore cost $1, the Super Chat minimum in most currencies.
+- **Budget:**
+  - A request game stops when its running cost reaches `price × (1 − FeeShare)`, the net the owner received.
+  - It ends with termination `budget` and is adjudicated like `MaxPlies`: Stockfish if present, otherwise material.
+  - The game is still rated, like a `MaxPlies` adjudication.
+  - The provider dashboards' spend limits on the keys are the second line of defence.
+- **Currency:**
+  - A Super Chat carries `amountMicros` and a currency code. `Arena:Requests:UsdPerUnit` converts the amount to USD.
+  - A default table covers the common Super Chat currencies, and the owner updates the rates.
+  - A currency missing from the table is still recorded at 0 USD with the reason "currency not configured", so the
+    owner can credit it by hand.
+
+### 15.3 Commands
+
+- `!g <white> vs <black> [style]` and `!g <white> <black> [style]`. Each side is a menu code with an optional `~style`.
+- Matching is case-insensitive and extra words are ignored.
+- The command must open the Super Chat's message, or a plain chat message that spends credit.
+- The free text is never shown on the stream. Only the parsed configuration and the payer's display name are shown,
+  as YouTube already shows them in the chat.
+
+### 15.4 Contracts (frozen 2026-10-26)
+
+```csharp
+// Chess.Api/Contracts/ApiContracts.cs and the web copy
+public sealed record MenuItemDto(string Code, string PlayerId, string Label, double EstimatedUsdPerSide);
+public sealed record RequestMenuDto(IReadOnlyList<MenuItemDto> Items, IReadOnlyList<string> Styles, IReadOnlyList<double> TiersUsd,
+    double FeeShare, string CommandHelp);
+public sealed record QuoteDto(string White, string Black, double EstimatedUsd, double? PriceUsd);   // PriceUsd null: not offered
+public sealed record GameRequestDto(Guid Id, string Source, string PayerDisplay, string White, string Black, double PriceUsd,
+    string Status, string? Reason, Guid? GameId, DateTimeOffset ReceivedAt, int? QueuePosition);
+public sealed record RequestQueueDto(GameRequestDto? Playing, IReadOnlyList<GameRequestDto> Queued,
+    IReadOnlyList<GameRequestDto> Recent, int? EstimatedWaitMinutes);
+public sealed record SimulateChatRequest(string PayerId, string PayerDisplay, double? Amount, string? Currency, string Text);
+// Chess.Api/Requests/RequestContracts.cs: ChatEvent, IChatIntake, IGameRequestQueue, RequestStatus (see the file)
+```
+
+- **Statuses:** `received → queued → playing → played`, plus `rejected` (credit kept), `failed` (requeued once
+  automatically, then credited), and `cancelled` (by the owner, credited).
+- **Endpoints:**
+  - `GET /api/requests/menu`.
+  - `GET /api/requests/quote?white=&black=`.
+  - `GET /api/requests/queue`.
+  - `POST /api/requests/simulate`: only when `Arena:Requests:Mode = Mock`, otherwise 403. It runs the same intake path
+    as YouTube.
+  - `POST /api/requests/{id}/cancel` (owner).
+- `Arena:Requests:Mode` is `Off` (the default), `Mock` (the fake profile sets it) or `YouTube`.
+- **Persistence**, in one migration:
+  - `game_requests`: id, source, external_id unique, payer_id, payer_display, white, black, price_usd, status, reason,
+    game_id, received_at, started_at, finished_at.
+  - `payer_ledger`: an append-only list of deposits and spends per payer, with the external id unique. The balance is
+    the sum, re-read and never cached.
+- **Recovery:** at startup, a request left `playing` whose game did not finish goes back to `queued`.
+
+### 15.5 YouTube intake
+
+- **Transport:** plain `HttpClient` against the YouTube Data API v3. No Google SDK, so the dependency budget is unchanged.
+- **Sign-in:** OAuth with the owner's channel. The client id, client secret and refresh token are AppHost secret
+  parameters, and are never logged or stored.
+- **Reading the chat:**
+  - `liveBroadcasts.list?mine=true&broadcastStatus=active` finds the `liveChatId`.
+  - `liveChatMessages.list` reads the chat with `pageToken`, honouring `pollingIntervalMillis` and
+    `Arena:Requests:YouTube:MinPollSeconds` (default 45).
+  - The default daily API quota is 10 000 units, so a 24-hour stream must not poll faster.
+  - `superChatEvent` becomes a deposit with its comment; `textMessageEvent` starting with `!g` becomes a spend. Every
+    other message is ignored.
+- `scripts/youtube-smoke.sh` is the owner's run against a live stream. It refuses under CI.
+
+### 15.6 Stream
+
+- The `/broadcast` page gains:
+  - "Now playing, requested by …";
+  - the next requests with an estimated wait;
+  - the menu with codes and per-side cost, and how to order;
+  - recent rejections as "@name: credit kept, see the menu", with no free text.
+- With an empty queue, it replays stored games (the best-rated recent games) at the broadcast pace.
+- `/admin/requests` holds the queue and the ledger, cancel and requeue, and a simulate form in Mock mode.
+- The static site gets a menu page with the full price matrix (menu × menu, classic and think), so a viewer can check
+  a price before paying.

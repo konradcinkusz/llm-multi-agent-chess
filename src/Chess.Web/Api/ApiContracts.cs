@@ -25,6 +25,15 @@ public sealed record ModelDto(string Id, string DisplayName, double? PremiumMult
 public sealed record ModelPricingDto(double? InputUsdPerMillionTokens, double? OutputUsdPerMillionTokens,
     double? CachedInputUsdPerMillionTokens);
 public sealed record PromptStyleDto(string Id, string DisplayName, string Description, bool PerMoveConversation, string Version);  // 03 §14.3
+public sealed record MenuItemDto(string Code, string PlayerId, string Label, double EstimatedUsdPerSide);   // 03 §15.4
+public sealed record RequestMenuDto(IReadOnlyList<MenuItemDto> Items, IReadOnlyList<string> Styles, IReadOnlyList<double> TiersUsd,
+    double FeeShare, string CommandHelp);
+public sealed record QuoteDto(string White, string Black, double EstimatedUsd, double? PriceUsd);   // PriceUsd null: not offered
+public sealed record GameRequestDto(Guid Id, string Source, string PayerDisplay, string White, string Black, double PriceUsd,
+    string Status, string? Reason, Guid? GameId, DateTimeOffset ReceivedAt, int? QueuePosition);
+public sealed record RequestQueueDto(GameRequestDto? Playing, IReadOnlyList<GameRequestDto> Queued,
+    IReadOnlyList<GameRequestDto> Recent, int? EstimatedWaitMinutes);
+public sealed record SimulateChatRequest(string PayerId, string PayerDisplay, double? Amount, string? Currency, string Text);
 public sealed record StatusDto(string Copilot, string CopilotDetail, string Database, string Stockfish);
 
 // Local copies of Chess.Rating.ModelRating and PairwiseCoefficient (03 §3.4).

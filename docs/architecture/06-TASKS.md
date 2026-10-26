@@ -1140,3 +1140,174 @@ if one exists, `scripts/benchmark.sh` and `scripts/benchmark.ps1` (help text onl
 to compare styles: a tournament with two styles, then a benchmark of `model@medium~think` against the field. Add one
 recorded fake run.
 **Done when:** every command in the new text was run against the fake profile and its output is in the PR.
+
+## Viewer-paid games (owner decision 2026-10-26, 03 §15, ADR-016)
+
+The supervisor PR froze the following, so V1, V2, V4 and V5 run in parallel against it. V3 needs V2, and V6 comes last.
+
+- 03 §15, ADR-016 and the CLAUDE.md invariants;
+- the §15.4 DTOs, in the API and the web copy, with a round-trip test;
+- `src/Chess.Api/Requests/RequestContracts.cs` (`ChatEvent`, `IChatIntake`, `IGameRequestQueue`, `RequestStatus`).
+
+| ID | Title | Depends on | Status |
+|---|---|---|---|
+| V1 | Gateway: the `anthropic` provider type; Anthropic, OpenAI and DeepInfra custom models | contract | todo |
+| V2 | API: request menu, quote and tiers, ledger and queue, command parser, intake, endpoints, mock simulate | contract | todo |
+| V3 | Broadcast runner plays requests; the per-game budget guard (`budget` termination); recovery | V2 | todo |
+| V4 | UI: request panels and idle replays on `/broadcast`, `/admin/requests`, the site's menu and price matrix | contract | todo |
+| V5 | YouTube intake: OAuth, live chat polling, Super Chat mapping, currency, AppHost secrets, smoke script | contract | todo |
+| V6 | Docs: `docs/REQUESTS.md` (owner setup), README, BROADCAST.md, recorded mock run | V1–V5 | todo |
+
+### V1 — Gateway: Anthropic, OpenAI and DeepInfra keys
+
+**Owns:**
+- `src/Chess.Llm/**`;
+- `tests/Chess.Llm.Tests/**`.
+
+**Do:**
+- `ArenaOptions` accepts `ProviderType` `anthropic` next to `openai` and `azure`. The gateway passes it to
+  `ProviderConfig.Type`; the SDK's `ProviderConfigType.Anthropic` is the Messages API.
+- `ModelProvider` is set for telemetry: `anthropic`, or `openai` for OpenAI and DeepInfra.
+- Validation:
+  - `anthropic` requires a `BaseUrl` (`https://api.anthropic.com`);
+  - a custom model used by the request menu must have prices (`UsdPerMillionInput` and `UsdPerMillionOutput`, or their
+    credit equivalents).
+- The key is never logged and never appears in `ToString()`.
+- The fake gateway serves custom models of every provider type offline.
+
+**Done when** unit tests show:
+- the session config for each of the three providers: type, base URL, model, wire API;
+- an unknown type is rejected with a clear message;
+- a menu model without prices fails validation;
+- the key is absent from `ToString()` and from logs;
+- `PublicSurfaceTests` pass.
+
+### V2 — API: menu, quote, ledger, queue, intake
+
+**Owns:**
+- `src/Chess.Api/Requests/**`, except `RequestContracts.cs`, which is frozen;
+- `src/Chess.Api/Persistence/**`: one migration (`game_requests`, `payer_ledger`) and the startup recovery of a
+  `playing` request;
+- `src/Chess.Api/Program.cs`: one registration line;
+- `src/Chess.AppHost/**`: the fake profile sets `Arena:Requests:Mode=Mock` and a small mock menu of fake models;
+- `tests/Chess.Api.Tests/Requests/**`.
+
+**Do:** 03 §15.1–§15.4.
+- `RequestOptions` with startup validation.
+- A pure command parser.
+- A pure pricing function over `CostEstimator`, with the per-style assumptions.
+- The ledger: append-only, balance as the sum, and a unique external id that makes duplicates no-ops.
+- `IChatIntake` (`ChatIntake`) and `IGameRequestQueue` (FIFO; "take next" is race-safe).
+- The endpoints. `simulate` answers 403 unless the mode is Mock.
+
+**Done when** unit and API tests show:
+- the parser: codes, `vs` optional, a style per side and for both, case, unknown code, extra words;
+- the tiers:
+  - two cheap models are $1;
+  - premium think picks the right tier;
+  - above the top tier the price is null;
+- the deposit and the spend:
+  - credit is kept on rejection;
+  - a later plain `!g` spends it;
+  - a duplicate external id is a no-op;
+- the currency table, and an unknown currency recorded at 0 with its reason;
+- the queue order, positions and the estimated wait;
+- recovery of a `playing` request;
+- `RequireApiKeyModels` refuses a Copilot model in the menu;
+- `simulate` answers 403 outside Mock.
+
+### V3 — Broadcast plays requests; budget guard
+
+**Owns:**
+- `src/Chess.Api/Broadcast/**`;
+- `src/Chess.Api/Games/GameRunnerHooks.cs`, `GameTermination.cs` and `GameRunner.cs`, for the budget hook and the
+  `budget` termination only;
+- `tests/Chess.Api.Tests/Broadcast/**` and `tests/Chess.Api.Tests/Games/**` (new tests only).
+
+**Do:**
+- In request mode, the runner takes the next queued request between games. A request goes before the next planned slot,
+  and a running game is never interrupted.
+- The game plays with broadcast pacing and an `IGameBudget` hook. The hook checks the running cost after every move,
+  using `GameCostCalculator` on the stored attempts. At the budget, the game ends `budget` and is adjudicated like
+  `MaxPlies`.
+- Before the start, the runner checks that both sides' models are custom when `RequireApiKeyModels` is on; if not, the
+  request is failed and credited.
+- An outage marks the request failed: requeued once, then credited.
+
+**Done when:**
+- a fake request plays to the end and is marked `played`;
+- a tiny budget stops a game with `budget` and an adjudicated result;
+- a Copilot model in a request is refused;
+- a failure requeues once, then credits;
+- requests go before slots, and a running game is not interrupted;
+- the existing broadcast tests pass.
+
+### V4 — UI: stream panels, admin, site menu
+
+**Owns:**
+- `src/Chess.Web/Components/Pages/Broadcast/**` (the OBS page and the planner);
+- `src/Chess.Web/Components/Pages/Admin/**` (a new `/admin/requests`);
+- `src/Chess.Web/Api/ArenaApiClient.cs` (the request calls);
+- `src/Chess.Web/Components/Site/**` and `src/Chess.Web/Site/**` (a menu page with the price matrix);
+- the tests of those under `tests/Chess.Web.Tests/**`;
+- a new E2E journey `tests/Chess.E2E/RequestJourney.cs`.
+
+**Do:** 03 §15.6.
+- `/broadcast` keeps the board fixed (#106) and adds: the "requested by" line, the next requests and the wait, the menu
+  with codes and per-side cost, the order instruction, and recent rejections without free text.
+- With an empty queue it plays replays of stored games at the broadcast pace.
+- `/admin/requests`: the queue, the recent requests, cancel and requeue, and a simulate form shown only in Mock mode.
+- The site: a menu page with the price matrix (menu × menu, classic and think) and no script.
+
+**Done when:**
+- bUnit covers each panel, the empty-queue replay, the admin simulate form (absent outside Mock) and the matrix page;
+- the E2E journey simulates a $1 Super Chat in Mock mode and sees the request queued, then playing with the payer's name
+  on `/broadcast`;
+- screenshots (light, dark, OBS 1920×1080) and the phone-width check are in the PR.
+
+### V5 — YouTube intake
+
+**Owns:**
+- `src/Chess.Api/Requests/YouTube/**` (new);
+- `src/Chess.AppHost/**` (the YouTube secret parameters);
+- `scripts/youtube-smoke.sh`;
+- `tests/Chess.Api.Tests/Requests/YouTube/**` with recorded JSON fixtures.
+
+**Do:** 03 §15.5, with plain `HttpClient` and no Google package.
+- Refresh the OAuth access token.
+- Find the active broadcast's `liveChatId`.
+- Poll `liveChatMessages.list` with `pageToken`, at `max(pollingIntervalMillis, MinPollSeconds)`.
+- Map `superChatEvent` (`amountMicros`, `currency`, `userComment`, author channel id and display name) and
+  `textMessageEvent` starting with `!g` to `ChatEvent`. Ignore everything else.
+- Back off on errors.
+- Treat a stream that is not live as idle, not an error.
+- Never log tokens.
+- Run only in `YouTube` mode.
+
+**Done when:**
+- fixture tests cover: a Super Chat with a command, a Super Chat without one, a plain `!g` message, an ignored message,
+  paging, the poll interval taken from the response, a 401 that refreshes the token, quota exhausted (403) that backs
+  off, and no active broadcast;
+- the smoke script refuses under CI and prints the live chat id and the last 5 mapped events without tokens. It is run
+  by the owner.
+
+### V6 — Docs
+
+**Owns:**
+- `docs/REQUESTS.md` (new);
+- `README.md`;
+- `docs/BROADCAST.md`;
+- `docs/architecture/06-TASKS.md` (V statuses).
+
+**Do:**
+- The owner's setup:
+  - API keys for Anthropic, OpenAI and DeepInfra as AppHost secret parameters, with a menu example (codes, player ids,
+    prices);
+  - the provider spend limits;
+  - the YouTube OAuth steps and the scopes;
+  - the currency table, the tiers, `FeeShare` and `SafetyFactor`.
+- The viewer's rules as the stream shows them: commands, prices, credit, no refunds, the budget stop.
+- The checks before going live: the Super Chat policy and tax.
+- A recorded Mock-mode run of `simulate`, then the queue, the game and `played`.
+
+**Done when:** every command in the docs was run against the fake profile, with its real output in the PR.

@@ -146,6 +146,41 @@ public class GameRunnerTests
         Assert.Empty(await harness.LoadMovesAsync(gameId));
     }
 
+    /// <summary>
+    /// GameFinished is published before the runner removes the game's slot. An abort at that moment used to report success
+    /// for a game that had already ended; the CI run of #107 caught it in AbortStopsAGameInProgressAndRecordsItAsAborted.
+    /// Aborting from inside Publish hits that window every time.
+    /// </summary>
+    [Fact]
+    public async Task AnAbortAtTheMomentTheGameFinishesReportsThatTheGameIsNoLongerRunning()
+    {
+        bool? abortedAtFinish = null;
+        GameHarness? harness = null;
+        await using var h = harness = new GameHarness(GameHarness.RealPlayers(), maxPlies: 4, onPublish: e =>
+        {
+            if (e is GameFinished finished)
+            {
+                abortedAtFinish = harness!.Runner.TryAbort(finished.GameId);
+            }
+        });
+        await h.StartAsync();
+        var gameId = await h.SeedGameAsync(RandomPlayer, RandomPlayer);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var stream = h.Watch(gameId, timeout.Token);
+        await h.Runner.EnqueueAsync(gameId, timeout.Token);
+
+        await foreach (var e in stream)
+        {
+            if (e is GameFinished)
+            {
+                break;
+            }
+        }
+
+        Assert.False(abortedAtFinish);
+        Assert.NotEqual("aborted", (await h.LoadGameAsync(gameId)).Termination);
+    }
+
     [Fact]
     public async Task AGameAbortedWhileQueuedIsRecordedWithoutBeingPlayed()
     {
