@@ -17,6 +17,7 @@ It runs on `localhost` only. Nothing is deployed. Every game, move, LLM attempt 
 - [How ratings work](#how-ratings-work)
 - [Prompt styles](#prompt-styles)
 - [Broadcast mode (24 h channel)](#broadcast-mode-24-h-channel)
+- [Viewer-paid games](#viewer-paid-games)
 - [Public results site](#public-results-site)
 - [Benchmark your own model](#benchmark-your-own-model)
 - [Cost: AI credits per move](#cost-ai-credits-per-move)
@@ -82,6 +83,7 @@ The navigation lists them in this order:
 | Benchmark | `/benchmark`, `/benchmark/{id}` | One candidate against every other model: the estimate before you start, progress, a cancel button, and the report with downloads (Markdown and JSON). See [Benchmark your own model](#benchmark-your-own-model). |
 | Games | `/games`, `/games/{id}` | Paged archive. Replay shows the same move table, engine log and game summary as the live page, with each move's attempts, latency, centipawn loss and best move, and a PGN download. |
 | Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, model and legality. |
+| Viewer requests | `/admin/requests` | Not in the navigation. The requests playing now, the queue with cancel, the recent requests, and a simulate form in Mock mode. See [Viewer-paid games](#viewer-paid-games). |
 | Broadcast plan | `/broadcast/plan` | Plan a day of games, preview every slot and the AI-credit and USD estimate, save a draft, start, pause, resume or stop. |
 | Site | `/admin/site` | Export the public results site, publish it to the `gh-pages` branch, and see the last export and publish. See [Public results site](#public-results-site). |
 | Broadcast (OBS) | `/broadcast` | Not in the navigation. The page OBS captures. |
@@ -135,6 +137,12 @@ Broadcast mode plans a day of games in advance, plays them one at a time with pa
 The planner (`/broadcast/plan`) shows every slot and the AI-credit and USD estimate before anything is saved. Start the day once, and it plays through its slots in order, one game at a time. A restart resumes the day at its next unfinished slot.
 
 The full runbook is [docs/BROADCAST.md](docs/BROADCAST.md): planning, OBS setup, YouTube settings, keeping the machine awake, and what happens on a restart or a Copilot outage.
+
+## Viewer-paid games
+
+Viewers can pay a YouTube Super Chat to choose a game for the stream, for example `!g ca vs oa think`. The price comes from a menu of models and is the smallest tier that covers the game's expected cost. With `Arena:Requests:RequireApiKeyModels` on (the default), paid games run only on your own API keys at Anthropic, OpenAI or DeepInfra, never on the Copilot subscription. A payment is either played or kept as credit, and nothing is refunded through Super Chat.
+
+The owner's setup is in [docs/REQUESTS.md](docs/REQUESTS.md): the API keys, the provider spend limits, the YouTube OAuth steps, the menu, the tiers and the currency table, the viewer's rules to show on stream, and a recorded run on the fake profile. The fake profile runs the whole path offline with `dotnet run --project src/Chess.AppHost --launch-profile fake`, and the simulate form on `/admin/requests` sends a message through the same intake as YouTube. The broadcast runner plays the queue before the planned slots: see [BROADCAST.md §8](docs/BROADCAST.md#8-viewer-paid-requests-on-the-stream).
 
 ## Public results site
 

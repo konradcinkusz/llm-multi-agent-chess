@@ -32,6 +32,7 @@ the model's default effort and the `classic` prompt style.
 | stalemate, insufficient material, fifty-move, threefold repetition | ½ |
 | **forfeit** — a side gave `MaxAttemptsPerMove` (default 3) illegal or unparseable replies, or timed out, for one move | loss for that side |
 | **adjudicated** at `MaxPlies` (default 200) | Stockfish available: eval ≥ +300 cp for one side → that side wins, else ½. Without Stockfish: material difference ≥ 5 points → that side wins, else ½ |
+| **adjudicated** at `budget`: a viewer-paid game reached its net budget ([REQUESTS.md](REQUESTS.md), 03 §15.2) | Adjudicated exactly as at `MaxPlies`, with the same rule. The game is rated |
 
 A model that cannot produce legal moves therefore **loses** — it never gets a free move.
 

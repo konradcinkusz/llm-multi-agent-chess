@@ -179,3 +179,37 @@ It starts the app with the fake profile, plans a one-hour schedule with 50 ms mo
 `/api/broadcast/now` until the schedule is finished (or fails after 120 s), prints the standings and stops the app it started. It
 needs the .NET 10 SDK, `curl` and `jq`, and port 5080 must be free. The fake profile does not play Copilot; use it to check the
 plumbing, and check the live models from the planner page before the first real day.
+
+## 8. Viewer-paid requests on the stream
+
+Viewers can pay a YouTube Super Chat to ask for a game between two models (ADR-016, [03 §15](architecture/03-TARGET-ARCHITECTURE.md)).
+The owner's rules, prices and keys are in [docs/REQUESTS.md](REQUESTS.md). This section is what the broadcast does with them.
+
+**Requests go before slots.** The runner checks the request queue before the next planned slot, at every step:
+
+- A queued request is played **even with no schedule running**. The runner then uses the default pace: one move every 4 s and a
+  20 s gap between games.
+- Otherwise a request's game uses the running schedule's pace, like a slot.
+- **Pause** holds requests as well as slots. A paused day plays no request until **Resume**.
+- A request that is playing is never interrupted by a request that arrives after it. The queue is first in, first out.
+- A request game is an ordinary rated game. Only the games the broadcast runner plays are paced; nothing else changes.
+
+**Idle replays.** While the broadcast is **running**, no game is on the schedule's slot and **nothing is queued or playing**, the
+`/broadcast` page replays a stored game instead of the intermission card:
+
+- The game is the best-rated recent finished rated game, with the two models' ratings added. It is not the game just shown.
+- The pace is the schedule's, or one move every 3 s with a 10 s gap when the schedule sends none. Replays cost nothing.
+- A request that arrives during a replay stops the replay at the page's next read of the queue, every 5 s, and the request plays next.
+
+**Request panels on `/broadcast`.** The OBS page shows:
+
+- **Now playing**, with "requested by" and the payer's display name, while the request's game is on the board.
+- **Next requests**: up to three queued requests, each with its queue position and the estimated wait. The estimate is 20 minutes
+  for each game ahead (`Arena:Requests:EstimatedMinutesPerGame`).
+- **The menu**: each code with its per-side cost, and how to order (`!g <white> vs <black> [style]`).
+- **Recent rejections**, as `@name: credit kept, see the menu`. The page never shows why a command was refused or what was typed.
+
+The panels show only the parsed configuration and the display name. A viewer's message text is never shown on the stream.
+
+**Admin.** `/admin/requests` lists what plays, what is queued and what finished recently, with cancel for a queued request. It is
+not in the navigation: open it by its address, `http://localhost:5070/admin/requests`. It has a simulate form in Mock mode only.
