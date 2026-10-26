@@ -55,6 +55,17 @@ if (fake)
 {
     api.WithEnvironment("Llm__Provider", "Fake")
         .WithEnvironment("Database__Provider", "InMemory");
+
+    // Mock requests (03 §15.4): the simulate form works offline. The menu names the fake models, which are not bring-your-own-key,
+    // so RequireApiKeyModels is off here only; a real run keeps it on (the default).
+    api.WithEnvironment("Arena__Requests__Mode", "Mock")
+        .WithEnvironment("Arena__Requests__RequireApiKeyModels", "false")
+        .WithEnvironment("Arena__Requests__Menu__0__Code", "fa")
+        .WithEnvironment("Arena__Requests__Menu__0__PlayerId", "fake-a")
+        .WithEnvironment("Arena__Requests__Menu__1__Code", "fb")
+        .WithEnvironment("Arena__Requests__Menu__1__PlayerId", "fake-b")
+        .WithEnvironment("Arena__Requests__Menu__2__Code", "fah")
+        .WithEnvironment("Arena__Requests__Menu__2__PlayerId", "fake-a@high");
 }
 else
 {

@@ -1,5 +1,6 @@
 using Chess.Api.Benchmarks;
 using Chess.Api.Broadcast;
+using Chess.Api.Requests;
 using Chess.Api.Requests.YouTube;
 using Chess.Api.Usage;
 
@@ -17,6 +18,7 @@ builder.AddCatalog();
 builder.AddAttempts();
 builder.AddMoveQualityPipeline();
 builder.AddBroadcast();
+builder.AddRequests();
 builder.AddYouTubeIntake();
 
 var app = builder.Build();
@@ -32,6 +34,7 @@ api.MapResultEndpoints();
 api.MapAttemptEndpoints();
 api.MapUsageEndpoints();
 api.MapBroadcastEndpoints();
+api.MapRequestEndpoints();
 app.Run();
 
 public partial class Program;
