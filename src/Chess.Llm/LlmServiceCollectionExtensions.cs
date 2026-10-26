@@ -32,8 +32,11 @@ public static class LlmServiceCollectionExtensions
             case "fake":
                 var seed = builder.Configuration.GetValue("Llm:Seed", 1);
                 var latency = TimeSpan.FromMilliseconds(builder.Configuration.GetValue("Llm:FakeLatencyMs", 0));
-                builder.Services.AddSingleton<ILlmGateway>(sp => new FakeLlmGateway(seed, latency,
-                    sp.GetRequiredService<IOptions<ArenaOptions>>().Value.CustomModels));
+                builder.Services.AddSingleton<ILlmGateway>(sp =>
+                {
+                    var arena = sp.GetRequiredService<IOptions<ArenaOptions>>().Value;
+                    return new FakeLlmGateway(seed, latency, arena.CustomModels, arena.Cost.UsdPerAiCredit);
+                });
                 break;
 
             default:

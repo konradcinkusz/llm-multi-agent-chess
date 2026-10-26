@@ -53,6 +53,47 @@ public class CopilotSessionSettingsTests
         Assert.Equal("sk-test-secret", config.Provider.ApiKey);
     }
 
+    [Theory]
+    [InlineData("anthropic", "https://api.anthropic.com", "anthropic", null)]
+    [InlineData("openai", "https://api.openai.com/v1", "openai", "chat-completions")]
+    [InlineData("openai", "https://api.deepinfra.com/v1/openai", "openai", "chat-completions")]
+    [InlineData("azure", "https://example.openai.azure.com", "azure_openai", "chat-completions")]
+    public void EachApiKeyProviderGetsItsTypeBaseUrlModelWireApiAndTelemetryProvider(
+        string providerType, string baseUrl, string modelProvider, string? wireApi)
+    {
+        var custom = new CustomModelOptions
+        {
+            Id = "hosted",
+            ProviderType = providerType,
+            BaseUrl = baseUrl,
+            Model = "hosted-model",
+            WireApi = "chat-completions",
+            ApiKey = "key-for-the-test",
+        };
+
+        var config = CopilotSessionSettings.ForCustomModel(
+            new LlmConversationOptions("hosted", Prompt, TimeSpan.FromSeconds(5)), custom);
+
+        Assert.Null(config.Model);
+        Assert.Equal(providerType, config.Provider!.Type);
+        Assert.Equal(baseUrl, config.Provider.BaseUrl);
+        Assert.Equal("hosted-model", config.Provider.WireModel);
+        Assert.Equal(modelProvider, config.Provider.ModelProvider);
+        Assert.Equal(wireApi, config.Provider.WireApi);
+        Assert.Equal("key-for-the-test", config.Provider.ApiKey);
+    }
+
+    [Fact]
+    public void AnAnthropicProviderTypeIsLowerCasedWhateverTheConfiguredCase()
+    {
+        var custom = new CustomModelOptions { Id = "claude", ProviderType = "Anthropic", BaseUrl = "https://api.anthropic.com", Model = "claude-sonnet-5-5" };
+
+        var config = CopilotSessionSettings.ForCustomModel(new LlmConversationOptions("claude", Prompt, TimeSpan.FromSeconds(5)), custom);
+
+        Assert.Equal("anthropic", config.Provider!.Type);
+        Assert.Equal("anthropic", config.Provider.ModelProvider);
+    }
+
     [Fact]
     public void EverySessionHasNoToolsAndTheReplacedSystemPrompt()
     {
