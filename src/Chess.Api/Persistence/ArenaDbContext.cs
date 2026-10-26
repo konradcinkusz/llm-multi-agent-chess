@@ -26,6 +26,8 @@ public sealed class ArenaDbContext(DbContextOptions<ArenaDbContext> options) : D
     public DbSet<RatingSnapshotEntity> RatingSnapshots => Set<RatingSnapshotEntity>();
     public DbSet<BroadcastScheduleEntity> BroadcastSchedules => Set<BroadcastScheduleEntity>();
     public DbSet<BroadcastSlotEntity> BroadcastSlots => Set<BroadcastSlotEntity>();
+    public DbSet<GameRequestEntity> GameRequests => Set<GameRequestEntity>();
+    public DbSet<PayerLedgerEntity> PayerLedger => Set<PayerLedgerEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -85,6 +87,22 @@ public sealed class ArenaDbContext(DbContextOptions<ArenaDbContext> options) : D
             e.HasIndex(s => new { s.ScheduleId, s.Index }).IsUnique();
             e.HasOne<BroadcastScheduleEntity>().WithMany().HasForeignKey(s => s.ScheduleId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<GameEntity>().WithMany().HasForeignKey(s => s.GameId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GameRequestEntity>(e =>
+        {
+            e.ToTable("game_requests");
+            e.HasKey(r => r.Id);
+            e.HasIndex(r => r.ExternalId).IsUnique();
+            e.HasIndex(r => new { r.Status, r.ReceivedAt });
+        });
+
+        modelBuilder.Entity<PayerLedgerEntity>(e =>
+        {
+            e.ToTable("payer_ledger");
+            e.HasKey(l => l.Id);
+            e.HasIndex(l => l.ExternalId).IsUnique();
+            e.HasIndex(l => l.PayerId);
         });
 
         // Column names are snake_case (03 §4) without a third-party naming package.

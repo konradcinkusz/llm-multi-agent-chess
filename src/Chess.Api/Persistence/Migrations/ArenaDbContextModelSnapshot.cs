@@ -232,6 +232,86 @@ namespace Chess.Api.Persistence.Migrations
                     b.ToTable("games", (string)null);
                 });
 
+            modelBuilder.Entity("Chess.Api.Persistence.Entities.GameRequestEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("Black")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("black");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("external_id");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<Guid?>("GameId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("game_id");
+
+                    b.Property<string>("PayerDisplay")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payer_display");
+
+                    b.Property<string>("PayerId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payer_id");
+
+                    b.Property<long>("PriceMicros")
+                        .HasColumnType("bigint")
+                        .HasColumnName("price_micros");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("source");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("White")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("white");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "ReceivedAt");
+
+                    b.ToTable("game_requests", (string)null);
+                });
+
             modelBuilder.Entity("Chess.Api.Persistence.Entities.MoveAttemptEntity", b =>
                 {
                     b.Property<Guid>("GameId")
@@ -364,6 +444,58 @@ namespace Chess.Api.Persistence.Migrations
                     b.HasKey("GameId", "Ply");
 
                     b.ToTable("moves", (string)null);
+                });
+
+            modelBuilder.Entity("Chess.Api.Persistence.Entities.PayerLedgerEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<long>("AmountMicros")
+                        .HasColumnType("bigint")
+                        .HasColumnName("amount_micros");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("Currency")
+                        .HasColumnType("text")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("external_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("PayerId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payer_id");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalId")
+                        .IsUnique();
+
+                    b.HasIndex("PayerId");
+
+                    b.ToTable("payer_ledger", (string)null);
                 });
 
             modelBuilder.Entity("Chess.Api.Persistence.Entities.RatingSnapshotEntity", b =>
