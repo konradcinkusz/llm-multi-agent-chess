@@ -1,0 +1,48 @@
+@* The table of "Prompt styles compared" (03 §14.5), shared by /results and the static site. No script. *@
+<p class="muted results-note">
+    Each row is one model at one effort under one prompt style, on the same global scale as the table above. Each style is
+    read against the baseline style through the head-to-head matrix; the reading uses the one significance rule.
+</p>
+<div class="table-wrap table-compact">
+    <table class="results-table style-comparison">
+        <thead>
+            <tr>
+                <th scope="col">Model</th>
+                <th scope="col">Style</th>
+                <th scope="col" class="num">Rating</th>
+                <th scope="col" class="num">95 % interval</th>
+                <th scope="col" class="num">Games</th>
+                <th scope="col" class="num">Legality</th>
+                <th scope="col" class="num">Move quality</th>
+                <th scope="col" class="num">Cost per game</th>
+                <th scope="col">Against the baseline</th>
+            </tr>
+        </thead>
+        @foreach (var group in Groups)
+        {
+            <tbody data-configuration="@group.Configuration">
+                @foreach (var row in group.Rows)
+                {
+                    <tr>
+                        <td>@group.Configuration</td>
+                        <td>@row.Style</td>
+                        <td class="num">@ResultsModel.Number(row.Rating.Rating, "0")</td>
+                        <td class="num">@ResultsModel.Number(row.Rating.CiLow, "0") to @ResultsModel.Number(row.Rating.CiHigh, "0")</td>
+                        <td class="num">@row.Rating.Games</td>
+                        <td class="num">@Percent(row.Rating.Legality)</td>
+                        <td class="num">@(row.Rating.MoveQuality is { } mq ? Percent(mq) : "—")</td>
+                        <td class="num">@(row.CostPerGame is { } cost ? "$" + ResultsModel.Number(cost, "0.000") : "—")</td>
+                        <td>@row.Against</td>
+                    </tr>
+                }
+            </tbody>
+        }
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<StyleGroup> Groups { get; set; } = [];
+
+    private static string Percent(double fraction) => ResultsModel.Number(100 * fraction, "0") + "%";
+}

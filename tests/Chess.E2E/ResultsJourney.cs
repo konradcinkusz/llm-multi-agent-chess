@@ -61,5 +61,8 @@ public sealed class ResultsJourney(ArenaFixture arena)
             .ToBeVisibleAsync(new() { Timeout = LoadTimeout });
         await Expect(leaderboard.GetByRole(AriaRole.Cell, new() { Name = Players.FakeB, Exact = true }))
             .ToBeVisibleAsync(new() { Timeout = LoadTimeout });
+
+        // The fake players are all classic, so "Prompt styles compared" (03 §6.1, item 8) is not on the page.
+        await Expect(page.Locator("section[data-section='prompt-styles']")).ToHaveCountAsync(0);
     }
 }
