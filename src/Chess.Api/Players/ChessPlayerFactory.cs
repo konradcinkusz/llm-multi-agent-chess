@@ -1,4 +1,5 @@
 using Chess.Api.Catalog;
+using Chess.Api.Players.Prompts;
 using Chess.Engine;
 using Chess.Llm;
 using Microsoft.Extensions.Options;
@@ -24,10 +25,19 @@ public sealed class ChessPlayerFactory(ILlmGateway gateway, IOptions<PlayerOptio
                 }
 
                 var timeout = TimeSpan.FromSeconds(settings.MoveTimeoutSeconds);
-                var (model, effort) = ModelVariant.Split(descriptor.ModelId);
-                var conversation = await gateway.StartConversationAsync(
-                    new LlmConversationOptions(model, RatedPromptBuilder.SystemPrompt, timeout, effort), ct);
-                return new LlmChessPlayer(descriptor, conversation, settings.MaxAttemptsPerMove);
+                var parts = ModelVariant.Parse(descriptor.ModelId);
+                var style = PromptStyles.Find(parts.Style)
+                    ?? throw new ArgumentException($"'{parts.Style}' is not a prompt style.", nameof(descriptor));
+                var options = new LlmConversationOptions(parts.Model, style.SystemPrompt, timeout, parts.Effort);
+
+                // A per-move style opens its conversation for each move (03 §14.2); classic opens one for the game.
+                if (style.PerMoveConversation)
+                {
+                    return new LlmChessPlayer(descriptor, style, ct => gateway.StartConversationAsync(options, ct), settings.MaxAttemptsPerMove);
+                }
+
+                var conversation = await gateway.StartConversationAsync(options, ct);
+                return new LlmChessPlayer(descriptor, conversation, settings.MaxAttemptsPerMove, style);
 
             default:
                 throw new ArgumentException($"Unknown player kind '{descriptor.Kind}'. Use 'llm' or 'random'.", nameof(descriptor));

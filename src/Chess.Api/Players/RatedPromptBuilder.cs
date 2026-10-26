@@ -36,18 +36,21 @@ public static class RatedPromptBuilder
             "Answer with one move in SAN only.");
     }
 
+    private static string FormatRecent(string fen, IReadOnlyList<string> history) =>
+        FormatMoves(fen, history, RecentMoveCount);
+
     /// <summary>
-    /// The last ten plies in PGN style, with move numbers. The move numbers are derived from the FEN by walking
+    /// The last <paramref name="count"/> plies in PGN style, with move numbers. The move numbers are derived from the FEN by walking
     /// back from the current position, so the text is right for any start position, not only the standard one.
     /// </summary>
-    private static string FormatRecent(string fen, IReadOnlyList<string> history)
+    internal static string FormatMoves(string fen, IReadOnlyList<string> history, int count)
     {
         var (side, fullMove) = ParseFen(fen);
         var recent = new List<(int Number, Side Mover, string San)>();
 
         // The last move was made by the side that is not to move. Before a black move the full-move
         // number is one lower than in the position after it; before a white move it is the same.
-        for (var i = history.Count - 1; i >= 0 && recent.Count < RecentMoveCount; i--)
+        for (var i = history.Count - 1; i >= 0 && recent.Count < count; i--)
         {
             var mover = Opposite(side);
             var number = mover == Side.Black ? fullMove - 1 : fullMove;

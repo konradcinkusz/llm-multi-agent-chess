@@ -69,6 +69,11 @@ internal sealed class ArenaOptionsValidator : IValidateOptions<ArenaOptions>
                     errors.Add($"{at}.Id '{model.Id}' must not contain '@': that separates the reasoning effort (ADR-014).");
                 }
 
+                if (model.Id.Contains('~'))
+                {
+                    errors.Add($"{at}.Id '{model.Id}' must not contain '~': that separates the prompt style (ADR-015).");
+                }
+
                 if (model.Id.Any(char.IsWhiteSpace))
                 {
                     errors.Add($"{at}.Id '{model.Id}' must not contain spaces.");

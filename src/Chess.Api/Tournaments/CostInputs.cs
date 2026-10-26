@@ -29,4 +29,15 @@ public sealed class CostInputs(IDbContextFactory<ArenaDbContext> factory, IOptio
             model => new ModelCostInputs(model.PremiumMultiplier, model.Pricing, history.GetValueOrDefault(model.Id)),
             StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// The inputs of one player id (03 §14.4). Pricing and the premium multiplier are the base model's. The token history is the
+    /// full id's own stored moves when it has any, else the base model's, so a styled player with no moves yet is estimated from
+    /// its model.
+    /// </summary>
+    public static ModelCostInputs For(string playerId, ModelCostInputs modelInputs, IReadOnlyDictionary<string, ModelTokenAverage> history) =>
+        modelInputs with
+        {
+            History = history.GetValueOrDefault(playerId) ?? history.GetValueOrDefault(ModelVariant.BaseOf(playerId)),
+        };
 }
