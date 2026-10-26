@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Chess.Api.Benchmarks;
 using Chess.Api.Contracts;
+using Chess.Api.Players.Prompts;
 using Chess.Api.Tests.Tournaments;
 using Chess.Api.Tournaments;
 using Microsoft.AspNetCore.Hosting;
@@ -178,6 +179,20 @@ public class BenchmarkEndpointTests
         Assert.Contains("| fake-b | 4 |", text);
         Assert.Contains("| random | 4 |", text);
         Assert.Contains($"Prompt version: {report.Fingerprint.PromptVersion}", text);
+    }
+
+    [Fact]
+    public async Task AStyledCandidatesReportCarriesTheVersionOfItsStyle()
+    {
+        using var app = new FakeRunApp();
+        using var client = app.CreateClient();
+        var created = await CreateAsync(client, new CreateBenchmarkRequest("Think pick", "fake-a~think", ["fake-b"], 2, 2));
+        await WaitForAsync(client, created.Benchmark.Id);
+
+        var report = await client.GetFromJsonAsync<BenchmarkReportDto>($"/api/benchmarks/{created.Benchmark.Id}/report", Json);
+
+        Assert.NotNull(report);
+        Assert.Equal(PromptStyles.VersionOf(PromptStyles.Find("think")!), report.Fingerprint.PromptVersion);
     }
 
     [Fact]

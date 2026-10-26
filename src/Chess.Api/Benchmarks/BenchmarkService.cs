@@ -91,7 +91,7 @@ public sealed class BenchmarkService(
         var rated = await RatedGameLoader.LoadAsync(factory, tournamentId: null, ct);
         var rating = RatingCalculator.Compute(rated.Outcomes, rated.MoveStats, new RatingOptions());
         return BenchmarkReportBuilder.Build(benchmark, games, rating, rated.Outcomes,
-            BenchmarkFingerprint.Create(clock.GetUtcNow()));
+            BenchmarkFingerprint.Create(clock.GetUtcNow(), benchmark.Candidate));
     }
 
     private async Task<List<BenchmarkGame>> LoadGamesAsync(BenchmarkDto benchmark, ModelListing listing, CancellationToken ct)
