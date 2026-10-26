@@ -35,5 +35,8 @@ public sealed record LiveNowNext(string Status, LiveSlot? Current, IReadOnlyList
 public sealed record LiveSlot(Guid Id, int Index, PlayerSpec White, PlayerSpec Black, DateTimeOffset PlannedStart,
     DateTimeOffset PlannedEnd, string State, Guid? GameId);
 
-/// <summary>The part of a schedule (03 §9.2 ScheduleDto) the header needs: how many games it has.</summary>
-public sealed record LiveScheduleSummary(Guid Id, string Status, int SlotsTotal, int SlotsFinished);
+/// <summary>
+/// The part of a schedule (03 §9.2 ScheduleDto) the header needs: how many games it has, and the pace its replays and
+/// games use. Pacing is null when the API does not send it, and the page then uses its own defaults.
+/// </summary>
+public sealed record LiveScheduleSummary(Guid Id, string Status, int SlotsTotal, int SlotsFinished, PacingProfile? Pacing = null);

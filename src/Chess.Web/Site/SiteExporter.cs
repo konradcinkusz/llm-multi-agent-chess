@@ -62,6 +62,8 @@ public sealed class SiteExporter(
         await WriteTournamentsAsync(output, renderer, frame, snapshot, ct);
         await new SiteGamePages(api).WriteAsync(output, renderer, frame, snapshot, options.Value.FullLogGames, ct);
 
+        await output.WritePageAsync(SitePaths.Menu,
+            await renderer.RenderAsync<SiteMenuPage>(("Frame", frame(1)), ("PriceMenu", snapshot.PriceMenu)), ct);
         await output.WritePageAsync(SitePaths.About, await renderer.RenderAsync<SiteAboutPage>(("Frame", frame(1))), ct);
 
         await WriteDataAsync(output, snapshot, ct);

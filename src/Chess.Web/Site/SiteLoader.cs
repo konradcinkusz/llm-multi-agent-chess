@@ -43,7 +43,39 @@ internal sealed class SiteLoader(ArenaApiClient api, TournamentRatingsClient rat
             usage[game.Id] = await api.GetGameUsageAsync(game.Id, ct);
         }
 
-        return new SiteSnapshot(takenAt, board, matrix, breakdown, history, tournaments, tournamentBoards, games, usage);
+        return new SiteSnapshot(takenAt, board, matrix, breakdown, history, tournaments, tournamentBoards, games, usage,
+            await LoadPriceMenuAsync(ct));
+    }
+
+    /// <summary>
+    /// The menu and the quote of every matchup in each matrix style. Without the requests API (or with the menu empty) the
+    /// page says the menu is not open, and the rest of the export is unaffected.
+    /// </summary>
+    private async Task<SitePriceMenu?> LoadPriceMenuAsync(CancellationToken ct)
+    {
+        try
+        {
+            var menu = await api.GetRequestMenuAsync(ct);
+            var cells = new List<SitePriceCell>();
+            foreach (var style in SitePriceMenu.Styles)
+            {
+                foreach (var white in menu.Items)
+                {
+                    foreach (var black in menu.Items)
+                    {
+                        // A code with its style, as a viewer types it: "c1~think" is the think style of menu entry c1.
+                        var quote = await api.GetRequestQuoteAsync($"{white.Code}~{style}", $"{black.Code}~{style}", ct);
+                        cells.Add(new SitePriceCell(style, white.Code, black.Code, quote.PriceUsd));
+                    }
+                }
+            }
+
+            return new SitePriceMenu(menu, cells);
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Every game of the archive: <c>GET /api/games</c> has no tournament filter and no way to ask for finished only.</summary>

@@ -19,6 +19,8 @@ public class NavigationTests
         "/games", "/games/{Id:guid}", "/admin/attempts", "/broadcast/plan",
         // Not in 03 §6: the public-site admin page (ADR-013, Site/Publishing), listed here so the route set stays exact.
         "/admin/site",
+        // Not in 03 §6: the viewer-request admin (03 §15.6), reached by its address like the site admin.
+        "/admin/requests",
     ];
 
     // "/broadcast" is the chrome-less OBS page (03 §9.4): a route, but deliberately NOT in the navigation.
