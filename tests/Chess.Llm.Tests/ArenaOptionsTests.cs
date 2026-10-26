@@ -28,6 +28,15 @@ public class ArenaOptionsTests
     }
 
     [Fact]
+    public void AnIdWithTildeIsRejectedWithAMessageNamingTheEntry()
+    {
+        var result = Validate(Valid(c => c.Id = "my-model~think"));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Failures(result), f => f.StartsWith("Arena:CustomModels[0].Id", StringComparison.Ordinal) && f.Contains("'~'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void AnIdWithSpacesIsRejected()
     {
         var result = Validate(Valid(c => c.Id = "my model"));

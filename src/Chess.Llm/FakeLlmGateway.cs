@@ -15,6 +15,7 @@ namespace Chess.Llm;
 public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnumerable<CustomModelOptions>? customModels = null) : ILlmGateway
 {
     private const string LegalMovesPrefix = "Legal moves:";
+    private const string MoveLinePrefix = "Move:";
     private const string FakeAId = "fake-a";
     private const string FakeBId = "fake-b";
     private const string DefaultEffort = "medium";
@@ -67,7 +68,7 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnum
             throw new ArgumentException($"Model {options.ModelId} does not offer reasoning effort '{effort}'.", nameof(options));
         }
 
-        return Task.FromResult<ILlmConversation>(new FakeConversation(this, options.ModelId));
+        return Task.FromResult<ILlmConversation>(new FakeConversation(this, options.ModelId, options.SystemPrompt));
     }
 
     private bool OffersEffort(string modelId, string effort) =>
@@ -87,7 +88,8 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnum
         return list;
     }
 
-    private string NextReply(string modelId, string prompt, CancellationToken ct)
+    /// <returns>The reply, and whether it was scripted (a scripted reply is returned as it was queued).</returns>
+    private (string Text, bool Scripted) NextReply(string modelId, string prompt, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -95,12 +97,21 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnum
         {
             if (_scripted.TryGetValue(modelId, out var queue) && queue.Count > 0)
             {
-                return queue.Dequeue();
+                return (queue.Dequeue(), Scripted: true);
             }
 
-            return PickLegalMove(prompt);
+            return (PickLegalMove(prompt), Scripted: false);
         }
     }
+
+    /// <summary>
+    /// A system prompt that asks for a <c>Move:</c> line (the think style) gets the analysis, plan and move lines in that
+    /// order, so the think path runs offline. Any other system prompt gets the bare move, as before.
+    /// </summary>
+    private static string AnswerFormat(string systemPrompt, string move) =>
+        systemPrompt.Contains(MoveLinePrefix, StringComparison.Ordinal)
+            ? $"Analysis: the legal moves are listed in the prompt, and {move} is one of them.\nPlan: keep the pieces coordinated.\n{MoveLinePrefix} {move}"
+            : move;
 
     private string PickLegalMove(string prompt)
     {
@@ -119,14 +130,15 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnum
         return legal[_random.Next(legal.Length)];
     }
 
-    private sealed class FakeConversation(FakeLlmGateway gateway, string modelId) : ILlmConversation
+    private sealed class FakeConversation(FakeLlmGateway gateway, string modelId, string systemPrompt) : ILlmConversation
     {
         public string ModelId { get; } = modelId;
 
         public async Task<LlmReply> AskAsync(string prompt, CancellationToken ct)
         {
-            var text = gateway.NextReply(ModelId, prompt, ct);
-            var reasoning = $"The legal moves are listed in the prompt. I choose {text}.";
+            var (move, scripted) = gateway.NextReply(ModelId, prompt, ct);
+            var text = scripted ? move : AnswerFormat(systemPrompt, move);
+            var reasoning = $"The legal moves are listed in the prompt. I choose {move}.";
             if (gateway._latency > TimeSpan.Zero)
             {
                 await Task.Delay(gateway._latency, ct);
