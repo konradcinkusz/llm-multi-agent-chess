@@ -35,7 +35,13 @@ internal sealed class FakeBroadcast
 
     private readonly Dictionary<Guid, Stored> _schedules = [];
 
-    public FakeBroadcast() => Handler = new FakeHandler(Answer);
+    private readonly bool _stylesAvailable;
+
+    public FakeBroadcast(bool stylesAvailable = true)
+    {
+        _stylesAvailable = stylesAvailable;
+        Handler = new FakeHandler(Answer);
+    }
 
     public FakeHandler Handler { get; }
 
@@ -65,6 +71,11 @@ internal sealed class FakeBroadcast
         if (request.Method == "GET" && path == "/api/models")
         {
             return Canned.Json(Fixtures.Models);
+        }
+
+        if (request.Method == "GET" && path == "/api/prompt-styles")
+        {
+            return _stylesAvailable ? Canned.Json(PromptStyleFixtures.Json) : Canned.Json("{}", HttpStatusCode.NotFound);
         }
 
         if (request.Method == "GET" && path == "/api/cost/inputs")
