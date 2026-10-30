@@ -233,7 +233,9 @@
     private bool IsLight => string.Equals(Theme, "light", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A request or a replay is on the board, so the intermission card must not cover it.</summary>
-    private bool ShowsRequestOrReplay => _replays is not null || _queue?.Playing?.GameId is not null;
+    // A replay counts once its game is on the board (_replaying), not when its loop starts looking for one: the loop may find
+    // none, and hiding the intermission meanwhile made it flicker.
+    private bool ShowsRequestOrReplay => _replaying || _queue?.Playing?.GameId is not null;
 
     private string ThemeClass => IsLight ? "bc-light" : "bc-dark";
 
