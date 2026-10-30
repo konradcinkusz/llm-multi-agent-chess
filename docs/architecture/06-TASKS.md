@@ -1151,12 +1151,12 @@ The supervisor PR froze the following, so V1, V2, V4 and V5 run in parallel agai
 
 | ID | Title | Depends on | Status |
 |---|---|---|---|
-| V1 | Gateway: the `anthropic` provider type; Anthropic, OpenAI and DeepInfra custom models | contract | todo |
-| V2 | API: request menu, quote and tiers, ledger and queue, command parser, intake, endpoints, mock simulate | contract | todo |
-| V3 | Broadcast runner plays requests; the per-game budget guard (`budget` termination); recovery | V2 | todo |
-| V4 | UI: request panels and idle replays on `/broadcast`, `/admin/requests`, the site's menu and price matrix | contract | todo |
-| V5 | YouTube intake: OAuth, live chat polling, Super Chat mapping, currency, AppHost secrets, smoke script | contract | todo |
-| V6 | Docs: `docs/REQUESTS.md` (owner setup), README, BROADCAST.md, recorded mock run | V1–V5 | todo |
+| V1 | Gateway: the `anthropic` provider type; Anthropic, OpenAI and DeepInfra custom models | contract | done (#108) |
+| V2 | API: request menu, quote and tiers, ledger and queue, command parser, intake, endpoints, mock simulate | contract | done (#110) |
+| V3 | Broadcast runner plays requests; the per-game budget guard (`budget` termination); recovery | V2 | done (#112) |
+| V4 | UI: request panels and idle replays on `/broadcast`, `/admin/requests`, the site's menu and price matrix | contract | done (#111) |
+| V5 | YouTube intake: OAuth, live chat polling, Super Chat mapping, currency, AppHost secrets, smoke script | contract | done (#109) |
+| V6 | Docs: `docs/REQUESTS.md` (owner setup), README, BROADCAST.md, recorded mock run | V1–V5 | in review (this PR) |
 
 ### V1 — Gateway: Anthropic, OpenAI and DeepInfra keys
 
