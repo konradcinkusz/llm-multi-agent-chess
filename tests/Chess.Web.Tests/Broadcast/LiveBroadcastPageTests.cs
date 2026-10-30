@@ -96,6 +96,30 @@ public class LiveBroadcastPageTests
         Assert.Equal("LLM Chess 24h", cut.Find("[data-testid=broadcast-title]").TextContent);
     }
 
+    /// <summary>
+    /// The replay loop starts as soon as nothing is on, and looks for a stored game first. Until one is on the board the
+    /// intermission stays: hiding it while the loop only looks made the card flicker, and when no game was found it came back.
+    /// </summary>
+    [Fact]
+    public void TheIntermissionStaysWhileTheReplayLoopIsStillLookingForAGame()
+    {
+        var next = $"[{LiveFixtures.Slot(17, "claude", "gemini", "pending", start: "2026-10-24T19:00:00Z")}]";
+        var server = new LiveBroadcastServer
+        {
+            Now = LiveFixtures.Now("running", "null", next, "null"),
+            Queue = LiveFixtures.Queue(),
+            GamesHang = true,
+        };
+        using var ctx = new BunitContext();
+        Wire(ctx, server);
+
+        var cut = Render(ctx);
+
+        cut.WaitForAssertion(() => Assert.Contains(server.Handler.Requests, r => r.Target.StartsWith("/api/games?", StringComparison.Ordinal)));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=broadcast-intermission]")));
+        Assert.Contains("Claude vs Gemini", cut.Find("[data-testid=broadcast-intermission]").TextContent);
+    }
+
     [Fact]
     public void ShowsAPausedCardNotAnIntermissionWhenTheBroadcastIsPausedBetweenGames()
     {

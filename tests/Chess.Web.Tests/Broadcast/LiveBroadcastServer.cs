@@ -52,6 +52,9 @@ internal sealed class LiveBroadcastServer
     /// <summary>What GET /api/games answers, for the replays. Null is a 404.</summary>
     public string? Games { get; set; }
 
+    /// <summary>When true, GET /api/games never finishes its body, so the replay loop stays at its lookup.</summary>
+    public bool GamesHang { get; set; }
+
     /// <summary>How many times the page has opened the event stream.</summary>
     public int StreamRequests => Volatile.Read(ref _streamRequests);
 
@@ -110,6 +113,11 @@ internal sealed class LiveBroadcastServer
 
         if (request.Method == "GET" && request.Target.StartsWith("/api/games?", StringComparison.Ordinal))
         {
+            if (GamesHang)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new Pipe().Reader.AsStream()) };
+            }
+
             return Games is null ? Canned.Json("{}", HttpStatusCode.NotFound) : Canned.Json(Games);
         }
 
