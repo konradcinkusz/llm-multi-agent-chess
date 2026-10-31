@@ -30,12 +30,18 @@ internal sealed class RequestApp(string mode = "Mock") : WebApplicationFactory<P
         builder.UseSetting("Arena:Requests:Menu:2:Code", "fah");
         builder.UseSetting("Arena:Requests:Menu:2:PlayerId", "fake-a@high");
 
-        // These tests drive the queue themselves. The broadcast runner plays queued requests with no schedule running (03 §15.1),
-        // so it would take a request before the test does; it is removed from this host.
+        // These tests drive the queue and its recovery themselves, so two hosted services are removed from this host:
+        // - the broadcast runner plays queued requests with no schedule running (03 §15.1), so it would take a request before
+        //   the test does;
+        // - the start-up recovery runs once the database is ready, on its own thread. Between a test's TakeNextAsync and its
+        //   StartedAsync it would see a request playing with no game and requeue it with the restart reason, which made
+        //   RequestRecoveryTests fail about once in six runs under load. The tests call RecoverAsync at the moment they mean to.
         builder.ConfigureServices(services =>
         {
             foreach (var hosted in services
-                .Where(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(Chess.Api.Broadcast.BroadcastRunner))
+                .Where(d => d.ServiceType == typeof(IHostedService)
+                    && (d.ImplementationType == typeof(Chess.Api.Broadcast.BroadcastRunner)
+                        || d.ImplementationType == typeof(RequestRecovery)))
                 .ToList())
             {
                 services.Remove(hosted);
