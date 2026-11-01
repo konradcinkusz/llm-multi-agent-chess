@@ -44,6 +44,12 @@ foreach (var (field, parameter) in new[]
     }
 }
 
+// Results archive (docs/RESULTS-ARCHIVE.md): the folder `POST /api/results/archive/export` writes into, normally results/ of a clone.
+if (builder.Configuration["Arena:Results:Archive:ExportFolder"] is { Length: > 0 } archiveFolder)
+{
+    api.WithEnvironment("Arena__Results__Archive__ExportFolder", archiveFolder);
+}
+
 var web = builder.AddProject<Projects.Chess_Web>("web")
     .WithHttpEndpoint(port: 5070, targetPort: 5070, name: "http", isProxied: false)
     .WithExternalHttpEndpoints()

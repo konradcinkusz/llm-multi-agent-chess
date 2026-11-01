@@ -1,5 +1,6 @@
 using Chess.Api.Catalog;
 using Chess.Api.Persistence;
+using Chess.Api.Results.Archive;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -15,6 +16,10 @@ public static class ResultsExtensions
         builder.Services.AddOptions<RatingSnapshotOptions>().BindConfiguration("RatingSnapshots");
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddHostedService<RatingSnapshotService>();
+        builder.Services.AddOptions<ArchiveOptions>().BindConfiguration("Arena:Results:Archive");
+        builder.Services.AddSingleton<ResultsArchive>();
+        builder.Services.AddSingleton<ArchiveImportStatus>();
+        builder.Services.AddHostedService<ArchiveImportService>();
         return builder;
     }
 
@@ -22,6 +27,8 @@ public static class ResultsExtensions
     {
         endpoints.MapGet("/ratings/history", RatingHistoryHandler);
         endpoints.MapGet("/results/breakdown", ResultsBreakdownHandler);
+        endpoints.MapPost("/results/archive/export", ArchiveExportHandler);
+        endpoints.MapGet("/results/archive/status", (ArchiveImportStatus status) => TypedResults.Ok(new { status.State, status.Added }));
         return endpoints;
     }
 
@@ -30,6 +37,21 @@ public static class ResultsExtensions
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         return TypedResults.Ok(await RatingHistory.ReadAsync(db, model, ct));
+    }
+
+    /// <summary>Writes the rated games that have no file yet into <c>Arena:Results:Archive:ExportFolder</c> (docs/RESULTS-ARCHIVE.md).</summary>
+    private static async Task<IResult> ArchiveExportHandler(
+        ResultsArchive archive, IOptions<ArchiveOptions> options, CancellationToken ct)
+    {
+        if (options.Value.ExportFolder is not { Length: > 0 } folder)
+        {
+            return TypedResults.Problem(
+                title: "No export folder",
+                detail: "Set Arena:Results:Archive:ExportFolder to the results/ folder of a clone of the repository.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        return TypedResults.Ok(await archive.ExportAsync(folder, ct));
     }
 
     private static async Task<IResult> ResultsBreakdownHandler(

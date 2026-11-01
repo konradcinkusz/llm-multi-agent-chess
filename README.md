@@ -179,6 +179,11 @@ no configuration, no secrets, no attempts of aborted games.
 | `SupportLinks` | none | Support links, each with a `Label` and a `Url`. Only http(s) links are shown. |
 | `FullLogGames` | `300` | The newest this many games keep their engine log on the site. Older games say so instead of showing a log. |
 
+### Results archive
+
+Finished rated games can also live as files in `results/`, so other people add theirs by pull request and the site is built
+from them in CI. See [docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARCHIVE.md).
+
 ## Benchmark your own model
 
 Benchmark one model, or one model at one reasoning effort (`model@effort`, such as `fake-a@high` on the fake profile), against

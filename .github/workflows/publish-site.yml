@@ -1,0 +1,76 @@
+name: publish-site
+
+# Builds the public results site from the results archive (results/, docs/RESULTS-ARCHIVE.md) and deploys it to GitHub Pages.
+# Pull requests that add games are checked by the `build and test` job of ci.yml (ResultsArchiveTests replays every file).
+# One manual step, once: Settings, Pages, Source = GitHub Actions. Until then this job builds and uploads, and the deploy fails.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'results/**'
+      - '.github/workflows/publish-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site from the archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - run: dotnet build src/Chess.Api -c Release -warnaserror
+      - run: dotnet build src/Chess.Web -c Release -warnaserror
+
+      - name: Start the API on the archive (fake LLM, in-memory database)
+        run: |
+          Database__Provider=InMemory Llm__Provider=Fake \
+          Arena__Results__Archive__ImportFolder="$GITHUB_WORKSPACE/results" \
+          ASPNETCORE_URLS=http://127.0.0.1:5080 \
+            nohup dotnet src/Chess.Api/bin/Release/net10.0/Chess.Api.dll > api.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fs http://127.0.0.1:5080/api/results/archive/status | grep -q '"state":"done"' && exit 0
+            sleep 1
+          done
+          cat api.log
+          exit 1
+
+      - name: Export the site
+        working-directory: src/Chess.Web
+        env:
+          ASPNETCORE_ENVIRONMENT: Development  # the static web assets the export copies are found in Development
+          ASPNETCORE_URLS: http://127.0.0.1:5070
+          services__api__http__0: http://127.0.0.1:5080
+          Arena__Site__ExportOnceTo: ${{ github.workspace }}/_site
+        run: dotnet bin/Release/net10.0/Chess.Web.dll
+
+      - name: Check the export
+        run: |
+          test -s _site/index.html
+          ! grep -rl '<script' _site --include='*.html'
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
