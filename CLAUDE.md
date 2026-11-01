@@ -50,7 +50,8 @@ src/
 tests/
   Chess.Engine.Tests/  Chess.Rating.Tests/  Chess.Llm.Tests/  Chess.Api.Tests/  Chess.Web.Tests/
   Chess.E2E/              Playwright journeys on the fake profile: live game, replay, results, tournament, benchmark (CI job `e2e`)
-docs/  RATING.md, BROADCAST.md, BENCHMARK.md, EVALS.md (linked from the README); architecture/ (owned by the supervisor)
+results/                  the results archive: one JSON file per rated game (docs/RESULTS-ARCHIVE.md); CI builds the public site from it
+docs/  RATING.md, RESULTS-ARCHIVE.md, BROADCAST.md, BENCHMARK.md, EVALS.md (linked from the README); architecture/ (owned by the supervisor)
 scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh (owner's live run), broadcast-smoke.sh (fake profile),
                           benchmark.sh and benchmark.ps1 (a benchmark against a running arena; refuse under CI)
 ```

@@ -10,6 +10,7 @@ public static class SiteServiceCollectionExtensions
         services.AddOptions<SiteOptions>().Bind(configuration.GetSection("Arena:Site"));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ISiteExporter, SiteExporter>();
+        services.AddHostedService<SiteExportOnceService>();
         return services;
     }
 }
