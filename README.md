@@ -181,8 +181,9 @@ no configuration, no secrets, no attempts of aborted games.
 
 ### Results archive
 
-Finished rated games can also live as files in `results/`, so other people add theirs by pull request and the site is built
-from them in CI. See [docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARCHIVE.md).
+Finished rated games can also live as files in `results/`. Anyone adds their games by pull request, and CI builds the
+public site from the folder. Export your games with `POST /api/results/archive/export`, then follow
+[Contribute your results](CONTRIBUTING.md#contribute-your-results).
 
 ## Benchmark your own model
 

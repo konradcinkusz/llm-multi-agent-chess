@@ -38,6 +38,66 @@ Both must pass with no warnings. CI runs the same build and tests, plus these jo
 
 A new project goes into `Chess.sln` in the same pull request. A new web project is also registered in the AppHost.
 
+## Contribute your results
+
+Finished rated games can join the public ranking. Each game is one JSON file in `results/games/`, added by pull request.
+The file format and the checks are in [docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARCHIVE.md).
+
+1. **Fork and clone** the repository, then make a branch:
+
+   ```bash
+   git clone https://github.com/<your-user>/llm-multi-agent-chess.git
+   cd llm-multi-agent-chess
+   git checkout -b add-my-results
+   ```
+
+2. **Start the app with the export folder set** to the `results/` folder of your clone. The variable is read by the AppHost
+   and passed to the API. The `fake` profile needs no Docker or Copilot login, so it is the quick way to try the steps:
+
+   ```bash
+   Arena__Results__Archive__ExportFolder="$PWD/results" dotnet run --project src/Chess.AppHost --launch-profile fake
+   ```
+
+   For real models, run the same line without `--launch-profile fake`. That needs Docker and a Copilot login, see
+   [Prerequisites](README.md#prerequisites).
+
+3. **Play rated games.** Use the Play page at <http://localhost:5070> and keep the game rated. The API is at
+   <http://127.0.0.1:5080>. Only games with real models are results: the `fake-a` and `fake-b` games of the `fake` profile
+   are test data, do not submit them.
+
+4. **Export the finished games** into your clone. Do this before you stop the app, because the `fake` profile keeps its
+   database in memory and its games are gone when it stops:
+
+   ```bash
+   curl -X POST http://127.0.0.1:5080/api/results/archive/export
+   ```
+
+   The answer is `{"written":N,"alreadyThere":M,"folder":"..."}`. `written` is the number of new files. The export never
+   rewrites a file that exists.
+
+5. **Check the files** with the test that CI runs on your pull request:
+
+   ```bash
+   dotnet test tests/Chess.Api.Tests --filter ResultsArchiveTests
+   ```
+
+   It replays every game on the engine and reports any file that does not parse, is illegal, sits at the wrong path or repeats
+   a game id.
+
+6. **Commit only the new files and open a pull request:**
+
+   ```bash
+   git add results/games
+   git commit -m "Add results: <models played>"
+   git push -u origin add-my-results
+   ```
+
+   Open the pull request on GitHub against `main`. A maintainer reviews it. The replay proves that the moves are legal and the
+   result fits them; it cannot prove which model played the game, so the review is what checks that.
+
+Rules for the files: never edit or rename a file that is already in `results/`. A wrong game is removed by a pull request that
+deletes its file. Each game id appears once.
+
 ## Secrets
 
 Never commit a token, a password, a connection string with credentials, or a personal path. Copilot and PostgreSQL secrets are
