@@ -56,11 +56,13 @@
             <span>@PlayerName(_live?.Summary.White)</span>
         </div>
 
-        <p class="bc-status" data-testid="broadcast-status" role="status">@StatusLine</p>
     </section>
 
-    <aside class="bc-side">
-        <section class="bc-panel" data-testid="broadcast-leaderboard" aria-label="Leaderboard">
+    @* Two side columns on the 16:9 stage. On a portrait screen they dissolve (display: contents) into the stage grid. *@
+    <div class="bc-col bc-col-a">
+        <p class="bc-status" data-testid="broadcast-status" role="status">@StatusLine</p>
+
+        <section class="bc-panel bc-lb" data-testid="broadcast-leaderboard" aria-label="Leaderboard">
             <h2>Leaderboard</h2>
             <ol class="bc-table">
                 <li class="bc-table-head" aria-hidden="true">
@@ -71,12 +73,17 @@
                     <li data-model="@model.Model">
                         <span class="bc-rank">@rank</span>
                         <span class="bc-swatch" style="background: @ColourOf(model.Model)"></span>
-                        <span class="bc-name">@ModelName(model.Model)@if (model.Provisional)
-                            {
-                                <span class="bc-prov"> · provisional</span>
-                            }</span>
+                        <span class="bc-name">@ModelName(model.Model)</span>
                         <span class="bc-num">@model.ArenaScore.ToString("0.0", CultureInfo.InvariantCulture)</span>
-                        <span class="bc-num">@(model.Provisional ? "—" : Math.Round(model.Rating).ToString("0", CultureInfo.InvariantCulture))</span>
+                        @* A provisional model has no rating yet: the mark sits in the rating column, so the name keeps the width. *@
+                        @if (model.Provisional)
+                        {
+                            <span class="bc-num bc-prov" title="provisional">prov.</span>
+                        }
+                        else
+                        {
+                            <span class="bc-num">@Math.Round(model.Rating).ToString("0", CultureInfo.InvariantCulture)</span>
+                        }
                     </li>
                 }
             </ol>
@@ -86,91 +93,89 @@
             }
         </section>
 
-        <div class="bc-lower">
-            <section class="bc-panel" data-testid="broadcast-moves" aria-label="Moves">
-                <h2>Moves</h2>
-                <ol class="bc-moves">
-                    @foreach (var row in MoveTail)
+        <section class="bc-panel bc-moves-panel" data-testid="broadcast-moves" aria-label="Moves">
+            <h2>Moves</h2>
+            <ol class="bc-moves">
+                @foreach (var row in MoveTail)
+                {
+                    <li data-move="@row.Number">
+                        <span class="bc-num-move">@(row.Number).</span>
+                        <span class="bc-san">@row.White</span>
+                        <span class="bc-san">@row.Black</span>
+                    </li>
+                }
+            </ol>
+        </section>
+    </div>
+
+    <div class="bc-col bc-col-b">
+        <section class="bc-panel bc-next-panel" data-testid="broadcast-upnext" aria-label="Up next">
+            <h2>Up next</h2>
+            @if (_now is { Next.Count: > 0 } now)
+            {
+                <ol class="bc-next">
+                    @foreach (var slot in now.Next)
                     {
-                        <li data-move="@row.Number">
-                            <span class="bc-num-move">@(row.Number).</span>
-                            <span class="bc-san">@row.White</span>
-                            <span class="bc-san">@row.Black</span>
+                        <li>
+                            <span class="bc-time">@LiveBroadcastView.StartLabel(slot.PlannedStart)</span>
+                            <span class="bc-name">@PlayerName(slot.White) vs @PlayerName(slot.Black)</span>
                         </li>
                     }
                 </ol>
-            </section>
-
-            <section class="bc-panel" data-testid="broadcast-upnext" aria-label="Up next">
-                <h2>Up next</h2>
-                @if (_now is { Next.Count: > 0 } now)
-                {
-                    <ol class="bc-next">
-                        @foreach (var slot in now.Next)
-                        {
-                            <li>
-                                <span class="bc-time">@LiveBroadcastView.StartLabel(slot.PlannedStart)</span>
-                                <span class="bc-name">@PlayerName(slot.White) vs @PlayerName(slot.Black)</span>
-                            </li>
-                        }
-                    </ol>
-                }
-                else
-                {
-                    <p class="bc-muted">Nothing scheduled after this game.</p>
-                }
-            </section>
-        </div>
+            }
+            else
+            {
+                <p class="bc-muted">Nothing scheduled after this game.</p>
+            }
+        </section>
 
         @* The viewer requests (03 §15.6). Without the requests API none of this is drawn, and nothing else moves. *@
         @if (_queue is not null || _menu is not null)
         {
-            <div class="bc-requests">
-                <section class="bc-panel" data-testid="broadcast-queue" aria-label="Requests">
-                    <h2>Requests</h2>
-                    @if (_queue is { Queued.Count: > 0 } queue)
-                    {
-                        <ol class="bc-next">
-                            @foreach (var request in queue.Queued.Take(LiveRequestView.MaxQueued))
-                            {
-                                <li data-request="@request.Id">
-                                    <span class="bc-time">@request.QueuePosition</span>
-                                    <span class="bc-name">@request.PayerDisplay · @ModelName(request.White) vs @ModelName(request.Black)</span>
-                                </li>
-                            }
-                        </ol>
-                        <p class="bc-muted" data-testid="broadcast-wait">@LiveRequestView.WaitLabel(queue.EstimatedWaitMinutes)</p>
-                    }
-                    else if (_queue is not null)
-                    {
-                        <p class="bc-muted">No requests waiting. Order one with a Super Chat.</p>
-                    }
-                    @foreach (var line in LiveRequestView.RejectionLines(_queue))
-                    {
-                        <p class="bc-muted" data-testid="broadcast-rejection">@line</p>
-                    }
-                </section>
+            <section class="bc-panel bc-queue-panel" data-testid="broadcast-queue" aria-label="Requests">
+                <h2>Requests</h2>
+                @if (_queue is { Queued.Count: > 0 } queue)
+                {
+                    <ol class="bc-next">
+                        @foreach (var request in queue.Queued.Take(LiveRequestView.MaxQueued))
+                        {
+                            <li data-request="@request.Id">
+                                <span class="bc-time">@request.QueuePosition</span>
+                                <span class="bc-name">@request.PayerDisplay · @ModelName(request.White) vs @ModelName(request.Black)</span>
+                            </li>
+                        }
+                    </ol>
+                    <p class="bc-muted" data-testid="broadcast-wait">@LiveRequestView.WaitLabel(queue.EstimatedWaitMinutes)</p>
+                }
+                else if (_queue is not null)
+                {
+                    <p class="bc-muted">No requests waiting. Order one with a Super Chat.</p>
+                }
+                @foreach (var line in LiveRequestView.RejectionLines(_queue))
+                {
+                    <p class="bc-muted" data-testid="broadcast-rejection">@line</p>
+                }
+            </section>
 
-                <section class="bc-panel" data-testid="broadcast-menu" aria-label="Order a game">
-                    <h2>Order a game</h2>
-                    @if (_menu is { } menu)
-                    {
-                        <ol class="bc-menu">
-                            @foreach (var item in menu.Items)
-                            {
-                                <li data-code="@item.Code">
-                                    <span class="bc-code">@item.Code</span>
-                                    <span class="bc-name">@item.Label</span>
-                                    <span class="bc-num">@LiveRequestView.Price(item.EstimatedUsdPerSide) a side</span>
-                                </li>
-                            }
-                        </ol>
-                        <p class="bc-muted" data-testid="broadcast-order">@menu.CommandHelp</p>
-                    }
-                </section>
-            </div>
+            <section class="bc-panel bc-menu-panel" data-testid="broadcast-menu" aria-label="Order a game">
+                <h2>Order a game</h2>
+                @if (_menu is { } menu)
+                {
+                    <ol class="bc-menu">
+                        @foreach (var item in menu.Items)
+                        {
+                            <li data-code="@item.Code">
+                                <span class="bc-code">@item.Code</span>
+                                <span class="bc-name">@item.Label</span>
+                                <span class="bc-num">@LiveRequestView.Price(item.EstimatedUsdPerSide) a side</span>
+                            </li>
+                        }
+                    </ol>
+                    <p class="bc-muted" data-testid="broadcast-order">@menu.CommandHelp</p>
+                }
+            </section>
         }
-    </aside>
+    </div>
 </div>
 
 @code {

@@ -1,15 +1,42 @@
 /*
- * The OBS frame. A 16:9 stage fits the window, and every size is in container units of that stage, so the whole
- * picture scales as one. At 1920 px wide 1cqw is 19.2 px: the smallest text here (1.6cqw) is 30.7 px, above the 28 px floor.
+ * The OBS frame, and the page a viewer opens on a phone. Everything must be on one screen, nothing scrolls, nothing is cut.
+ *
+ * Landscape (OBS at 1920x1080, a desktop, a phone held sideways): a 16:9 stage that fits the window. The board takes the
+ * full height on the left; two columns on the right hold the status, the leaderboard and the moves, then up next, the
+ * requests and the order menu. Sizes are in cqh of the stage: at 1080 px high 1cqh is 10.8 px, so the row text (2.6cqh) is
+ * 28 px, the floor for text read on a phone watching the stream.
+ *
+ * Portrait (a phone held upright): a 9:19.5 stage that fits the window, one column: board, status, leaderboard, then two
+ * pairs of panels. Sizes are in cqw of the stage. The side columns dissolve into the stage grid (display: contents).
+ *
+ * Every size comes from the variables below, so the two modes differ only in their values and their grid.
  */
 
 .bc-stage {
     --bc-bg: #0d1014;
     --bc-ink: #eceff4;
     --bc-muted: rgb(236 239 244 / 0.7);
-    --bc-panel: rgb(255 255 255 / 0.05);
+    --bc-panel: rgb(255 255 255 / 0.06);
     --bc-accent: #f0b429;
     --bc-card: rgb(8 10 14 / 0.86);
+
+    /* Landscape sizes (cqh). */
+    --pad: 2.4cqh;
+    --gap: 1.6cqh;
+    --head: 7cqh;
+    --title: 4.4cqh;
+    --player-h: 5.2cqh;
+    --player: 3.4cqh;
+    --board: 76cqh;
+    --status: 2.8cqh;
+    --panel-pad: 1.2cqh 1.6cqh;
+    --h2: 2.3cqh;
+    --row: 3.6cqh;
+    --fs: 2.6cqh;
+    --swatch: 2cqh;
+    --radius: 1cqh;
+    --card-title: 6cqh;
+    --card-text: 3.4cqh;
 
     position: absolute;
     left: 50%;
@@ -19,22 +46,35 @@
     aspect-ratio: 16 / 9;
     container-type: size;
     box-sizing: border-box;
+    overflow: hidden;
     display: grid;
-    grid-template-columns: 38cqw 1fr;
-    grid-template-rows: 9cqh 1fr;
-    gap: 2cqh 3cqw;
-    padding: 0 2.5cqw 2cqh;
-    font-size: 1.6cqw;
-    line-height: 1.3;
+    grid-template-columns: var(--board) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-rows: var(--head) minmax(0, 1fr);
+    grid-template-areas:
+        "head head head"
+        "game cola colb";
+    column-gap: calc(var(--gap) * 1.6);
+    row-gap: var(--gap);
+    padding: 0 var(--pad) var(--pad);
+    line-height: 1.2;
     background: var(--bc-bg);
     color: var(--bc-ink);
+}
+
+/*
+ * Container units on the container itself resolve against the viewport, not the stage. The base text size is therefore set on
+ * the stage's children, where cqw and cqh mean the stage. Setting it on the stage made the text too large whenever the stage
+ * was letterboxed (a 9:16 phone, a 4:3 window).
+ */
+.bc-stage > * {
+    font-size: var(--fs);
 }
 
 .bc-light {
     --bc-bg: #f5f3ee;
     --bc-ink: #1d232b;
-    --bc-muted: rgb(29 35 43 / 0.7);
-    --bc-panel: rgb(0 0 0 / 0.05);
+    --bc-muted: rgb(29 35 43 / 0.72);
+    --bc-panel: rgb(0 0 0 / 0.06);
     --bc-accent: #8a5a00;
     --bc-card: rgb(245 243 238 / 0.9);
 }
@@ -42,47 +82,60 @@
 /* Header */
 
 .bc-head {
-    grid-column: 1 / -1;
+    grid-area: head;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--gap);
+    min-width: 0;
     border-bottom: 1px solid var(--bc-panel);
 }
 
 .bc-title,
 .bc-clock {
     margin: 0;
-    font-size: 2.8cqw;
+    font-size: var(--title);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.bc-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bc-head-right {
     display: flex;
+    flex: none;
     align-items: center;
-    gap: 2cqw;
+    gap: var(--gap);
 }
 
 .bc-link {
     margin: 0;
     color: var(--bc-accent);
+    font-size: var(--fs);
 }
 
-/* The game: players, board, status */
+/* The game: black above the board, white below */
 
 .bc-game {
+    grid-area: game;
     display: flex;
     flex-direction: column;
-    gap: 1cqh;
     min-height: 0;
+    min-width: 0;
 }
 
 .bc-player {
     display: flex;
+    flex: none;
     align-items: center;
-    gap: 1cqw;
-    height: 5cqh;
-    font-size: 2.2cqw;
+    gap: calc(var(--swatch) * 0.6);
+    height: var(--player-h);
+    font-size: var(--player);
     font-weight: 600;
     min-width: 0;
 }
@@ -95,13 +148,14 @@
 
 .bc-swatch {
     flex: none;
-    width: 1.6cqw;
-    height: 1.6cqw;
-    border-radius: 0.3cqw;
+    width: var(--swatch);
+    height: var(--swatch);
+    border-radius: 20%;
 }
 
 .bc-board-frame {
     position: relative;
+    flex: none;
 }
 
 .bc-board {
@@ -116,16 +170,9 @@
     max-width: none;
 }
 
-/* Board coordinates are drawn at 16 units of an 800-unit board, far below 28 px on screen. They are hidden. */
+/* Board coordinates are drawn at 16 units of an 800-unit board, far below a readable size on screen. They are hidden. */
 .bc-board ::deep .coord {
     display: none;
-}
-
-.bc-status {
-    height: 4cqh;
-    margin: 0;
-    font-size: 1.8cqw;
-    color: var(--bc-muted);
 }
 
 /* Cards that cover the board: intermission, technical break */
@@ -137,48 +184,72 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2cqh;
-    padding: 4cqw;
+    gap: var(--gap);
+    padding: 8%;
     text-align: center;
     background: var(--bc-card);
 }
 
 .bc-card h2 {
     margin: 0;
-    font-size: 4.2cqw;
+    font-size: var(--card-title);
 }
 
 .bc-card p {
     margin: 0;
-    font-size: 2.2cqw;
+    font-size: var(--card-text);
 }
 
 .bc-notice h2 {
     color: var(--bc-accent);
 }
 
-/* Side: leaderboard, then moves and up next */
+/* Side columns */
 
-.bc-side {
-    grid-column: 2;
+.bc-col {
     display: flex;
     flex-direction: column;
-    gap: 2cqh;
+    gap: var(--gap);
     min-height: 0;
+    min-width: 0;
+}
+
+.bc-col-a { grid-area: cola; }
+.bc-col-b { grid-area: colb; }
+
+/* The game's status line: thinking, result, replay, who requested it. Two lines at most. */
+.bc-status {
+    flex: none;
+    margin: 0;
+    min-height: calc(var(--status) * 1.2);
+    font-size: var(--status);
+    font-weight: 600;
+    color: var(--bc-accent);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+.bc-status:empty {
+    visibility: hidden;
 }
 
 .bc-panel {
+    flex: none;
+    min-width: 0;
     min-height: 0;
     overflow: hidden;
-    padding: 1.2cqh 1.5cqw;
-    border-radius: 1cqw;
+    padding: var(--panel-pad);
+    border-radius: var(--radius);
     background: var(--bc-panel);
 }
 
 .bc-panel h2 {
-    margin: 0 0 1cqh;
-    font-size: 1.8cqw;
-    font-weight: 600;
+    margin: 0 0 0.4em;
+    font-size: var(--h2);
+    font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--bc-muted);
@@ -191,17 +262,18 @@
 }
 
 .bc-panel li {
-    height: 3.8cqh;
+    min-height: var(--row);
     align-items: center;
 }
 
 .bc-muted {
     margin: 0;
-    font-size: 1.6cqw;
+    font-size: var(--fs);
     color: var(--bc-muted);
 }
 
 .bc-name {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -217,16 +289,19 @@
     color: var(--bc-muted);
 }
 
+/* Leaderboard: one line per model; a long name is cut, never wrapped. */
+
 .bc-table li {
     display: grid;
-    grid-template-columns: 3.4cqw 2cqw 1fr 7cqw 7cqw;
-    gap: 1cqw;
-    font-size: 1.7cqw;
+    grid-template-columns: 1.4em var(--swatch) minmax(0, 1fr) 2.6em 2.6em;
+    gap: 0 0.5em;
+    height: var(--row);
 }
 
 .bc-table .bc-table-head {
-    height: 3cqh;
-    font-size: 1.6cqw;
+    height: auto;
+    min-height: 0;
+    font-size: 0.85em;
     color: var(--bc-muted);
 }
 
@@ -238,29 +313,39 @@
     font-weight: 700;
 }
 
-.bc-lower {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2cqw;
-    min-height: 0;
-}
+/* Moves */
 
 .bc-moves li {
     display: grid;
-    grid-template-columns: 4cqw 1fr 1fr;
-    gap: 1cqw;
-    font-size: 1.7cqw;
+    grid-template-columns: 2.4em 1fr 1fr;
+    gap: 0.5em;
+    height: var(--row);
 }
 
 .bc-num-move {
     color: var(--bc-muted);
 }
 
+/* Up next and requests: the time or the place, then the matchup, which wraps onto a second line rather than being cut. */
+
 .bc-next li {
     display: grid;
-    grid-template-columns: 6cqw 1fr;
-    gap: 1cqw;
-    font-size: 1.7cqw;
+    grid-template-columns: 2.9em minmax(0, 1fr);
+    gap: 0.4em;
+    align-items: start;
+    padding: 0.15em 0;
+}
+
+.bc-next .bc-name {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+.bc-queue-panel .bc-next li {
+    grid-template-columns: 1.2em minmax(0, 1fr);
 }
 
 .bc-time {
@@ -268,29 +353,82 @@
     color: var(--bc-accent);
 }
 
-/* Requests: the queue and the order menu, under the moves and up next. Rows are tighter so both fit the side column. */
-
-.bc-requests {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2cqw;
-    min-height: 0;
-}
-
-.bc-requests .bc-panel li {
-    height: auto;
-    min-height: 3cqh;
-}
+/* Order menu: code, label, price */
 
 .bc-menu li {
     display: grid;
-    grid-template-columns: 4cqw 1fr auto;
-    gap: 1cqw;
-    height: 3cqh;
-    font-size: 1.5cqw;
+    grid-template-columns: 2.4em minmax(0, 1fr) auto;
+    gap: 0.5em;
+    height: var(--row);
+}
+
+.bc-menu-panel .bc-muted,
+.bc-queue-panel .bc-muted {
+    margin-top: 0.3em;
 }
 
 .bc-code {
     font-weight: 700;
     color: var(--bc-accent);
+}
+
+/* Last, so that it overrides the landscape rules above at the same specificity. */
+/* Portrait: a phone held upright. */
+@media (max-aspect-ratio: 3 / 4) {
+    .bc-stage {
+        --pad: 3cqw;
+        --gap: 1.6cqw;
+        --head: 8.4cqw;
+        --title: 4.6cqw;
+        --player-h: 6.4cqw;
+        --player: 4.2cqw;
+        --board: 80cqw;
+        --status: 3.3cqw;
+        --panel-pad: 1.1cqw 2.2cqw;
+        --h2: 2.9cqw;
+        --row: 3.7cqw;
+        --fs: 3.25cqw;
+        --swatch: 2.8cqw;
+        --radius: 1.6cqw;
+        --card-title: 7cqw;
+        --card-text: 4.2cqw;
+
+        width: min(100vw, calc(100vh * 9 / 19.5));
+        aspect-ratio: 9 / 19.5;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: var(--head);
+        grid-auto-rows: auto;
+        align-content: start;
+        grid-template-areas:
+            "head head"
+            "game game"
+            "status status"
+            "lb lb"
+            "moves next"
+            "queue menu";
+        column-gap: var(--gap);
+    }
+
+    .bc-col {
+        display: contents;
+    }
+
+    /* The board never gives up height to the panels below it. */
+    .bc-game {
+        justify-self: center;
+        width: var(--board);
+        min-height: auto;
+    }
+
+    .bc-status { grid-area: status; }
+    .bc-lb { grid-area: lb; }
+    .bc-moves-panel { grid-area: moves; }
+    .bc-next-panel { grid-area: next; }
+    .bc-queue-panel { grid-area: queue; }
+    .bc-menu-panel { grid-area: menu; }
+
+    /* The leaderboard has the full width here, so the provisional mark has room. */
+    .bc-table li {
+        grid-template-columns: 2.4em var(--swatch) minmax(0, 1fr) 3.6em 3.6em;
+    }
 }
