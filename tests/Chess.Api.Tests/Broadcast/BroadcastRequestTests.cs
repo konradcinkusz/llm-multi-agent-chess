@@ -73,25 +73,17 @@ public class BroadcastRequestTests
     }
 
     [Fact]
-    public async Task A_queued_request_plays_to_the_end_with_no_schedule_running()
+    public async Task A_queued_request_waits_while_no_schedule_is_running()
     {
         await using var h = NewHarness();
         var requestId = await QueueAsync(h, CustomA, CustomB, 1000);
         await h.StartRunnerAsync();
 
-        await h.Clock.RunUntilAsync(async () => (await RequestAsync(h, requestId)).Status == RequestStatus.Played,
-            "the request to be played");
+        await h.Clock.RunForAsync(TimeSpan.FromSeconds(2));
 
         var request = await RequestAsync(h, requestId);
-        Assert.NotNull(request.GameId);
-        Assert.NotNull(request.FinishedAt);
-        var game = await h.GameAsync(request.GameId!.Value);
-        Assert.True(game.Rated);
-        Assert.Equal(CustomA, game.WhiteModel);
-        Assert.Equal(CustomB, game.BlackModel);
-        Assert.NotEqual("*", game.Result);
-        Assert.NotEqual(GameTermination.Aborted.Termination, game.Termination);
-        Assert.Equal(0, await CreditAsync(h, requestId));
+        Assert.Equal(RequestStatus.Queued, request.Status);
+        Assert.Null(request.GameId);
     }
 
     [Fact]
@@ -100,6 +92,7 @@ public class BroadcastRequestTests
         await using var h = NewHarness();
         // One micro-dollar of price is 0.7 micro-dollars of budget, and the fake's first reply costs more than that.
         var requestId = await QueueAsync(h, CustomA, CustomB, 0.000001);
+        await h.SeedScheduleAsync(ScheduleStatus.Running, MoveDelayMs, GapSeconds);
         await h.StartRunnerAsync();
 
         await h.Clock.RunUntilAsync(async () => (await RequestAsync(h, requestId)).Status == RequestStatus.Played,
@@ -116,6 +109,7 @@ public class BroadcastRequestTests
     {
         await using var h = NewHarness();
         var requestId = await QueueAsync(h, "copilot-model", CustomB, 10);
+        await h.SeedScheduleAsync(ScheduleStatus.Running, MoveDelayMs, GapSeconds);
         await h.StartRunnerAsync();
 
         await h.Clock.RunUntilAsync(async () => (await RequestAsync(h, requestId)).Status == RequestStatus.Failed,
@@ -133,6 +127,7 @@ public class BroadcastRequestTests
     {
         await using var h = NewHarness();
         var requestId = await QueueAsync(h, BrokenOrRealPlayers.BrokenModel, CustomB, 10);
+        await h.SeedScheduleAsync(ScheduleStatus.Running, MoveDelayMs, GapSeconds);
         await h.StartRunnerAsync();
 
         await h.Clock.RunUntilAsync(async () => (await RequestAsync(h, requestId)).Status == RequestStatus.Failed,

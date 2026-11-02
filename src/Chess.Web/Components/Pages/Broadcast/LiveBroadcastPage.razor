@@ -12,9 +12,9 @@
 
 <PageTitle>LLM Chess 24h · Broadcast</PageTitle>
 
-<div class="bc-stage @ThemeClass" data-testid="broadcast-stage">
+<div class="bc-stage @ThemeClass @ViewClass" data-testid="broadcast-stage">
     <header class="bc-head">
-        <h1 class="bc-title" data-testid="broadcast-title">@LiveBroadcastView.Title(_slot?.Index, _totalGames)</h1>
+        <a class="bc-github" href="https://github.com/konradcinkusz/llm-multi-agent-chess" target="_blank" rel="noopener noreferrer" data-testid="broadcast-github">github.com/konradcinkusz/llm-multi-agent-chess</a>
         <div class="bc-head-right">
             @if (_now is null || _linkError is not null)
             {
@@ -25,9 +25,10 @@
     </header>
 
     <section class="bc-game" aria-label="Current game">
-        <div class="bc-player" data-testid="broadcast-black">
+        <div class="bc-player @(ThinkingSide == "black" ? "bc-thinking" : null)" data-testid="broadcast-black">
             <span class="bc-swatch" style="background: @ColourOf(_live?.Summary.Black.ModelId)"></span>
-            <span>@PlayerName(_live?.Summary.Black)</span>
+            <span>@SideLabel(_live?.Summary.Black)</span>
+            @if (ThinkingSide == "black") { <span class="bc-dots" aria-label="thinking"><i></i><i></i><i></i></span> }
         </div>
 
         <div class="bc-board-frame">
@@ -51,9 +52,10 @@
             }
         </div>
 
-        <div class="bc-player" data-testid="broadcast-white">
+        <div class="bc-player @(ThinkingSide == "white" ? "bc-thinking" : null)" data-testid="broadcast-white">
             <span class="bc-swatch" style="background: @ColourOf(_live?.Summary.White.ModelId)"></span>
-            <span>@PlayerName(_live?.Summary.White)</span>
+            <span>@SideLabel(_live?.Summary.White)</span>
+            @if (ThinkingSide == "white") { <span class="bc-dots" aria-label="thinking"><i></i><i></i><i></i></span> }
         </div>
 
     </section>
@@ -61,37 +63,6 @@
     @* Two side columns on the 16:9 stage. On a portrait screen they dissolve (display: contents) into the stage grid. *@
     <div class="bc-col bc-col-a">
         <p class="bc-status" data-testid="broadcast-status" role="status">@StatusLine</p>
-
-        <section class="bc-panel bc-lb" data-testid="broadcast-leaderboard" aria-label="Leaderboard">
-            <h2>Leaderboard</h2>
-            <ol class="bc-table">
-                <li class="bc-table-head" aria-hidden="true">
-                    <span></span><span></span><span></span><span>Score</span><span>Rating</span>
-                </li>
-                @foreach (var (model, rank) in Leaders.Select((item, index) => (item, index + 1)))
-                {
-                    <li data-model="@model.Model">
-                        <span class="bc-rank">@rank</span>
-                        <span class="bc-swatch" style="background: @ColourOf(model.Model)"></span>
-                        <span class="bc-name">@ModelName(model.Model)</span>
-                        <span class="bc-num">@model.ArenaScore.ToString("0.0", CultureInfo.InvariantCulture)</span>
-                        @* A provisional model has no rating yet: the mark sits in the rating column, so the name keeps the width. *@
-                        @if (model.Provisional)
-                        {
-                            <span class="bc-num bc-prov" title="provisional">prov.</span>
-                        }
-                        else
-                        {
-                            <span class="bc-num">@Math.Round(model.Rating).ToString("0", CultureInfo.InvariantCulture)</span>
-                        }
-                    </li>
-                }
-            </ol>
-            @if (Leaders.Count == 0)
-            {
-                <p class="bc-muted">Ratings appear after the first game.</p>
-            }
-        </section>
 
         <section class="bc-panel bc-moves-panel" data-testid="broadcast-moves" aria-label="Moves">
             <h2>Moves</h2>
@@ -106,9 +77,7 @@
                 }
             </ol>
         </section>
-    </div>
 
-    <div class="bc-col bc-col-b">
         <section class="bc-panel bc-next-panel" data-testid="broadcast-upnext" aria-label="Up next">
             <h2>Up next</h2>
             @if (_now is { Next.Count: > 0 } now)
@@ -129,52 +98,6 @@
             }
         </section>
 
-        @* The viewer requests (03 §15.6). Without the requests API none of this is drawn, and nothing else moves. *@
-        @if (_queue is not null || _menu is not null)
-        {
-            <section class="bc-panel bc-queue-panel" data-testid="broadcast-queue" aria-label="Requests">
-                <h2>Requests</h2>
-                @if (_queue is { Queued.Count: > 0 } queue)
-                {
-                    <ol class="bc-next">
-                        @foreach (var request in queue.Queued.Take(LiveRequestView.MaxQueued))
-                        {
-                            <li data-request="@request.Id">
-                                <span class="bc-time">@request.QueuePosition</span>
-                                <span class="bc-name">@request.PayerDisplay · @ModelName(request.White) vs @ModelName(request.Black)</span>
-                            </li>
-                        }
-                    </ol>
-                    <p class="bc-muted" data-testid="broadcast-wait">@LiveRequestView.WaitLabel(queue.EstimatedWaitMinutes)</p>
-                }
-                else if (_queue is not null)
-                {
-                    <p class="bc-muted">No requests waiting. Order one with a Super Chat.</p>
-                }
-                @foreach (var line in LiveRequestView.RejectionLines(_queue))
-                {
-                    <p class="bc-muted" data-testid="broadcast-rejection">@line</p>
-                }
-            </section>
-
-            <section class="bc-panel bc-menu-panel" data-testid="broadcast-menu" aria-label="Order a game">
-                <h2>Order a game</h2>
-                @if (_menu is { } menu)
-                {
-                    <ol class="bc-menu">
-                        @foreach (var item in menu.Items)
-                        {
-                            <li data-code="@item.Code">
-                                <span class="bc-code">@item.Code</span>
-                                <span class="bc-name">@item.Label</span>
-                                <span class="bc-num">@LiveRequestView.Price(item.EstimatedUsdPerSide) a side</span>
-                            </li>
-                        }
-                    </ol>
-                    <p class="bc-muted" data-testid="broadcast-order">@menu.CommandHelp</p>
-                }
-            </section>
-        }
     </div>
 </div>
 
@@ -190,11 +113,15 @@
 
     /// <summary>The replay pace when the schedule sends none: one move every three seconds, ten seconds between games.</summary>
     private const int DefaultMoveDelayMs = 3000;
-    private const int DefaultGameGapSeconds = 10;
+    private const int DefaultGameGapSeconds = 30 * 60;
 
     /// <summary>The <c>?theme=</c> option: <c>light</c> for a light background, anything else is the dark default.</summary>
     [Parameter, SupplyParameterFromQuery(Name = "theme")]
     public string? Theme { get; set; }
+
+    /// <summary>The <c>?view=</c> option: <c>mobile</c> forces the portrait (phone) layout on any screen; otherwise a narrow portrait viewport gets it.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? View { get; set; }
 
     /// <summary>The <c>?top=</c> option: how many models the leaderboard shows (default 8).</summary>
     [Parameter, SupplyParameterFromQuery(Name = "top")]
@@ -244,9 +171,9 @@
 
     private string ThemeClass => IsLight ? "bc-light" : "bc-dark";
 
-    private LiveBroadcastClient Broadcast => _broadcast ??= new LiveBroadcastClient(HttpClients.CreateClient(ArenaClientName));
+    private string ViewClass => string.Equals(View, "mobile", StringComparison.OrdinalIgnoreCase) ? "bc-portrait" : string.Empty;
 
-    private IReadOnlyList<ModelRating> Leaders => LiveBroadcastView.Leaderboard(_leaderboard?.Models ?? [], LiveBroadcastView.ClampTop(Top));
+    private LiveBroadcastClient Broadcast => _broadcast ??= new LiveBroadcastClient(HttpClients.CreateClient(ArenaClientName));
 
     private IReadOnlyList<MoveRow> MoveTail => _live is null ? [] : LiveBroadcastView.MoveTail(_live.Moves);
 
@@ -258,6 +185,8 @@
         : null;
 
     private string LinkText => _now is null && _linkError is null ? "Connecting to the arena…" : "Reconnecting to the arena…";
+
+    private string? ThinkingSide => !_replaying && _live is { Outcome: null, Thinking: { } t } ? (t.Ply % 2 == 1 ? "white" : "black") : null;
 
     private string StatusLine
     {
@@ -700,6 +629,19 @@
     private TimeSpan GameGap => TimeSpan.FromSeconds(_pacing?.GameGapSeconds ?? DefaultGameGapSeconds);
 
     private string PlayerName(PlayerSpec? player) => player is null ? "—" : ModelName(player.ModelId);
+
+    /// <summary>The name of a side on the board, with its reasoning effort after a dot when the model has one.</summary>
+    private string SideLabel(PlayerSpec? player)
+    {
+        if (player is null)
+        {
+            return "—";
+        }
+
+        var id = PlayerId.Parse(player.ModelId);
+        var name = ModelName(id.Model);
+        return id.Effort is null ? name : $"{name} · {id.Effort}";
+    }
 
     private string ModelName(string modelId) => _models.FirstOrDefault(model => model.Id == modelId)?.DisplayName ?? modelId;
 

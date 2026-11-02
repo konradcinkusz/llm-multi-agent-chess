@@ -39,7 +39,7 @@ public sealed class BroadcastRunner(
     private static readonly TimeSpan ErrorPause = TimeSpan.FromSeconds(10);
 
     /// <summary>The pacing of a request game when no schedule is running: the defaults of 03 §9.1.</summary>
-    private static readonly PacingProfile DefaultPacing = new(MoveDelayMs: 4000, GameGapSeconds: 20);
+    private static readonly PacingProfile DefaultPacing = new(MoveDelayMs: 4000, GameGapSeconds: 30 * 60);
 
     private const string InterruptedNote = "interrupted by a restart";
     private const string StoppedNote = "stopped by the operator";
@@ -83,7 +83,8 @@ public sealed class BroadcastRunner(
 
     /// <summary>
     /// One decision of the loop: wait, finish the schedule, play the next paid request, or play the next slot. A paused broadcast
-    /// holds both. A request goes before the next planned slot, and it is taken with no schedule running too (03 §15.1).
+    /// holds both. A request goes before the next planned slot. Requests wait while no schedule is running or paused, so a
+    /// finished broadcast does not start a game on its own: a waiting request stays queued and is not lost.
     /// </summary>
     private async Task StepAsync(CancellationToken ct)
     {
@@ -94,15 +95,15 @@ public sealed class BroadcastRunner(
             return;
         }
 
-        if (await requests.TakeNextAsync(ct) is { } request)
-        {
-            await PlayRequestAsync(request, active?.Pacing ?? DefaultPacing, ct);
-            return;
-        }
-
         if (active is null)
         {
             await WaitAsync(clock.GetUtcNow() + MaxWait, ct);
+            return;
+        }
+
+        if (await requests.TakeNextAsync(ct) is { } request)
+        {
+            await PlayRequestAsync(request, active.Pacing ?? DefaultPacing, ct);
             return;
         }
 
@@ -268,7 +269,10 @@ public sealed class BroadcastRunner(
             if (end is not null && end.Termination != GameTermination.Aborted.Termination)
             {
                 await FinishSlotAsync(slotId, SlotState.Finished, null, ct);
-                await HoldAsync(scheduleId, clock.GetUtcNow() + attempt!.Gap, ct);
+                var endedAt = clock.GetUtcNow();
+                var nextStart = endedAt + attempt!.Gap;
+                await ShiftPendingAsync(scheduleId, slotId, endedAt, nextStart, attempt!.Gap, ct);
+                await HoldAsync(scheduleId, nextStart, ct);
                 return;
             }
 
@@ -348,6 +352,42 @@ public sealed class BroadcastRunner(
         signals.Notice = null;
         await db.SaveChangesAsync(ct);
         signals.Publish();
+    }
+
+    /// <summary>
+    /// Re-estimates the pending games after a game ended: the game just played ends at <paramref name="endedAt"/> (its planned
+    /// end is corrected to that), the next one starts at <paramref name="firstStart"/> (the end plus the gap), and the rest
+    /// follow back to back with their planned lengths.
+    /// </summary>
+    private async Task ShiftPendingAsync(
+        Guid scheduleId, Guid playedSlotId, DateTimeOffset endedAt, DateTimeOffset firstStart, TimeSpan gap, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var played = await db.BroadcastSlots.FirstOrDefaultAsync(s => s.Id == playedSlotId, ct);
+        if (played is not null)
+        {
+            played.PlannedEnd = endedAt;
+        }
+
+        var pending = await db.BroadcastSlots
+            .Where(s => s.ScheduleId == scheduleId && s.State == SlotState.Pending)
+            .OrderBy(s => s.Index)
+            .ToListAsync(ct);
+
+        var next = firstStart;
+        foreach (var slot in pending)
+        {
+            var length = slot.PlannedEnd - slot.PlannedStart;
+            slot.PlannedStart = next;
+            slot.PlannedEnd = next + length;
+            next = slot.PlannedEnd + gap;
+        }
+
+        if (played is not null || pending.Count > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            signals.Publish();
+        }
     }
 
     /// <summary>Start-up: a slot that was running when the process stopped was cut off, so it is skipped (03 §9.3).</summary>

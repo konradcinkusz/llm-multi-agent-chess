@@ -21,7 +21,6 @@ public class SiteExportTests(SiteExportFixture site) : IClassFixture<SiteExportF
         "games/page-2/index.html",
         "tournaments/index.html",
         $"tournaments/{SiteDataSet.Tournament:D}/index.html",
-        "menu/index.html",
         "about/index.html",
     ];
 

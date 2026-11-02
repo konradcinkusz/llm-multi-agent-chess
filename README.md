@@ -84,9 +84,9 @@ The navigation lists them in this order:
 | Games | `/games`, `/games/{id}` | Paged archive. Replay shows the same move table, engine log and game summary as the live page, with each move's attempts, latency, centipawn loss and best move, and a PGN download. |
 | Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, model and legality. |
 | Viewer requests | `/admin/requests` | Not in the navigation. The requests playing now, the queue with cancel, the recent requests, and a simulate form in Mock mode. See [Viewer-paid games](#viewer-paid-games). |
-| Broadcast plan | `/broadcast/plan` | Plan a day of games, preview every slot and the AI-credit and USD estimate, save a draft, start, pause, resume or stop. |
+| Broadcast plan | `/broadcast/plan` | Add games one by one (White and Black), see the estimated cost of the broadcast, press Start; pause, resume or stop from the list. |
 | Site | `/admin/site` | Export the public results site, publish it to the `gh-pages` branch, and see the last export and publish. See [Public results site](#public-results-site). |
-| Broadcast (OBS) | `/broadcast` | Not in the navigation. The page OBS captures. |
+| Broadcast (OBS) | `/broadcast` | The live page, linked from the navigation as "Live broadcast". It is also the page OBS captures. |
 
 Copilot's `auto` model is hidden from the model pickers unless `Arena:ShowAutoModel` is `true`: it picks a different model for each request, so it is not one player.
 
@@ -134,7 +134,7 @@ Broadcast mode plans a day of games in advance, plays them one at a time with pa
 
 **The app does not stream video.** OBS captures `http://localhost:5070/broadcast` as a Browser Source at 1920×1080 and streams to YouTube. The app never sees the stream key.
 
-The planner (`/broadcast/plan`) shows every slot and the AI-credit and USD estimate before anything is saved. Start the day once, and it plays through its slots in order, one game at a time. A restart resumes the day at its next unfinished slot.
+The planner (`/broadcast/plan`) takes the games one by one, with no dates, and shows the estimated cost of the whole broadcast. Press Start once, and the games play through its slots in order, one game at a time. A restart resumes the day at its next unfinished slot.
 
 The full runbook is [docs/BROADCAST.md](docs/BROADCAST.md): planning, OBS setup, YouTube settings, keeping the machine awake, and what happens on a restart or a Copilot outage.
 

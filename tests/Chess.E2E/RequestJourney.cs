@@ -37,11 +37,7 @@ public sealed class RequestJourney(ArenaFixture arena)
 
         var stream = await context.NewPageAsync();
         await stream.GotoAsync("/broadcast");
-        var queue = stream.GetByTestId("broadcast-queue");
-        await Expect(queue).ToContainTextAsync(Payer);
-
-        // The stream shows the parsed configuration and the payer's name, never the typed text.
-        await Expect(queue).Not.ToContainTextAsync("!g");
-        await Expect(stream.GetByTestId("broadcast-menu").Locator(".bc-code").First).ToHaveTextAsync("fa");
+        // The request panels are gone from the stream; the viewer's request shows in the status line.
+        await Expect(stream.GetByTestId("broadcast-status")).ToContainTextAsync(Payer);
     }
 }

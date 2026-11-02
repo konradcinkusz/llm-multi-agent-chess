@@ -30,13 +30,12 @@ running; detach with `Ctrl-b d` in tmux and reattach with `tmux attach`.
 ### In the app: `/broadcast/plan`
 
 1. Open `http://localhost:5070/broadcast/plan`.
-2. Pick the models. Each model shows its token price (or its premium multiplier, for a model that still reports one). `Random` is always available and costs nothing.
-3. Set the start time and the duration (24 h by default), the pacing (move delay 4000 ms and game gap 20 s by default), and the seed.
-4. Press **Generate preview**. The timeline of every slot and the cost estimate per model (AI credits and USD) appear **before anything is saved**.
-5. Edit if needed: **Up**, **Down** and **Delete** change the order of the slots.
-6. Press **Save draft**. Nothing runs yet.
-7. Press **Start**. The day plays from the start time; the button is offered only for the saved draft with no unsaved edits.
+2. Optionally set the name and the pacing (move delay 4000 ms and game gap 30 min by default; the gap is typed in minutes). There is no start time or duration.
+3. Pick a White player and a Black player (each model also appears with each reasoning effort it offers, and in each ticked prompt style) and press **Add game**. Repeat for every game, one line per game. **Up**, **Down** and **Delete** change the list.
+4. Under the list, **Estimated cost of the broadcast** shows the total premium requests, AI credits and USD of the games added, and each model's share, before anything is sent.
+5. Press **Start**. The app saves the games as a schedule that begins now and starts it in one click. The games play in list order. Each game starts after the previous one ends plus the game gap, and the next start time shown on the page is recalculated from the games already played. Start is disabled while another broadcast is playing or paused.
 
+The schedule window is the span of the games, so a long list is limited to 168 hours.
 Only one day plays at a time. A second start while one is playing or paused is refused.
 
 ### Through the API
@@ -55,7 +54,7 @@ Content-Type: application/json
   "models": ["random", "<model id>", "<model id>"],
   "startsAt": "2026-10-25T08:00:00Z",
   "durationHours": 24,
-  "pacing": { "moveDelayMs": 4000, "gameGapSeconds": 20 },
+  "pacing": { "moveDelayMs": 4000, "gameGapSeconds": 1800 },
   "seed": 1,
   "assumedPlies": 80,
   "assumedMoveLatencyMs": 40000
@@ -80,9 +79,9 @@ A 409 means the schedule is not in a state the command can leave, for example st
 
 Copilot bills the arena's models by tokens, in **AI credits**: each move costs its input and output tokens at the model's token
 prices. The app shows credits and an estimate in US dollars, at `Arena:Cost:UsdPerAiCredit` (default 0.01 per credit). The
-planner's defaults (80 plies per game, 40 s average move latency, 4 s move delay, 20 s gap) give:
+planner's defaults (80 plies per game, 40 s average move latency, 4 s move delay, 30 min gap) give:
 
-- **Game length.** 80 plies × (40 s + 4 s) = 58 min 40 s per game, plus the 20 s gap: 59 min per slot.
+- **Game length.** 80 plies × (40 s + 4 s) = 58 min 40 s per game, plus the 30 min gap: about 1 h 29 min per slot.
 - **Games per day.** A 24-hour window holds **24 games** (the soak test checks this count with these defaults).
 - **Moves per side.** The planner assumes 80 plies ÷ 2 = **40 moves per side** per game.
 - **Tokens per move.** A model with no stored moves is assumed to use **700 input and 300 output tokens** per move. A model
@@ -105,11 +104,13 @@ The estimate is the normal case, not a ceiling:
 
 ## 3. OBS: Browser Source
 
-The page is a full-screen 1920×1080 layout with no app chrome: the board on the full height, then the status line,
-leaderboard and moves, then up next, the requests and the order menu. Everything fits on the one screen; nothing scrolls.
+The page is a full-screen 1920×1080 layout with no app chrome: the board on the full height, with the status line, the moves
+and the up-next games beside it, with a link to the repository in the header. Each player's
+model and reasoning effort (`model · effort`) show on its side of the board. Everything fits on the one screen; nothing scrolls.
 The row text is 28 px at 1080p (panel headings 25 px), so the stream stays readable on a phone. The same layout fits any
-landscape window, and on a phone held upright `/broadcast` switches to a one-column layout (board, status, leaderboard, then
-two pairs of panels). A model without a rating yet shows `prov.` in its rating column. Add the page as a source:
+landscape window, and on a phone held upright `/broadcast` switches to a two-column grid (moves and up next, under the board).
+To force that phone layout on any screen, open
+`/broadcast?view=mobile`. A model without a rating yet shows `prov.` in its rating column. Add the page as a source:
 
 1. In OBS, select or create a scene for the channel. Set the canvas to **1920×1080** (Settings → Video) and **30 FPS**
    (Settings → Video → Common FPS Values).
@@ -119,7 +120,7 @@ two pairs of panels). A model without a rating yet shows `prov.` in its rating c
 5. **Custom CSS:** leave empty.
 6. Tick **Refresh browser when scene becomes active**.
 7. Leave **Control audio via OBS** unticked. The page makes no sound.
-8. Press **OK**. The board, the moves, the leaderboard and the "Up next" list appear. If the page is empty, check that the app
+8. Press **OK**. The board, the moves and the "Up next" list appear. If the page is empty, check that the app
    is running and the URL is correct.
 
 ## 4. YouTube Live
@@ -191,8 +192,8 @@ The owner's rules, prices and keys are in [docs/REQUESTS.md](REQUESTS.md). This 
 
 **Requests go before slots.** The runner checks the request queue before the next planned slot, at every step:
 
-- A queued request is played **even with no schedule running**. The runner then uses the default pace: one move every 4 s and a
-  20 s gap between games.
+- A queued request is played only **while a schedule is running**. With no schedule running (none started, or the day finished) the
+  request stays queued and no game starts. A running schedule's pace applies to it, like a slot.
 - Otherwise a request's game uses the running schedule's pace, like a slot.
 - **Pause** holds requests as well as slots. A paused day plays no request until **Resume**.
 - A request that is playing is never interrupted by a request that arrives after it. The queue is first in, first out.

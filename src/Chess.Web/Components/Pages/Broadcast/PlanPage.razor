@@ -1,6 +1,5 @@
 @page "/broadcast/plan"
 @using Chess.Web.Api
-@using Chess.Web.Components.Charts
 @using Chess.Web.Components.Pages.Tournaments
 @implements IDisposable
 @inject ArenaApiClient Api
@@ -10,7 +9,7 @@
 
 <div class="page-header">
     <h1>Broadcast plan</h1>
-    <p class="page-lede">Plan a day of games, check the cost estimate, save the plan as a draft, then start it. Times are UTC.</p>
+    <p class="page-lede">Add the games one by one, White against Black. They play in this order as soon as you press Start.</p>
 </div>
 
 @* Every action reports here, whichever section it came from. *@
@@ -20,8 +19,8 @@
 }
 
 <div class="stack-lg">
-<section class="plan-section" aria-labelledby="plan-form-heading">
-    <h2 id="plan-form-heading">1. Plan the day</h2>
+<section class="plan-section" aria-labelledby="plan-games-heading">
+    <h2 id="plan-games-heading">1. Games</h2>
 
     <div class="card stack">
 
@@ -41,243 +40,166 @@
                 <input data-testid="plan-name" type="text" maxlength="120" @bind="_name" />
             </label>
             <label class="field">
-                Start (UTC)
-                <input data-testid="plan-start" type="datetime-local" value="@_startText" @onchange="OnStartChanged" />
-            </label>
-            <label class="field">
-                Hours
-                <input data-testid="plan-hours" type="number" min="1" max="@PlanPlanner.MaxDurationHours" @bind="_hours" />
-            </label>
-            <label class="field">
                 Move delay (ms)
                 <input data-testid="plan-move-delay" type="number" min="0" step="500" @bind="_moveDelayMs" />
             </label>
             <label class="field">
-                Game gap (s)
-                <input data-testid="plan-game-gap" type="number" min="0" @bind="_gameGapSeconds" />
-            </label>
-            <label class="field">
-                Seed
-                <input data-testid="plan-seed" type="number" @bind="_seed" />
+                Game gap (min)
+                <input data-testid="plan-game-gap" type="number" min="0" @bind="_gameGapMinutes" />
             </label>
         </div>
 
-        <fieldset class="plan-models" data-testid="plan-models">
-            <legend>Models</legend>
-            <div class="chips">
-                @foreach (var model in _choices)
-                {
-                    <label class="chip plan-model">
-                        <input data-testid="plan-model-@model.Id" type="checkbox" checked="@_selected.Contains(model.Id)"
-                               @onchange="e => Toggle(model.Id, e.Value)" />
-                        @model.DisplayName
-                        <span class="muted">@TournamentFormat.Cost(model)</span>
-                    </label>
-                }
-            </div>
-        </fieldset>
-
-        <fieldset class="plan-styles" data-testid="plan-styles">
-            <legend>Prompt styles</legend>
-            <div class="chips">
-                @foreach (var style in _styles)
-                {
-                    <label class="chip plan-style">
-                        <input data-testid="plan-style-@style.Id" type="checkbox" checked="@_selectedStyles.Contains(style.Id)"
-                               @onchange="e => ToggleStyle(style.Id, e.Value)" />
-                        @style.DisplayName
-                        <span class="muted">@PromptStyleChoices.Players(PromptStyleChoices.Participants(SelectedModels, [style.Id]).Count)</span>
-                    </label>
-                }
-            </div>
-            @if (_stylesNotice is { } notice)
-            {
-                <p class="field-hint" data-testid="styles-notice">@notice</p>
-            }
-        </fieldset>
-
-        @foreach (var problem in FormProblems)
+        @if (_styles.Count > 1)
         {
-            <p class="plan-problem error-text">@problem</p>
+            <fieldset class="plan-styles" data-testid="plan-styles">
+                <legend>Prompt styles offered</legend>
+                <div class="chips">
+                    @foreach (var style in _styles)
+                    {
+                        <label class="chip plan-style">
+                            <input data-testid="plan-style-@style.Id" type="checkbox" checked="@_selectedStyles.Contains(style.Id)"
+                                   @onchange="e => ToggleStyle(style.Id, e.Value)" />
+                            @style.DisplayName
+                        </label>
+                    }
+                </div>
+            </fieldset>
         }
 
-        <div class="cluster">
-            <button data-testid="plan-generate" type="button" class="btn-primary" @onclick="Generate" disabled="@(FormProblems.Count > 0 || _busy)">
-                Generate preview
-            </button>
+        @if (_stylesNotice is { } notice)
+        {
+            <p class="field-hint" data-testid="styles-notice">@notice</p>
+        }
+
+        <div class="cluster plan-add">
+            <label>
+                White
+                <select data-testid="add-white" value="@_pickWhite" disabled="@_busy"
+                        @onchange="e => _pickWhite = e.Value?.ToString()">
+                    <option value="">Choose a model</option>
+                    @foreach (var player in Players)
+                    {
+                        <option value="@player">@NameOf(player)</option>
+                    }
+                </select>
+            </label>
+            <label>
+                Black
+                <select data-testid="add-black" value="@_pickBlack" disabled="@_busy"
+                        @onchange="e => _pickBlack = e.Value?.ToString()">
+                    <option value="">Choose a model</option>
+                    @foreach (var player in Players)
+                    {
+                        <option value="@player">@NameOf(player)</option>
+                    }
+                </select>
+            </label>
+            <button data-testid="add-game" type="button" class="btn" @onclick="AddGame" disabled="@(!CanAddGame)">Add game</button>
         </div>
-    }
-    </div>
-</section>
+        @if (_addError is not null)
+        {
+            <p class="plan-problem">@_addError</p>
+        }
 
-@if (_request is { } request)
-{
-    var ends = request.StartsAt.AddHours(request.DurationHours);
-
-    <section class="plan-section" aria-labelledby="plan-preview-heading">
-        <h2 id="plan-preview-heading">2. Preview and estimate</h2>
-        <p class="muted">
-            @_slots.Count @(_slots.Count == 1 ? "game" : "games") from @PlanFormat.Utc(request.StartsAt) to @PlanFormat.Utc(ends).
-            Nothing is saved until you press Save draft.
-        </p>
-
-        <ChartFrame Title="Preview timeline"
-                    Description="Each bar is one game on a UTC clock: white on the left half, black on the right.">
-            <PlanTimeline Slots="_slots" StartsAt="request.StartsAt" EndsAt="ends" />
-        </ChartFrame>
-
-        <div class="callout callout-info plan-estimate" data-testid="plan-estimate" aria-live="polite">
-            <h3>Cost of the day (estimate, before saving)</h3>
-            <p class="muted">
-                Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
-                AI credits and USD use the API's rate and the tokens of past moves, as the saved draft will.
-            </p>
+        @if (_slots.Count == 0)
+        {
+            <p class="muted" data-testid="plan-empty">No games yet. Pick White and Black, then Add game.</p>
+        }
+        else
+        {
             <div class="table-wrap">
-                <table class="table-compact">
+                <table class="plan-slots">
                     <thead>
-                        <tr><th>Model</th><th>Price</th><th class="num">Games</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
+                        <tr>
+                            <th class="num">#</th>
+                            <th>White</th>
+                            <th>Black</th>
+                            <th><span class="visually-hidden">Actions</span></th>
+                        </tr>
                     </thead>
                     <tbody>
-                        @foreach (var model in request.Models)
+                        @for (var i = 0; i < _slots.Count; i++)
                         {
-                            var cost = CostOf(model);
-                            <tr>
-                                <td>@NameOf(model)</td>
-                                <td>@TournamentFormat.Price(Find(model)?.Pricing)</td>
-                                <td class="num">@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
-                                <td class="num">@TournamentFormat.Requests(RequestsFor(model))</td>
-                                <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
-                                <td class="num">@TournamentFormat.Usd(cost?.Usd)</td>
-                                <td>@TournamentFormat.Basis(cost?.Basis, cost?.SampleMoves)</td>
+                            var index = i;
+                            var slot = _slots[i];
+                            <tr data-testid="plan-slot">
+                                <td class="num">@(index + 1)</td>
+                                <td data-testid="slot-white">@NameOf(slot.White.ModelId)</td>
+                                <td data-testid="slot-black">@NameOf(slot.Black.ModelId)</td>
+                                <td class="plan-row-actions">
+                                    <button data-testid="slot-up" type="button" class="btn-sm" disabled="@(_busy || index == 0)"
+                                            @onclick="() => Reorder(index, -1)">Up</button>
+                                    <button data-testid="slot-down" type="button" class="btn-sm" disabled="@(_busy || index == _slots.Count - 1)"
+                                            @onclick="() => Reorder(index, 1)">Down</button>
+                                    <button data-testid="slot-delete" type="button" class="btn-sm btn-danger" disabled="@_busy"
+                                            @onclick="() => Delete(index)">Delete</button>
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <p>
-                Known total: @TournamentFormat.Requests(request.Models.Sum(model => RequestsFor(model) ?? 0))
-                · AI credits: @TournamentFormat.Credits(Known(request.Models.Select(model => CostOf(model)?.AiCredits)))
-                · USD: @TournamentFormat.Usd(Known(request.Models.Select(model => CostOf(model)?.Usd)))
-                @if (UnknownCount > 0)
-                {
-                    <span>, plus @UnknownCount model@(UnknownCount == 1 ? "" : "s") billed by token, counted in AI credits</span>
-                }
-            </p>
-        </div>
 
-        <h3>Games</h3>
-        <div class="table-wrap">
-            <table class="plan-slots">
-                <thead>
-                    <tr>
-                        <th class="num">#</th>
-                        <th>Starts</th>
-                        <th>White</th>
-                        <th>Black</th>
-                        <th><span class="visually-hidden">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @for (var i = 0; i < _slots.Count; i++)
+            var models = _slots.SelectMany(slot => new[] { slot.White.ModelId, slot.Black.ModelId }).Distinct().ToList();
+            <div class="callout callout-info plan-estimate" data-testid="plan-estimate" aria-live="polite">
+                <h3>Estimated cost of the broadcast</h3>
+                <p class="plan-total" data-testid="plan-total">
+                    Estimated total for @_slots.Count game@(_slots.Count == 1 ? "" : "s"):
+                    @TournamentFormat.Requests(Known(models.Select(RequestsFor))) premium requests ·
+                    @TournamentFormat.Credits(Known(models.Select(model => CostOf(model)?.AiCredits))) AI credits ·
+                    @TournamentFormat.Usd(Known(models.Select(model => CostOf(model)?.Usd)))
+                    @if (UnknownCount(models) > 0)
                     {
-                        var index = i;
-                        var slot = _slots[i];
-                        <tr data-testid="plan-slot">
-                            <td class="num">@(index + 1)</td>
-                            <td>@PlanFormat.Utc(slot.PlannedStart)</td>
-                            <td>
-                                <select data-testid="slot-white" aria-label="White, game @(index + 1)" value="@slot.White.ModelId"
-                                        disabled="@(Locked || _busy)" @onchange="e => SetPlayer(index, true, e.Value)">
-                                    @foreach (var model in request.Models)
-                                    {
-                                        <option value="@model">@NameOf(model)</option>
-                                    }
-                                </select>
-                            </td>
-                            <td>
-                                <select data-testid="slot-black" aria-label="Black, game @(index + 1)" value="@slot.Black.ModelId"
-                                        disabled="@(Locked || _busy)" @onchange="e => SetPlayer(index, false, e.Value)">
-                                    @foreach (var model in request.Models)
-                                    {
-                                        <option value="@model">@NameOf(model)</option>
-                                    }
-                                </select>
-                            </td>
-                            <td class="plan-row-actions">
-                                <button data-testid="slot-up" type="button" class="btn-sm" disabled="@(Locked || _busy || index == 0)"
-                                        @onclick="() => Reorder(index, -1)">Up</button>
-                                <button data-testid="slot-down" type="button" class="btn-sm" disabled="@(Locked || _busy || index == _slots.Count - 1)"
-                                        @onclick="() => Reorder(index, 1)">Down</button>
-                                <button data-testid="slot-delete" type="button" class="btn-sm btn-danger" disabled="@(Locked || _busy)"
-                                        @onclick="() => Delete(index)">Delete</button>
-                            </td>
-                        </tr>
+                        <span>, plus @UnknownCount(models) model@(UnknownCount(models) == 1 ? "" : "s") billed by token, counted in AI credits</span>
                     }
-                </tbody>
-            </table>
-        </div>
-        <p class="muted">Up and Down move the players of a game to the neighbouring game; the windows stay where they are.</p>
-
-        @foreach (var problem in SlotProblems)
-        {
-            <p class="plan-problem">@problem</p>
-        }
-
-        <div class="cluster">
-            <button data-testid="plan-save" type="button" class="btn" @onclick="SaveAsync" disabled="@(!CanSave)">Save draft</button>
-            <button data-testid="plan-start-now" type="button" class="btn-primary" @onclick="StartAsync" disabled="@(!CanStart)">Start</button>
-        </div>
-
-        @if (_saved is { } saved)
-        {
-            <p class="callout @(Dirty ? "callout-warning" : "callout-info") plan-saved" role="status">
-                Saved as <strong>@saved.Schedule.Name</strong> (@PlanFormat.Status(saved.Schedule.Status)).
-                @if (Dirty)
-                {
-                    <span>Unsaved changes: save the draft before you start it.</span>
-                }
-            </p>
-        }
-
-        @if (_saved is { } estimated && !Dirty)
-        {
-            <div class="callout callout-info plan-cost" data-testid="plan-cost" role="status">
-                <h3>AI credits and USD (estimate, from the API)</h3>
+                </p>
                 <p class="muted">
-                    Tokens per move are the model's average over its stored moves, or the assumed tokens when it has none.
-                    USD is credits × the rate in Arena:Cost:UsdPerAiCredit.
+                    Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
+                    AI credits and USD use the API's rate and the tokens of past moves.
                 </p>
                 <div class="table-wrap">
                     <table class="table-compact">
                         <thead>
-                            <tr><th>Model</th><th class="num">Games</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
+                            <tr><th>Model</th><th>Price</th><th class="num">Games</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
                         </thead>
                         <tbody>
-                            @foreach (var estimate in estimated.Schedule.EstimatedPremiumRequests)
+                            @foreach (var model in models)
                             {
+                                var cost = CostOf(model);
                                 <tr>
-                                    <td>@NameOf(estimate.ModelId)</td>
-                                    <td class="num">@estimated.Slots.Count(slot => slot.White.ModelId == estimate.ModelId || slot.Black.ModelId == estimate.ModelId)</td>
-                                    <td class="num">@TournamentFormat.Credits(estimate.EstimatedAiCredits)</td>
-                                    <td class="num">@TournamentFormat.Usd(estimate.EstimatedUsd)</td>
-                                    <td>@TournamentFormat.Basis(estimate.TokenBasis, estimate.SampleMoves)</td>
+                                    <td>@NameOf(model)</td>
+                                    <td>@TournamentFormat.Price(Find(model)?.Pricing)</td>
+                                    <td class="num">@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
+                                    <td class="num">@TournamentFormat.Requests(RequestsFor(model))</td>
+                                    <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
+                                    <td class="num">@TournamentFormat.Usd(cost?.Usd)</td>
+                                    <td>@TournamentFormat.Basis(cost?.Basis, cost?.SampleMoves)</td>
                                 </tr>
                             }
                         </tbody>
                     </table>
                 </div>
-                <p>
-                    Known total: @TournamentFormat.Credits(KnownCredits(estimated.Schedule.EstimatedPremiumRequests))
-                    (@TournamentFormat.Usd(KnownUsd(estimated.Schedule.EstimatedPremiumRequests)))
-                </p>
             </div>
         }
 
-    </section>
-}
+        @foreach (var problem in Problems)
+        {
+            <p class="plan-problem error-text">@problem</p>
+        }
+
+        <div class="cluster">
+            <button data-testid="plan-start-now" type="button" class="btn-primary" @onclick="StartAsync" disabled="@(!CanStart)">Start</button>
+            @if (ChannelBusy(Guid.Empty))
+            {
+                <span class="muted">Another broadcast is playing. Stop it to start this one.</span>
+            }
+        </div>
+    }
+    </div>
+</section>
 
 <section class="plan-section" aria-labelledby="plan-schedules-heading">
-    <h2 id="plan-schedules-heading">3. Schedules</h2>
+    <h2 id="plan-schedules-heading">2. Broadcasts</h2>
 
     @if (_scheduleError is not null)
     {
@@ -290,7 +212,7 @@
     }
     else if (_schedules.Count == 0)
     {
-        <p>No schedules yet. Save a plan above.</p>
+        <p>No broadcasts yet. Add games above and press Start.</p>
     }
     else
     {
@@ -351,15 +273,14 @@
 
 @code {
     /// <summary>
-    /// The day the estimate describes (ADR-011): about 24 games of 80 plies at 40 s a move. The planner does not ask
-    /// for these, so the page states them beside the estimate.
+    /// The pace the estimate and the games' windows assume (ADR-011): 80 plies at 40 s a move. The page does not ask
+    /// for these, so it states them beside the estimate.
     /// </summary>
     private const double AssumedPlies = 80;
     private const double AssumedMoveLatencyMs = 40_000;
-    private const int DefaultHours = 24;
     private const int DefaultMoveDelayMs = 4000;
-    private const int DefaultGameGapSeconds = 20;
-    private const int DefaultSeed = 1;
+    private const int DefaultGameGapMinutes = 30;
+    private const int Seed = 1;
 
     /// <summary>The badge variant (07 §4) for a schedule status: running is accented, paused a warning, finished a success.</summary>
     private static string ScheduleBadge(string status) => status switch
@@ -370,7 +291,6 @@
         _ => "badge-neutral",
     };
 
-    private const string SaveFailure = "Not saved:";
     private const string StartFailure = "Could not start:";
     private const string PauseFailure = "Could not pause:";
     private const string ResumeFailure = "Could not resume:";
@@ -383,34 +303,29 @@
     private CostInputsDto? _costs;
     private string? _modelsError;
     private IReadOnlyList<ModelDto> _choices = [];
-    private readonly HashSet<string> _selected = [];
     private IReadOnlyList<PromptStyleDto> _styles = [PromptStyleChoices.Classic];
     private string? _stylesNotice;
     private readonly HashSet<string> _selectedStyles = [PlayerId.DefaultStyle];
 
-    private string _name = "LLM Chess 24h";
-    private string _startText = "";
-    private int _hours = DefaultHours;
+    private string _name = "LLM Chess broadcast";
     private int _moveDelayMs = DefaultMoveDelayMs;
-    private int _gameGapSeconds = DefaultGameGapSeconds;
-    private int _seed = DefaultSeed;
+    private int _gameGapMinutes = DefaultGameGapMinutes;
 
-    // The plan on screen: the request it was generated from, and its games, which the user may edit before saving.
-    private PlanRequest? _request;
-    private List<SlotEdit> _slots = [];
-
-    // The draft the API holds for this plan, once it is saved.
-    private ScheduleDetailDto? _saved;
+    // The games in play order. Their times are filled in when Start is pressed, so only the players matter here.
+    private readonly List<SlotEdit> _slots = [];
 
     private IReadOnlyList<ScheduleDto>? _schedules;
     private string? _scheduleError;
     private string? _actionError;
     private bool _busy;
 
+    private string? _pickWhite;
+    private string? _pickBlack;
+    private string? _addError;
+
     protected override async Task OnInitializedAsync()
     {
         _broadcast = new BroadcastApiClient(HttpClients.CreateClient(BroadcastApiClient.ClientName));
-        _startText = PlanFormat.ToStartInput(PlanFormat.NextFullHour(DateTimeOffset.UtcNow));
         try
         {
             _models = await Api.GetModelsAsync(_cts.Token);
@@ -429,7 +344,7 @@
         await ReloadSchedulesAsync();
     }
 
-    /// <summary>The API's rate and tokens. Null when they could not be loaded: the preview then shows premium requests only.</summary>
+    /// <summary>The API's rate and tokens. Null when they could not be loaded: the estimate then shows premium requests only.</summary>
     private async Task LoadCostInputsAsync()
     {
         try
@@ -442,67 +357,62 @@
         }
     }
 
-    private IReadOnlyList<string> SelectedModels =>
-        _choices.Where(model => _selected.Contains(model.Id)).Select(model => model.Id).ToArray();
-
     private IReadOnlyList<string> SelectedStyles =>
         _styles.Where(style => _selectedStyles.Contains(style.Id)).Select(style => style.Id).ToArray();
 
-    /// <summary>Every selected model in every selected style: the players of the schedule (03 §14.4).</summary>
-    private IReadOnlyList<string> Participants => PromptStyleChoices.Participants(SelectedModels, SelectedStyles);
+    /// <summary>Every enabled model, with each reasoning effort it offers, in every selected style: the players to pick from.</summary>
+    private IReadOnlyList<string> Players =>
+    [
+        .. _choices.SelectMany(model => EffortsOf(model).SelectMany(effort =>
+            SelectedStyles.Select(style => PromptStyleChoices.Player(model.Id, effort, style))))
+    ];
 
-    private IReadOnlyList<string> FormProblems =>
-        PlanFormat.ParseStartInput(_startText) is not { } start
-            ? ["Choose a start time (UTC)."]
-            : PlanPlanner.Problems(FormRequest(start));
+    private static IEnumerable<string?> EffortsOf(ModelDto model) =>
+        model.ReasoningEfforts is { Count: > 0 } efforts ? new string?[] { null }.Concat(efforts) : [null];
 
-    private IReadOnlyList<string> SlotProblems
+    private IReadOnlyList<string> Problems
     {
         get
         {
             var problems = new List<string>();
-            for (var i = 0; i < _slots.Count; i++)
+            if (string.IsNullOrWhiteSpace(_name))
             {
-                if (_slots[i].White.ModelId == _slots[i].Black.ModelId)
-                {
-                    problems.Add($"Game {i + 1}: a model cannot play itself.");
-                }
+                problems.Add("Give the broadcast a name.");
             }
 
-            if (_slots.Count == 0)
+            if (_moveDelayMs < 0 || _gameGapMinutes < 0)
             {
-                problems.Add("Keep at least one game to save.");
+                problems.Add("Pacing values must not be negative.");
+            }
+            else if (_slots.Count > 0 && Hours(Window(DateTimeOffset.UtcNow)) > PlanPlanner.MaxDurationHours)
+            {
+                problems.Add($"The games would run past {PlanPlanner.MaxDurationHours} hours. Remove a game or shorten the pacing.");
             }
 
             return problems;
         }
     }
 
-    /// <summary>The draft on screen differs from the one the API holds (or none is saved yet).</summary>
-    private bool Dirty => _saved is null || !SameSlots(_slots, _saved.Slots);
+    private bool CanStart => !_busy && _slots.Count > 0 && Problems.Count == 0 && !ChannelBusy(Guid.Empty);
 
-    /// <summary>A saved schedule that has started, finished or been stopped cannot be edited.</summary>
-    private bool Locked => _saved is { } saved && saved.Schedule.Status is not (ScheduleStatuses.Draft or ScheduleStatuses.Scheduled);
+    private bool CanAddGame => !_busy && _pickWhite is not null && _pickBlack is not null
+        && _pickWhite != _pickBlack && Players.Contains(_pickWhite) && Players.Contains(_pickBlack);
 
-    private bool CanSave => !_busy && !Locked && Dirty && _request is not null && SlotProblems.Count == 0;
-
-    /// <summary>Start is offered only for the saved draft, with no unsaved edits and no other schedule playing.</summary>
-    private bool CanStart => _saved is { } saved && saved.Schedule.Status is ScheduleStatuses.Draft or ScheduleStatuses.Scheduled
-        && !Dirty && !_busy && !ChannelBusy(saved.Schedule.Id);
+    private TimeSpan GameLength => TimeSpan.FromMilliseconds(AssumedPlies * (AssumedMoveLatencyMs + _moveDelayMs));
 
     /// <summary>True while another schedule is running or paused: the API runs one channel at a time.</summary>
     private bool ChannelBusy(Guid scheduleId) =>
         _schedules?.Any(schedule => schedule.Id != scheduleId
             && schedule.Status is ScheduleStatuses.Running or ScheduleStatuses.Paused) == true;
 
-    private int UnknownCount => _request is null ? 0 : _request.Models.Count(model => RequestsFor(model) is null);
+    private int UnknownCount(IEnumerable<string> models) => models.Count(model => RequestsFor(model) is null);
 
     private IReadOnlyDictionary<string, double?> Multipliers => (_models ?? Array.Empty<ModelDto>())
         .ToDictionary(model => model.Id, model => model.PremiumMultiplier, StringComparer.Ordinal);
 
     private double? RequestsFor(string model) => PlanPlanner.Requests(model, _slots, AssumedPlies, Multipliers);
 
-    /// <summary>A model's estimate over the games on screen: the same moves as the planner's (slots × plies ÷ 2 a side).</summary>
+    /// <summary>A model's estimate over the games on screen: the same moves as the planner's (games × plies ÷ 2 a side).</summary>
     private CostPreview.Estimate? CostOf(string model)
     {
         if (_costs is not { } costs || Find(model) is not { } entry)
@@ -524,7 +434,12 @@
     /// <summary>The model a player plays as, with the player's id, so its prices are looked up under that player.</summary>
     private ModelDto? Find(string playerId) => PromptStyleChoices.Find(_models, playerId);
 
-    private string NameOf(string playerId) => PromptStyleChoices.Label(playerId, _models, _styles);
+    /// <summary>The player's model, then its style when it is not classic, then its reasoning effort.</summary>
+    private string NameOf(string playerId)
+    {
+        var label = PromptStyleChoices.Label(playerId, _models, _styles);
+        return PlayerId.Parse(playerId).Effort is { } effort ? $"{label} · {effort}" : label;
+    }
 
     /// <summary>A schedule's estimate for one model on its row: the premium requests when it has a multiplier, then the credits and USD.</summary>
     private string EstimateText(ModelPremiumEstimateDto estimate)
@@ -538,16 +453,6 @@
         return $"{NameOf(estimate.ModelId)}: {premium}{cost}";
     }
 
-    private static double? KnownCredits(IEnumerable<ModelPremiumEstimateDto> estimates) =>
-        estimates.Any(estimate => estimate.EstimatedAiCredits is not null)
-            ? estimates.Sum(estimate => estimate.EstimatedAiCredits ?? 0)
-            : null;
-
-    private static double? KnownUsd(IEnumerable<ModelPremiumEstimateDto> estimates) =>
-        estimates.Any(estimate => estimate.EstimatedUsd is not null)
-            ? estimates.Sum(estimate => estimate.EstimatedUsd ?? 0)
-            : null;
-
     private void ToggleStyle(string styleId, object? selected)
     {
         if (selected is true)
@@ -560,89 +465,68 @@
         }
     }
 
-    private PlanRequest FormRequest(DateTimeOffset start) => new(_name.Trim(), Participants, start, _hours,
-        new PacingProfile(_moveDelayMs, _gameGapSeconds), _seed, AssumedPlies, AssumedMoveLatencyMs);
-
-    private void OnStartChanged(ChangeEventArgs e) => _startText = e.Value?.ToString() ?? "";
-
-    private void Toggle(string modelId, object? selected)
+    private void AddGame()
     {
-        if (selected is true)
-        {
-            _selected.Add(modelId);
-        }
-        else
-        {
-            _selected.Remove(modelId);
-        }
-    }
-
-    /// <summary>Builds the preview locally. Nothing is sent to the API, so nothing is saved.</summary>
-    private void Generate()
-    {
-        if (PlanFormat.ParseStartInput(_startText) is not { } start || FormProblems.Count > 0)
+        _addError = null;
+        if (!CanAddGame)
         {
             return;
         }
 
-        _request = FormRequest(start);
-        _slots = [.. PlanPlanner.Plan(_request)];
-        _saved = null;
+        _slots.Add(new SlotEdit(new PlayerSpec("llm", _pickWhite!), new PlayerSpec("llm", _pickBlack!),
+            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch));
         _actionError = null;
     }
 
-    private void SetPlayer(int index, bool white, object? value)
-    {
-        var model = value?.ToString();
-        if (string.IsNullOrEmpty(model))
-        {
-            return;
-        }
-
-        var spec = new PlayerSpec(model == PlanPlanner.RandomModelId ? "random" : "llm", model);
-        _slots[index] = white ? _slots[index] with { White = spec } : _slots[index] with { Black = spec };
-    }
-
-    /// <summary>Moves the players of game <paramref name="index"/> to the neighbouring game. The windows stay put, so the timeline does not shift.</summary>
-    private void Reorder(int index, int delta)
-    {
-        var other = index + delta;
-        var mine = _slots[index];
-        var theirs = _slots[other];
-        _slots[index] = mine with { White = theirs.White, Black = theirs.Black };
-        _slots[other] = theirs with { White = mine.White, Black = mine.Black };
-    }
+    /// <summary>Swaps game <paramref name="index"/> with its neighbour.</summary>
+    private void Reorder(int index, int delta) => (_slots[index], _slots[index + delta]) = (_slots[index + delta], _slots[index]);
 
     private void Delete(int index) => _slots.RemoveAt(index);
 
-    private Task SaveAsync()
+    /// <summary>The games laid end to end from <paramref name="start"/>, each after the previous one plus the gap.</summary>
+    private List<SlotEdit> Window(DateTimeOffset start)
     {
-        if (!CanSave || _request is not { } request)
+        var timed = new List<SlotEdit>();
+        var next = start;
+        foreach (var slot in _slots)
+        {
+            var end = next + GameLength;
+            timed.Add(slot with { PlannedStart = next, PlannedEnd = end });
+            next = end + TimeSpan.FromMinutes(_gameGapMinutes);
+        }
+
+        return timed;
+    }
+
+    private static int Hours(IReadOnlyList<SlotEdit> timed) =>
+        timed.Count == 0 ? 1 : Math.Max(1, (int)Math.Ceiling((timed[^1].PlannedEnd - timed[0].PlannedStart).TotalHours));
+
+    /// <summary>
+    /// Saves the games as a schedule that begins now, then starts it. The schedule window is the span of the games, so
+    /// the API accepts every game. On success the list is emptied for the next broadcast.
+    /// </summary>
+    private Task StartAsync()
+    {
+        if (!CanStart)
         {
             return Task.CompletedTask;
         }
 
-        return RunAsync(SaveFailure, async ct =>
+        return RunAsync(StartFailure, async ct =>
         {
-            _saved ??= await _broadcast.PlanAsync(request, ct);
-            if (!SameSlots(_slots, _saved.Slots))
-            {
-                _saved = await _broadcast.ReplaceSlotsAsync(_saved.Schedule.Id, _slots, ct);
-            }
+            var timed = Window(DateTimeOffset.UtcNow);
+            var players = timed.SelectMany(slot => new[] { slot.White.ModelId, slot.Black.ModelId }).Distinct().ToList();
+            var request = new PlanRequest(_name.Trim(), players, timed[0].PlannedStart, Hours(timed),
+                new PacingProfile(_moveDelayMs, _gameGapMinutes * 60), Seed, AssumedPlies, AssumedMoveLatencyMs);
+
+            var saved = await _broadcast.PlanAsync(request, ct);
+            await _broadcast.ReplaceSlotsAsync(saved.Schedule.Id, timed, ct);
+            await _broadcast.StartAsync(saved.Schedule.Id, ct);
+            _slots.Clear();
         });
     }
 
-    private Task StartAsync()
-    {
-        if (!CanStart || _saved is not { } saved)
-        {
-            return Task.CompletedTask;
-        }
-
-        return CommandAsync(saved.Schedule.Id, StartFailure, _broadcast.StartAsync);
-    }
-
-    /// <summary>Runs a schedule command. The saved draft is replaced by the answer when it is the one commanded.</summary>
+    /// <summary>Runs a schedule command from the list of broadcasts.</summary>
     private Task CommandAsync(Guid scheduleId, string failure, Func<Guid, CancellationToken, Task<ScheduleDetailDto>> command)
     {
         if (_busy)
@@ -650,14 +534,7 @@
             return Task.CompletedTask;
         }
 
-        return RunAsync(failure, async ct =>
-        {
-            var detail = await command(scheduleId, ct);
-            if (_saved?.Schedule.Id == scheduleId)
-            {
-                _saved = detail;
-            }
-        });
+        return RunAsync(failure, async ct => await command(scheduleId, ct));
     }
 
     /// <summary>
@@ -701,12 +578,6 @@
             _scheduleError = ex.Message;
         }
     }
-
-    /// <summary>Whether the saved games and the games on screen are the same, comparing instants rather than offsets.</summary>
-    private static bool SameSlots(IReadOnlyList<SlotEdit> edits, IReadOnlyList<SlotDto> slots) =>
-        edits.Count == slots.Count && edits.Zip(slots).All(pair =>
-            pair.First.White == pair.Second.White && pair.First.Black == pair.Second.Black
-            && pair.First.PlannedStart == pair.Second.PlannedStart && pair.First.PlannedEnd == pair.Second.PlannedEnd);
 
     public void Dispose() => _cts.Cancel();
 }

@@ -91,8 +91,8 @@ internal sealed class SoakHarness : IAsyncDisposable
     public const int Seed = 7;
 
     /// <summary>The gateway outage of the day: two simulated hours, from noon.</summary>
-    public static readonly DateTimeOffset OutageFrom = RunnerHarness.Start.AddHours(12);
-    public static readonly DateTimeOffset OutageUntil = RunnerHarness.Start.AddHours(14);
+    public static readonly DateTimeOffset OutageFrom = RunnerHarness.Start.AddHours(1);
+    public static readonly DateTimeOffset OutageUntil = RunnerHarness.Start.AddHours(3);
 
     /// <summary>The models of the day: the random player, three fake models, one of which fails in a share of its games.</summary>
     public static readonly string[] Models = [ModelCatalog.RandomModelId, "fake-a", InducedFailurePlayers.FlakyModel, "fake-c"];

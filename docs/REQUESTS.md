@@ -292,7 +292,7 @@ The same call again answers 409 with the detail `The request is cancelled; only 
 
 ### 4. The queue, as the runner plays it
 
-The runner takes the oldest queued request as soon as it is free, with no schedule running. Reading the queue shows each request's
+The runner takes the oldest queued request as soon as it is free, while a broadcast schedule is running. With no schedule running, a queued request waits. Reading the queue shows each request's
 status change:
 
 ```bash
@@ -312,7 +312,7 @@ Playing (about 10 s after; the request now has its game):
 ```
 
 The game `dc13822c-b9e9-48db-b01c-599059fabb4e` is an ordinary rated game. Its moves are at `GET /api/games/<gameId>`. While it plays, the
-broadcast paces it at 4 s a move (the default when no schedule runs). The game was still running at ply 171 when this section was
+broadcast paces it at 4 s a move (the running schedule's pace). The game was still running at ply 171 when this section was
 written; its result and the `played` state are added below once it ends.
 
 ## 7. Before going live

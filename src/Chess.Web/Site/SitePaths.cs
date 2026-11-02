@@ -12,7 +12,6 @@ public static class SitePaths
     public const string HeadToHead = "head-to-head/index.html";
     public const string Games = "games/index.html";
     public const string Tournaments = "tournaments/index.html";
-    public const string Menu = "menu/index.html";
     public const string About = "about/index.html";
     public const string Assets = "assets/";
     public const string Data = "data/";

@@ -23,12 +23,12 @@ public class NavigationTests
         "/admin/requests",
     ];
 
-    // "/broadcast" is the chrome-less OBS page (03 §9.4): a route, but deliberately NOT in the navigation.
+    // "/broadcast" is the chrome-less OBS page (03 §9.4). It is also linked from the navigation (the viewer's way in), so it is in NavHrefs too.
     private static readonly string[] ObsRoutes = ["/broadcast"];
 
     // The navigation shows the top-level routes, Results first; the detail routes are reached from their lists.
     private static readonly string[] NavHrefs =
-        ["/results", "/", "/head-to-head", "/tournaments", "/benchmark", "/broadcast/plan", "/games", "/admin/attempts", "/admin/site"];
+        ["/results", "/", "/head-to-head", "/tournaments", "/benchmark", "/broadcast", "/broadcast/plan", "/games", "/admin/attempts", "/admin/site"];
 
     [Fact]
     public void EveryRouteOfSection6IsServedByAPlaceholderPage()

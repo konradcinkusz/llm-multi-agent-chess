@@ -211,6 +211,8 @@ public static class GameEndpoints
     {
         var ct = http.RequestAborted;
         using var subscription = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        IAsyncEnumerator<IGameEvent>? stream = null;
+        Task<bool>? next = null;
         try
         {
             var live = events.SubscribeAsync(id, subscription.Token);
@@ -235,8 +237,8 @@ public static class GameEndpoints
                 return;
             }
 
-            await using var stream = live.GetAsyncEnumerator(subscription.Token);
-            var next = stream.MoveNextAsync().AsTask();
+            stream = live.GetAsyncEnumerator(subscription.Token);
+            next = stream.MoveNextAsync().AsTask();
             while (true)
             {
                 var heartbeat = Task.Delay(HeartbeatInterval, ct);
@@ -269,8 +271,24 @@ public static class GameEndpoints
         }
         finally
         {
-            // Releases the subscription when the stream was never read to its end.
+            // Releases the subscription when the stream was never read to its end. A read still pending must finish
+            // before the enumerator is disposed; disposing a running async iterator throws.
             subscription.Cancel();
+            if (next is not null)
+            {
+                try
+                {
+                    await next;
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+
+            if (stream is not null)
+            {
+                await stream.DisposeAsync();
+            }
         }
     }
 

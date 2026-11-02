@@ -29,7 +29,13 @@ public static class Extensions
         builder.Services.AddServiceDiscovery();
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
-            http.AddStandardResilienceHandler();
+            // Rating and results endpoints can take longer than the 10 s default attempt timeout.
+            http.AddStandardResilienceHandler(o =>
+            {
+                o.AttemptTimeout.Timeout = TimeSpan.FromSeconds(60);
+                o.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(120);
+                o.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(150);
+            });
             http.AddServiceDiscovery();
         });
 

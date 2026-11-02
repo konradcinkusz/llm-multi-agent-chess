@@ -7,60 +7,56 @@ namespace Chess.Web.Tests.Broadcast;
 
 public class PlanStyleTests
 {
-    private const string Start = "2026-10-24T10:00";
-
     [Fact]
-    public void TheScheduleIsPlannedWithTheStyledPlayers()
+    public void TheTickedStylesAddStyledPlayersToBothPickers()
     {
-        var fake = new FakeBroadcast();
         using var ctx = new BunitContext();
-        PlanWire.Api(ctx, fake);
+        PlanWire.Api(ctx, new FakeBroadcast());
         var cut = Render(ctx);
+        Assert.DoesNotContain("gpt~think", OptionValues(cut, "add-white"));
 
-        cut.Find("[data-testid='plan-model-gpt']").Change(true);
-        cut.Find("[data-testid='plan-model-claude']").Change(true);
         cut.Find("[data-testid='plan-style-think']").Change(true);
-        cut.Find("[data-testid='plan-hours']").Change("2");
-        cut.Find("[data-testid='plan-generate']").Click();
 
-        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-testid='plan-slot']")));
-        var players = cut.FindAll("[data-testid='slot-white'] option").Select(option => option.GetAttribute("value")!).Distinct().Order().ToArray();
-        Assert.Equal(["claude", "claude~think", "gpt", "gpt~think"], players);
+        Assert.Contains("gpt~think", OptionValues(cut, "add-white"));
+        Assert.Contains("claude~think", OptionValues(cut, "add-black"));
+        Assert.Contains("gpt", OptionValues(cut, "add-white"));
     }
 
     [Fact]
-    public void TheStyleChipsCountThePlayersTheyWouldAdd()
+    public void AStyledPlayerCanBeAddedToAGame()
     {
-        var fake = new FakeBroadcast();
         using var ctx = new BunitContext();
-        PlanWire.Api(ctx, fake);
+        PlanWire.Api(ctx, new FakeBroadcast());
         var cut = Render(ctx);
-        cut.Find("[data-testid='plan-model-gpt']").Change(true);
-        cut.Find("[data-testid='plan-model-claude']").Change(true);
+        cut.Find("[data-testid='plan-style-think']").Change(true);
 
-        cut.WaitForAssertion(() => Assert.Contains("Think, then move", cut.Find("[data-testid='plan-styles']").TextContent));
-        Assert.Contains("2 players", cut.Find("[data-testid='plan-styles']").TextContent);
-        Assert.Empty(cut.FindAll("[data-testid='styles-notice']"));
+        cut.Find("[data-testid='add-white']").Change("gpt~think");
+        cut.Find("[data-testid='add-black']").Change("claude");
+        cut.Find("[data-testid='add-game']").Click();
+
+        Assert.Contains("Think", cut.Find("[data-testid='slot-white']").TextContent);
     }
 
     [Fact]
     public void WithoutTheStyleListOnlyClassicIsOfferedAndTheNoticeSaysSo()
     {
-        var fake = new FakeBroadcast(stylesAvailable: false);
         using var ctx = new BunitContext();
-        PlanWire.Api(ctx, fake);
+        PlanWire.Api(ctx, new FakeBroadcast(stylesAvailable: false));
         var cut = Render(ctx);
 
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid='plan-styles'] .chip")));
+        Assert.Empty(cut.FindAll("[data-testid='plan-styles']"));
         Assert.Contains("Prompt styles could not be loaded", cut.Find("[data-testid='styles-notice']").TextContent);
+        Assert.DoesNotContain("gpt~think", OptionValues(cut, "add-white"));
     }
+
+    private static string[] OptionValues(IRenderedComponent<PlanPage> cut, string testId) =>
+        [.. cut.FindAll($"[data-testid='{testId}'] option").Select(option => option.GetAttribute("value")!)];
 
     private static IRenderedComponent<PlanPage> Render(BunitContext ctx)
     {
         var cut = ctx.Render<PlanPage>();
         cut.WaitForAssertion(() => Assert.DoesNotContain("Loading models", cut.Markup));
         cut.WaitForAssertion(() => Assert.DoesNotContain("Loading schedules", cut.Markup));
-        cut.Find("[data-testid='plan-start']").Change(Start);
         return cut;
     }
 }

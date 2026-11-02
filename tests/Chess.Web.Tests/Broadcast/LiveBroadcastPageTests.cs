@@ -31,7 +31,6 @@ public class LiveBroadcastPageTests
 
         var cut = Render(ctx);
 
-        cut.WaitForAssertion(() => Assert.Equal("LLM Chess 24h — Game 17 of 48", cut.Find("[data-testid=broadcast-title]").TextContent));
         Assert.Equal("GPT", cut.Find("[data-testid=broadcast-white]").TextContent.Trim());
         Assert.Equal("Claude", cut.Find("[data-testid=broadcast-black]").TextContent.Trim());
         Assert.Equal(32, cut.FindAll("[data-testid=broadcast-board] [data-piece]").Count);
@@ -93,7 +92,6 @@ public class LiveBroadcastPageTests
         var card = cut.Find("[data-testid=broadcast-intermission]").TextContent;
         Assert.Contains("Intermission", card);
         Assert.Contains("Claude vs Gemini", card);
-        Assert.Equal("LLM Chess 24h", cut.Find("[data-testid=broadcast-title]").TextContent);
     }
 
     /// <summary>
@@ -163,27 +161,6 @@ public class LiveBroadcastPageTests
     }
 
     [Fact]
-    public void TheLeaderboardShowsEightModelsByDefaultAndTheTopNWhenAsked()
-    {
-        var server = new LiveBroadcastServer
-        {
-            Now = LiveFixtures.Now("idle", "null", "[]", "null"),
-            Leaderboard = LiveFixtures.Leaderboard(LiveFixtures.Ratings),
-        };
-        using var ctx = new BunitContext();
-        Wire(ctx, server);
-
-        var defaults = Render(ctx);
-        WaitForRows(defaults, 8);
-        Assert.Equal("m01", defaults.Find("[data-testid=broadcast-leaderboard] li[data-model]").GetAttribute("data-model"));
-
-        var top = Render(ctx, "?top=3");
-        WaitForRows(top, 3);
-        Assert.Equal(new[] { "m01", "m02", "m03" }, top.FindAll("[data-testid=broadcast-leaderboard] li[data-model]")
-            .Select(row => row.GetAttribute("data-model")!).ToArray());
-    }
-
-    [Fact]
     public void UpNextListsTheNextThreeGamesWithTheirStartTimes()
     {
         var next = $"[{LiveFixtures.Slot(17, "claude", "gemini", "pending")}," +
@@ -247,7 +224,6 @@ public class LiveBroadcastPageTests
 
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=broadcast-intermission]")));
         cut.WaitForAssertion(() => Assert.True(server.StreamOpen));
-        Assert.Equal("LLM Chess 24h — Game 17 of 48", cut.Find("[data-testid=broadcast-title]").TextContent);
     }
 
     [Fact]
@@ -312,32 +288,6 @@ public class LiveBroadcastPageTests
             .Order()
             .ToArray();
 
-    [Fact]
-    public void AProvisionalModelShowsAMarkForItsRatingNotThePlaceholderZero()
-    {
-        var leaderboard = """
-            {"models":[
-              {"model":"fake-b","rating":0,"ciLow":0,"ciHigh":0,"games":1,"score":0.5,"legality":1,"moveQuality":null,"quality":1,"arenaScore":50,"provisional":true},
-              {"model":"random","rating":1512,"ciLow":1450,"ciHigh":1574,"games":40,"score":0.4,"legality":1,"moveQuality":null,"quality":1,"arenaScore":38.5,"provisional":false}
-            ],"whiteAdvantage":0,"games":41,"moveQualityAvailable":false}
-            """;
-        var server = new LiveBroadcastServer { Leaderboard = leaderboard };
-        using var ctx = new BunitContext();
-        Wire(ctx, server);
-
-        var cut = Render(ctx);
-
-        WaitForRows(cut, 2);
-        var rows = cut.FindAll("[data-testid=broadcast-leaderboard] li[data-model]");
-        Assert.Equal("random", rows[0].GetAttribute("data-model"));
-        Assert.Equal("38.5", rows[0].QuerySelectorAll(".bc-num")[0].TextContent);
-        Assert.Equal("1512", rows[0].QuerySelectorAll(".bc-num")[1].TextContent);
-        Assert.Equal("50.0", rows[1].QuerySelectorAll(".bc-num")[0].TextContent);
-        // A provisional model shows the mark in its rating column, and its name is left whole.
-        Assert.Equal("prov.", rows[1].QuerySelectorAll(".bc-num")[1].TextContent);
-        Assert.Equal("provisional", rows[1].QuerySelectorAll(".bc-num")[1].GetAttribute("title"));
-    }
-
     /// <summary>
     /// Renders the page at <c>/broadcast</c> plus <paramref name="query"/>, polling every 20 ms so a test sees a change to
     /// the stub within bUnit's wait. The query options are read from the navigation, as they are in the app.
@@ -351,8 +301,6 @@ public class LiveBroadcastPageTests
             parameters.Add(page => page.ReconnectDelay, TimeSpan.FromMilliseconds(10));
         });
     }
-    private static void WaitForRows(IRenderedComponent<LiveBroadcastPage> cut, int rows) =>
-        cut.WaitForAssertion(() => Assert.Equal(rows, cut.FindAll("[data-testid=broadcast-leaderboard] li[data-model]").Count));
 
     private static void Wire(BunitContext ctx, LiveBroadcastServer server)
     {
