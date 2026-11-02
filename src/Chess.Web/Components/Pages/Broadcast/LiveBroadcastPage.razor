@@ -26,8 +26,8 @@
 
     <section class="bc-game" aria-label="Current game">
         <div class="bc-player @(ThinkingSide == "black" ? "bc-thinking" : null)" data-testid="broadcast-black">
-            <span class="bc-swatch" style="background: @ColourOf(_live?.Summary.Black.ModelId)"></span>
-            <span>@SideLabel(_live?.Summary.Black)</span>
+            <span class="bc-swatch" style="background: @ColourOf(ShownBlack?.ModelId)"></span>
+            <span>@SideLabel(ShownBlack)</span>
             @if (ThinkingSide == "black") { <span class="bc-dots" aria-label="thinking"><i></i><i></i><i></i></span> }
         </div>
 
@@ -43,18 +43,23 @@
                     <p>@notice</p>
                 </div>
             }
-            else if (_now is { Current: null } && !ShowsRequestOrReplay)
+            else if (InIntermission)
             {
-                <div class="bc-card" data-testid="broadcast-intermission" role="status">
+                <div class="bc-card bc-intermission" data-testid="broadcast-intermission" role="status">
                     <h2>@InterludeTitle</h2>
                     <p>@IntermissionLine</p>
+                    @if (Countdown is { } left)
+                    {
+                        <p class="bc-countdown" data-testid="broadcast-countdown">Starts in @left</p>
+                    }
+                    <div class="bc-loader" aria-hidden="true"><i></i></div>
                 </div>
             }
         </div>
 
         <div class="bc-player @(ThinkingSide == "white" ? "bc-thinking" : null)" data-testid="broadcast-white">
-            <span class="bc-swatch" style="background: @ColourOf(_live?.Summary.White.ModelId)"></span>
-            <span>@SideLabel(_live?.Summary.White)</span>
+            <span class="bc-swatch" style="background: @ColourOf(ShownWhite?.ModelId)"></span>
+            <span>@SideLabel(ShownWhite)</span>
             @if (ThinkingSide == "white") { <span class="bc-dots" aria-label="thinking"><i></i><i></i><i></i></span> }
         </div>
 
@@ -175,12 +180,42 @@
 
     private LiveBroadcastClient Broadcast => _broadcast ??= new LiveBroadcastClient(HttpClients.CreateClient(ArenaClientName));
 
-    private IReadOnlyList<MoveRow> MoveTail => _live is null ? [] : LiveBroadcastView.MoveTail(_live.Moves);
+    private IReadOnlyList<MoveRow> MoveTail => _live is null || UpNext is not null ? [] : LiveBroadcastView.MoveTail(_live.Moves);
 
-    private string BoardFen => _live?.CurrentFen ?? LiveGame.StartFen;
+    private bool InIntermission => _now is { Current: null, Notice: null } && !ShowsRequestOrReplay;
+
+    /// <summary>Between games the board is already set up for the next one, with its players.</summary>
+    private LiveSlot? UpNext => InIntermission && _now is { Next.Count: > 0 } now ? now.Next[0] : null;
+
+    private PlayerSpec? ShownBlack => UpNext?.Black ?? _live?.Summary.Black;
+
+    private PlayerSpec? ShownWhite => UpNext?.White ?? _live?.Summary.White;
+
+    private string? Countdown
+    {
+        get
+        {
+            if (UpNext is not { } next)
+            {
+                return null;
+            }
+
+            var left = next.PlannedStart - DateTimeOffset.Now;
+            if (left <= TimeSpan.Zero)
+            {
+                return "a moment";
+            }
+
+            return left.TotalHours >= 1
+                ? left.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+                : left.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
+        }
+    }
+
+    private string BoardFen => UpNext is not null ? LiveGame.StartFen : _live?.CurrentFen ?? LiveGame.StartFen;
 
     /// <summary>The square pair of the last move, drawn as the board highlight.</summary>
-    private BoardMove? LastMove => _live is { Moves.Count: > 0 } live
+    private BoardMove? LastMove => UpNext is null && _live is { Moves.Count: > 0 } live
         ? LiveBoardHighlight.Of(live.Moves.Count > 1 ? live.Moves[^2].FenAfter : LiveGame.StartFen, live.Moves[^1].FenAfter, live.Moves[^1].San)
         : null;
 
