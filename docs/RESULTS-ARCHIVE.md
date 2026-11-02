@@ -6,18 +6,12 @@ authorship come with it. The ratings are not stored; the site computes them from
 
 ## Add your games
 
-1. In `Arena:Results:Archive:ExportFolder` (AppHost user secrets or environment) put the path of the `results/` folder of
-   your clone, then start the app and play rated games.
-2. Export the games that have no file yet:
-   ```bash
-   curl -X POST http://127.0.0.1:5080/api/results/archive/export
-   ```
-   It answers `{"written":N,"alreadyThere":M,"folder":"..."}`. It only adds files and never rewrites one.
-3. Commit the new files under `results/games/` and open a pull request.
+The steps are in [CONTRIBUTING.md](../CONTRIBUTING.md#contribute-your-results): fork, start the app with
+`Arena__Results__Archive__ExportFolder` set, play, export with `POST /api/results/archive/export`, commit the files under
+`results/games/` and open a pull request.
 
-A pull request is checked by `ResultsArchiveTests.The_results_folder_of_the_repository_is_valid` in the `build and test` job
-(run it locally with `dotnet test tests/Chess.Api.Tests --filter ResultsArchiveTests`). Each file is parsed, replayed on the
-engine move by move, and must sit at the path its id and date name; a game id may appear once.
+The pull request is checked by `ResultsArchiveTests.The_results_folder_of_the_repository_is_valid` in the `build and test`
+job. It replays every file on the engine and requires each file at the path its id and date name.
 
 ## File
 

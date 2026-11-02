@@ -313,7 +313,7 @@ public class LiveBroadcastPageTests
             .ToArray();
 
     [Fact]
-    public void AProvisionalModelShowsADashForItsRatingNotThePlaceholderZero()
+    public void AProvisionalModelShowsAMarkForItsRatingNotThePlaceholderZero()
     {
         var leaderboard = """
             {"models":[
@@ -332,9 +332,10 @@ public class LiveBroadcastPageTests
         Assert.Equal("random", rows[0].GetAttribute("data-model"));
         Assert.Equal("38.5", rows[0].QuerySelectorAll(".bc-num")[0].TextContent);
         Assert.Equal("1512", rows[0].QuerySelectorAll(".bc-num")[1].TextContent);
-        Assert.Contains("provisional", rows[1].TextContent);
         Assert.Equal("50.0", rows[1].QuerySelectorAll(".bc-num")[0].TextContent);
-        Assert.Equal("—", rows[1].QuerySelectorAll(".bc-num")[1].TextContent);
+        // A provisional model shows the mark in its rating column, and its name is left whole.
+        Assert.Equal("prov.", rows[1].QuerySelectorAll(".bc-num")[1].TextContent);
+        Assert.Equal("provisional", rows[1].QuerySelectorAll(".bc-num")[1].GetAttribute("title"));
     }
 
     /// <summary>

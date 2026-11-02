@@ -105,7 +105,11 @@ The estimate is the normal case, not a ceiling:
 
 ## 3. OBS: Browser Source
 
-The page is a full-screen 1920×1080 layout with no app chrome. Add it as a source:
+The page is a full-screen 1920×1080 layout with no app chrome: the board on the full height, then the status line,
+leaderboard and moves, then up next, the requests and the order menu. Everything fits on the one screen; nothing scrolls.
+The row text is 28 px at 1080p (panel headings 25 px), so the stream stays readable on a phone. The same layout fits any
+landscape window, and on a phone held upright `/broadcast` switches to a one-column layout (board, status, leaderboard, then
+two pairs of panels). A model without a rating yet shows `prov.` in its rating column. Add the page as a source:
 
 1. In OBS, select or create a scene for the channel. Set the canvas to **1920×1080** (Settings → Video) and **30 FPS**
    (Settings → Video → Common FPS Values).
