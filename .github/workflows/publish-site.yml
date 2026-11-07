@@ -61,7 +61,7 @@ jobs:
           test -s _site/index.html
           ! grep -rl '<script' _site --include='*.html'
 
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
