@@ -22,6 +22,19 @@ public class MoveNotationTests
     [InlineData(Start, "Nf3.", "Nf3")]
     [InlineData(Start, "\"e4\"", "e4")]
     [InlineData(Start, "`Nf3`", "Nf3")]
+    // Markdown emphasis, as models write it
+    [InlineData(Start, "**Nf3**", "Nf3")]
+    [InlineData(Start, "*Nf3*", "Nf3")]
+    [InlineData(Start, "__e4__", "e4")]
+    [InlineData(Start, "_e4_", "e4")]
+    [InlineData(Start, "**Nf3**.", "Nf3")]
+    [InlineData(Start, "`**Nf3**`", "Nf3")]
+    [InlineData(Start, "**1. e4**", "e4")]
+    [InlineData(Start, "1. **e4**", "e4")]
+    [InlineData(AfterE4, "**1... c5**", "c5")]
+    [InlineData(Castling, "**0-0**", "O-O")]
+    [InlineData(Castling, "**O-O-O**", "O-O-O")]
+    [InlineData(ScholarCheck, "**Qxf7+**", "Qxf7#")]
     // leading move numbers
     [InlineData(Start, "1. e4", "e4")]
     [InlineData(Start, "1.e4", "e4")]
@@ -89,6 +102,50 @@ public class MoveNotationTests
     public void ToUciGivesTheLegalMoveInUciForm(string fen, string san, string uci)
     {
         Assert.Equal(uci, MoveNotation.ToUci(Load(fen), san));
+    }
+
+    [Theory]
+    [InlineData("**Nf3**", "Nf3")]
+    [InlineData("`e4`", "e4")]
+    [InlineData("1. e4!?", "e4")]
+    [InlineData("12... **Nf6**", "Nf6")]
+    [InlineData("0-0-0", "O-O-O")]
+    [InlineData("\"Nf3\".", "Nf3")]
+    public void CleanRemovesWhatSurroundsTheMove(string text, string expected)
+    {
+        Assert.Equal(expected, MoveNotation.Clean(text));
+    }
+
+    [Theory]
+    [InlineData("e2e4", "e2", "e4", PieceType.None)]
+    [InlineData("b7b8q", "b7", "b8", PieceType.Queen)]
+    [InlineData("b7b8r", "b7", "b8", PieceType.Rook)]
+    [InlineData("b7b8b", "b7", "b8", PieceType.Bishop)]
+    [InlineData("b7b8n", "b7", "b8", PieceType.Knight)]
+    public void ToUciSpellsAMoveWithTheLowerCasePromotionLetter(string expected, string from, string to, PieceType promotion)
+    {
+        var move = new ChessMove(ChessBoard.FromAlgebraic(from), ChessBoard.FromAlgebraic(to), promotion);
+
+        Assert.Equal(expected, MoveNotation.ToUci(move));
+    }
+
+    [Fact]
+    public void EveryLegalMoveOfTheStartPositionHasItsUciSpelling()
+    {
+        var uci = Load(Start).GetLegalMoves().Select(MoveNotation.ToUci).ToList();
+
+        Assert.Equal(20, uci.Count);
+        Assert.Equal(20, uci.Distinct().Count());
+        Assert.Contains("g1f3", uci);
+        Assert.DoesNotContain("g1g3", uci);
+    }
+
+    [Fact]
+    public void ToUciSpellsCastlingAsTheKingMovingTwoSquares()
+    {
+        var castle = Load(Castling).GetLegalMoves().Single(m => m.San == "O-O");
+
+        Assert.Equal("e1g1", MoveNotation.ToUci(castle));
     }
 
     [Fact]
