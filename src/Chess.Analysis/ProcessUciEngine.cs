@@ -56,8 +56,8 @@ internal sealed class ProcessUciEngine(string binaryPath, UciTimeouts? timeouts 
                 using var stopOnCancel = deadline.Token.Register(() => Stop(process));
 
                 var position = uciMoves.Count == 0 ? $"position fen {fen}" : $"position fen {fen} moves {string.Join(' ', uciMoves)}";
-                await SendAsync(process, position, deadline.Token);
-                await SendAsync(process, $"go depth {depth}", deadline.Token);
+                await SendAsync(process, position, "bestmove", deadline.Token);
+                await SendAsync(process, $"go depth {depth}", "bestmove", deadline.Token);
 
                 var transcript = new List<string>();
                 while (true)
@@ -151,9 +151,9 @@ internal sealed class ProcessUciEngine(string binaryPath, UciTimeouts? timeouts 
             // A hung or non-UCI binary never answers: the deadline kills it, which ends the read.
             var started = process;
             using var stopOnTimeout = deadline.Token.Register(() => Stop(started));
-            await SendAsync(process, "uci", deadline.Token);
+            await SendAsync(process, "uci", "uciok", deadline.Token);
             await ReadUntilAsync(process, "uciok", deadline.Token);
-            await SendAsync(process, "isready", deadline.Token);
+            await SendAsync(process, "isready", "readyok", deadline.Token);
             await ReadUntilAsync(process, "readyok", deadline.Token);
         }
         catch (Exception ex) when (deadline.IsCancellationRequested && !ct.IsCancellationRequested)
@@ -181,8 +181,18 @@ internal sealed class ProcessUciEngine(string binaryPath, UciTimeouts? timeouts 
 
     private void Record(Exception ex) => _failure = new Failure(ex.Message, _time.GetUtcNow());
 
-    private static async Task SendAsync(Process process, string command, CancellationToken ct)
-        => await process.StandardInput.WriteLineAsync(command.AsMemory(), ct);
+    private static async Task SendAsync(Process process, string command, string awaiting, CancellationToken ct)
+    {
+        try
+        {
+            await process.StandardInput.WriteLineAsync(command.AsMemory(), ct);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or ObjectDisposedException)
+        {
+            // The engine already exited, so its stdin is a broken pipe: report that as the engine's failure, as a failed read does.
+            throw new InvalidOperationException($"Stockfish exited before answering '{awaiting}' (could not send '{command}').", ex);
+        }
+    }
 
     private static async Task ReadUntilAsync(Process process, string expected, CancellationToken ct)
     {

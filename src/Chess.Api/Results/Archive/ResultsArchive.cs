@@ -135,7 +135,7 @@ public sealed class ResultsArchive(IDbContextFactory<ArenaDbContext> factory)
             StartFen = startFen,
             CurrentFen = board.ToFen(),
             PlyCount = record.Moves.Count,
-            Pgn = Pgn.Write(tags, startFen, record.Moves.Select(m => m.San), record.Result),
+            Pgn = Pgn.Write(tags, startFen, record.Moves.Select(m => m.San), record.Result, record.Termination),
             CreatedAt = record.PlayedAt,
             StartedAt = record.PlayedAt,
             FinishedAt = record.PlayedAt,
