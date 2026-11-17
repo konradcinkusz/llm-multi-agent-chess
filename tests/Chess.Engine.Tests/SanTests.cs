@@ -51,14 +51,15 @@ public class SanTests
     [Fact]
     public void QueensNeedFileAndRankWhenBothAmbiguityExists()
     {
-        // Qd1 shares a file with Qd8 and a rank with Qh1; all three reach d5.
-        var board = Load("k2Q4/8/8/8/8/7K/8/3Q3Q w - - 0 1");
+        // Qd1 shares a file with Qd8 and a rank with Qh1; all three reach d5. The black king stands on a6, where no
+        // queen attacks it: LoadFen refuses a position with the side not to move in check.
+        var board = Load("3Q4/8/k7/8/8/7K/8/3Q3Q w - - 0 1");
 
         var sans = SanOf(board);
 
-        Assert.Contains("Qd1d5+", sans);
-        Assert.Contains("Q8d5+", sans);
-        Assert.Contains("Qhd5+", sans);
+        Assert.Contains("Qd1d5", sans);
+        Assert.Contains("Q8d5", sans);
+        Assert.Contains("Qhd5", sans);
     }
 
     [Fact]
