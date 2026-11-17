@@ -267,6 +267,8 @@ The Copilot check is never Unhealthy, and `/health` answers HTTP 200 even when a
 
 **403 `Cross-origin request rejected`.** The API and the web app refuse any request whose `Origin` header names another site, or whose `Sec-Fetch-Site` is `cross-site` (ADR-006, amended). A browser sends those headers when a page on another site makes the call. A 403 therefore means a foreign page reached the app through your browser, not that the app is broken. Open the arena at <http://localhost:5070> or <http://127.0.0.1:5070>. To allow another origin of your own, add it to `Arena:AllowedOrigins` in the API's configuration. Requests with no `Origin` header, such as `curl`, are allowed.
 
+**403 `Host rejected`.** The same guard refuses a request whose `Host` header is not the arena's own: `localhost`, `127.0.0.1` or `[::1]` (on port 5070 for the web app, 5080 for the API), the API's service name `api`, or the host of an `Arena:AllowedOrigins` entry. This stops DNS rebinding, where a page on `attacker.example:5080` is pointed at 127.0.0.1 and reads the API as if it were its own site. If you reach the arena through another name (a hosts-file alias, a tunnel), add that origin to `Arena:AllowedOrigins`; its host is then accepted too.
+
 ## Project layout
 
 ```
