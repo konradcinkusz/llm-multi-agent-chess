@@ -83,6 +83,34 @@ public class ErrorStatesTests
         Assert.Empty(cut.FindAll(".status-strip"));
     }
 
+    private static string AppCss()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Chess.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return File.ReadAllText(Path.Combine(dir.FullName, "src", "Chess.Web", "wwwroot", "app.css"));
+    }
+
+    [Fact]
+    public void The_framework_reconnect_dialog_is_hidden_on_the_broadcast_stage_by_css_alone()
+    {
+        // The dialog is appended to the body, outside the stage; the page has its own "Reconnecting to the arena" line.
+        Assert.Contains("body:has(.broadcast-layout) #components-reconnect-modal", AppCss());
+    }
+
+    [Fact]
+    public void The_error_bar_is_hidden_until_the_framework_shows_it()
+    {
+        var css = AppCss();
+        var start = css.IndexOf("#blazor-error-ui {", StringComparison.Ordinal);
+        var end = css.IndexOf('}', start);
+        Assert.Contains("display: none;", css.Substring(start, end - start));
+    }
+
     private static readonly RenderFragment ThrowerBody = b =>
     {
         b.OpenComponent<Thrower>(0);
