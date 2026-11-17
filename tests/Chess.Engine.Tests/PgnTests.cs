@@ -36,6 +36,45 @@ public class PgnTests
     }
 
     [Fact]
+    public void TerminationIsWrittenAfterResultWhenGiven()
+    {
+        var pgn = Pgn.Write(NoTags, null, new[] { "e4" }, "*", "forfeit-black");
+
+        var header = pgn.Split('\n').TakeWhile(line => line.StartsWith('[')).ToArray();
+        Assert.Equal(new[] { "[Result \"*\"]", "[Termination \"forfeit-black\"]" }, header[^2..]);
+    }
+
+    [Fact]
+    public void TerminationComesAfterResultAndBeforeSetUpAndFen()
+    {
+        var pgn = Pgn.Write(NoTags, AfterE4, new[] { "e5" }, "1/2-1/2", "adjudicated");
+
+        var header = pgn.Split('\n').TakeWhile(line => line.StartsWith('[')).ToArray();
+        Assert.Equal(
+            new[] { "[Result \"1/2-1/2\"]", "[Termination \"adjudicated\"]", "[SetUp \"1\"]", "[FEN \"" + AfterE4 + "\"]" },
+            header[6..]);
+    }
+
+    [Fact]
+    public void WithoutATerminationNoTerminationTagIsWritten()
+    {
+        Assert.DoesNotContain("Termination", Pgn.Write(NoTags, null, new[] { "e4" }, "*"));
+        Assert.DoesNotContain("Termination", Pgn.Write(NoTags, null, new[] { "e4" }, "*", "  "));
+    }
+
+    [Fact]
+    public void ATerminationTagInTheTagsIsUsedWhenNoArgumentIsGivenAndTheArgumentWins()
+    {
+        var tags = new Dictionary<string, string> { ["Termination"] = "checkmate" };
+
+        Assert.Contains("[Termination \"checkmate\"]\n", Pgn.Write(tags, null, new[] { "e4" }, "*"));
+
+        var pgn = Pgn.Write(tags, null, new[] { "e4" }, "*", "abandoned");
+        Assert.Contains("[Termination \"abandoned\"]\n", pgn);
+        Assert.Equal(1, pgn.Split("[Termination").Length - 1);
+    }
+
+    [Fact]
     public void MissingRosterTagsFallBackToPlaceholders()
     {
         var pgn = Pgn.Write(NoTags, null, new[] { "e4" }, "*");
