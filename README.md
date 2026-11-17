@@ -239,7 +239,7 @@ Check the USD estimate on the planner before you run a day.
 Everything is in PostgreSQL: games, every move, every LLM attempt with its prompt and reply, tournaments and benchmark runs, the rating history (`rating_snapshots`), and broadcast schedules and slots.
 
 - The default profile keeps the data in the Docker named volume **`chess-arena-pg`**, so it survives restarts of the app and of the container.
-- The leaderboard is recomputed from the stored games on every read. Every number on screen can be reproduced from the games table.
+- The leaderboard is computed from the stored games, never stored. The API keeps the last computation in memory (not in the database) and replaces it as soon as a rated game finishes or a move gets its Stockfish annotation, so a read always shows the numbers of the games as they are now. Every number on screen can be reproduced from the games table. The rating history chart (`/api/ratings/history`) sends at most 200 points per model, thinned at a fixed stride and always including each model's first and latest snapshot.
 - The `fake` profile and the tests use an in-memory store. Its data is gone when the app stops.
 - To use an existing PostgreSQL instead of the container, set the AppHost connection string `ConnectionStrings:chess` in the AppHost user secrets. No container is started then.
 

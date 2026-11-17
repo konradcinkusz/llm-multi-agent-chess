@@ -278,28 +278,29 @@ else
         _error = null;
         try
         {
+            // Every call is independent of the others except the history, which needs the model list. All start together.
             var boardTask = _ratings.GetLeaderboardAsync(tournamentId, _order, ct);
-            var allTask = Api.GetLeaderboardAsync(ct);
+            // The chart colours follow the ranking of all rated games by score. When that is the board being shown it is the
+            // same answer, so it is not asked for twice.
+            var allTask = tournamentId is null && _order == RankingOrder.Score ? boardTask : Api.GetLeaderboardAsync(ct);
+            var matrixTask = _ratings.GetRatingMatrixAsync(tournamentId, ct);
+            var breakdownTask = Api.GetResultsBreakdownAsync(tournamentId, ct);
             var tournamentsTask = Api.GetTournamentsAsync(ct);
-            await Task.WhenAll(boardTask, allTask, tournamentsTask);
+            var historyTask = LoadHistoriesAsync(allTask, ct);
+            await Task.WhenAll(boardTask, allTask, matrixTask, breakdownTask, tournamentsTask, historyTask);
+
             _tournaments = tournamentsTask.Result;
             var board = boardTask.Result;
-            var models = allTask.Result.Models.Select(m => m.Model).ToList();
-
-            var matrix = await _ratings.GetRatingMatrixAsync(tournamentId, ct);
-            var breakdown = await Api.GetResultsBreakdownAsync(tournamentId, ct);
-            PairwiseCoefficient? leaderVsSecond = board.Models.Count > 1
-                ? await _ratings.GetPairwiseAsync(board.Models[0].Model, board.Models[1].Model, tournamentId, ct)
-                : null;
-
-            // The history is not scoped by tournament, so only the models that get a palette colour are fetched.
-            var drawn = ChartPalette.AssignSlots(models).Keys.ToList();
-            var histories = await Task.WhenAll(drawn.Select(async model =>
-                (Model: model, Points: await Api.GetRatingHistoryAsync(model, ct))));
+            var matrix = matrixTask.Result;
+            var (models, histories) = historyTask.Result;
+            // The leader against #2 is a cell of the matrix. A matrix without it (not expected) falls back to the pairwise call.
+            var leaderVsSecond = ResultsModel.LeaderVsSecondIn(board, matrix)
+                ?? (board.Models.Count > 1
+                    ? await _ratings.GetPairwiseAsync(board.Models[0].Model, board.Models[1].Model, tournamentId, ct)
+                    : null);
 
             _board = board;
-            _report = ResultsModel.Build(new ResultsInputs(board, models, matrix, breakdown, leaderVsSecond,
-                histories.ToDictionary(h => h.Model, h => h.Points, StringComparer.Ordinal)));
+            _report = ResultsModel.Build(new ResultsInputs(board, models, matrix, breakdownTask.Result, leaderVsSecond, histories));
             // A scope that has no players of the chosen style shows All again, rather than an empty table.
             if (_style is not null && !_report.Styles.Contains(_style, StringComparer.Ordinal)) _style = null;
         }
@@ -312,6 +313,20 @@ else
             _error = ex.Message;
         }
         _loading = false;
+    }
+
+    /// <summary>
+    /// The history is not scoped by tournament, so only the models that get a palette colour are fetched, one request each,
+    /// together. Returns the model list the colours follow, with the histories.
+    /// </summary>
+    private async Task<(IReadOnlyList<string> Models, IReadOnlyDictionary<string, IReadOnlyList<RatingHistoryPointDto>> Histories)> LoadHistoriesAsync(
+        Task<LeaderboardDto> allTask, CancellationToken ct)
+    {
+        var models = (await allTask).Models.Select(m => m.Model).ToList();
+        var drawn = ChartPalette.AssignSlots(models).Keys.ToList();
+        var histories = await Task.WhenAll(drawn.Select(async model =>
+            (Model: model, Points: await Api.GetRatingHistoryAsync(model, ct))));
+        return (models, histories.ToDictionary(h => h.Model, h => h.Points, StringComparer.Ordinal));
     }
 
     private static string Percent(double fraction) => ResultsModel.Number(100 * fraction, "0") + "%";

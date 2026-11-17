@@ -10,16 +10,22 @@ namespace Chess.Api.Ratings;
 
 public static class RatingExtensions
 {
-    public static IHostApplicationBuilder AddRatings(this IHostApplicationBuilder builder) => builder;
+    public static IHostApplicationBuilder AddRatings(this IHostApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<RatingMemo>();
+        return builder;
+    }
 
     /// <summary>
-    /// <c>GET /api/ratings</c>, <c>/api/ratings/pairwise?a&amp;b</c> and <c>/api/ratings/matrix</c>. Each computes
-    /// from the games table on every request (no caching) and takes an optional <c>tournamentId</c> to restrict the games.
+    /// <c>GET /api/ratings</c>, <c>/api/ratings/pairwise?a&amp;b</c> and <c>/api/ratings/matrix</c>. Each takes an optional
+    /// <c>tournamentId</c> to restrict the games and answers from the games table: <see cref="RatingMemo"/> remembers the
+    /// computation per scope and recomputes when the rated games or their move annotations change, so the numbers are
+    /// always those of the data as it is now. The matrix and the pairwise endpoint read the same cells.
     /// <c>/api/ratings</c> also takes <c>order=score|conservative</c> (default <c>score</c>, RATING.md §6).
     /// </summary>
     public static IEndpointRouteBuilder MapRatingEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/ratings", async (IDbContextFactory<ArenaDbContext> factory, Guid? tournamentId, string? order, CancellationToken ct) =>
+        endpoints.MapGet("/ratings", async (IDbContextFactory<ArenaDbContext> factory, RatingMemo memo, Guid? tournamentId, string? order, CancellationToken ct) =>
         {
             if (!TryParseOrder(order, out var ranking))
             {
@@ -29,8 +35,8 @@ public static class RatingExtensions
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
-            var (_, report) = await ComputeAsync(factory, tournamentId, ct);
-            var ordered = RatingCalculator.Order(report, ranking);
+            var view = await memo.GetAsync(factory, tournamentId, ct);
+            var ordered = RatingCalculator.Order(view.Report, ranking);
             return HttpResults.Ok(new LeaderboardDto(
                 ordered.Models,
                 ordered.WhiteAdvantage,
@@ -38,10 +44,10 @@ public static class RatingExtensions
                 ordered.Models.Any(m => m.MoveQuality is not null)));
         });
 
-        endpoints.MapGet("/ratings/pairwise", async (string a, string b, IDbContextFactory<ArenaDbContext> factory, Guid? tournamentId, CancellationToken ct) =>
+        endpoints.MapGet("/ratings/pairwise", async (string a, string b, IDbContextFactory<ArenaDbContext> factory, RatingMemo memo, Guid? tournamentId, CancellationToken ct) =>
         {
-            var (rated, report) = await ComputeAsync(factory, tournamentId, ct);
-            var unknown = new[] { a, b }.FirstOrDefault(model => report.Models.All(m => m.Model != model));
+            var view = await memo.GetAsync(factory, tournamentId, ct);
+            var unknown = new[] { a, b }.FirstOrDefault(model => view.Report.Models.All(m => m.Model != model));
             if (unknown is not null)
             {
                 return HttpResults.Problem(
@@ -50,18 +56,17 @@ public static class RatingExtensions
                     statusCode: StatusCodes.Status404NotFound);
             }
 
-            return HttpResults.Ok(RatingCalculator.Pairwise(report, rated.Outcomes, a, b));
+            // The matrix holds the cell of every pair of distinct models, numerically the same as Pairwise. A model
+            // against itself is not in it, so that rare request is computed directly.
+            var cell = view.Matrix.FirstOrDefault(c => c.A == a && c.B == b);
+            return HttpResults.Ok(cell ?? RatingCalculator.Pairwise(view.Report, view.Rated.Outcomes, a, b));
         });
 
         // Every ordered pair of distinct models, in leaderboard order. The diagonal is left out: RQC(A, A) is 0.5 by definition.
-        endpoints.MapGet("/ratings/matrix", async (IDbContextFactory<ArenaDbContext> factory, Guid? tournamentId, CancellationToken ct) =>
+        endpoints.MapGet("/ratings/matrix", async (IDbContextFactory<ArenaDbContext> factory, RatingMemo memo, Guid? tournamentId, CancellationToken ct) =>
         {
-            var (rated, report) = await ComputeAsync(factory, tournamentId, ct);
-            var models = report.Models.Select(m => m.Model).ToList();
-            var cells = models
-                .SelectMany(a => models.Where(b => b != a).Select(b => RatingCalculator.Pairwise(report, rated.Outcomes, a, b)))
-                .ToList();
-            return HttpResults.Ok(new MatrixDto(models, cells));
+            var view = await memo.GetAsync(factory, tournamentId, ct);
+            return HttpResults.Ok(new MatrixDto(view.Report.Models.Select(m => m.Model).ToList(), view.Matrix));
         });
 
         return endpoints;
@@ -82,13 +87,5 @@ public static class RatingExtensions
                 order = default;
                 return false;
         }
-    }
-
-    private static async Task<(RatedGames Rated, RatingReport Report)> ComputeAsync(
-        IDbContextFactory<ArenaDbContext> factory, Guid? tournamentId, CancellationToken ct)
-    {
-        var rated = await RatedGameLoader.LoadAsync(factory, tournamentId, ct);
-        var report = RatingCalculator.Compute(rated.Outcomes, rated.MoveStats, new RatingOptions());
-        return (rated, report);
     }
 }
