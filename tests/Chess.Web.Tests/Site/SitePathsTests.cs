@@ -15,6 +15,14 @@ public class SitePathsTests
     public void A_model_id_becomes_a_folder_name(string model, string folder) =>
         Assert.Equal(folder, SitePaths.Slug(model));
 
+    [Theory]
+    [InlineData("alpha")]
+    [InlineData("GPT 5.1/x")]
+    [InlineData("claude-sonnet-4.5@high~think")]
+    [InlineData("org/Model_7B:q4+x")]
+    public void The_archive_validator_collides_two_ids_exactly_when_the_site_gives_them_one_folder(string model) =>
+        Assert.Equal(SitePaths.Slug(model), Chess.Api.Results.Archive.GameRecordValidator.SiteKey(model));
+
     [Fact]
     public void A_pair_page_is_named_by_the_two_ids_in_ordinal_order_under_head_to_head() =>
         Assert.Equal("head-to-head/alpha--beta/index.html", SitePaths.Pair("alpha", "beta"));

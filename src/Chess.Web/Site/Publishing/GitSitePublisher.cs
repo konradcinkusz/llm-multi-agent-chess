@@ -252,7 +252,7 @@ public sealed partial class GitSitePublisher(IOptions<SitePublishingOptions> opt
 
     private SitePublishResult Refused(string detail) => new(false, null, detail, time.GetUtcNow());
 
-    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._/-]*$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._/-]*\z", RegexOptions.CultureInvariant)]
     private static partial Regex BranchName();
 
     [GeneratedRegex(@"^ref: refs/heads/(?<branch>\S+)\tHEAD$", RegexOptions.CultureInvariant)]
