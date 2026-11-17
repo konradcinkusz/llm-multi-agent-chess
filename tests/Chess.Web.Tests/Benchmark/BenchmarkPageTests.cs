@@ -158,6 +158,27 @@ public class BenchmarkPageTests
     }
 
     [Fact]
+    public void TheRandomOpponentIsFreeAndAModelWithoutAMultiplierIsBilledByTokenNotUnknown()
+    {
+        using var ctx = new BunitContext();
+        Mount(ctx, Defaults());
+        var cut = ctx.Render<BenchmarkPage>();
+
+        cut.Find("#candidate").Change("gpt");
+
+        // The opponents are fake-a, fake-b, the custom model (no multiplier) and Random: the last is free, not "unknown".
+        cut.WaitForAssertion(() => Assert.Contains("billed by token, counted in AI credits", cut.Find("[data-testid='benchmark-estimate']").TextContent));
+        var estimate = cut.Find("[data-testid='benchmark-estimate']");
+        Assert.Contains("plus 1 player billed by token, counted in AI credits", estimate.TextContent);
+        Assert.DoesNotContain("unknown multiplier", estimate.TextContent);
+        var rows = cut.FindAll("[data-testid='benchmark-estimate'] tbody tr");
+        var random = rows.Single(row => row.Children[0].TextContent.StartsWith("random", StringComparison.Ordinal));
+        Assert.Equal(["free", "free", "free"], random.Children.Skip(2).Take(3).Select(cell => cell.TextContent).ToArray());
+        var custom = rows.Single(row => row.Children[0].TextContent.StartsWith("local", StringComparison.Ordinal));
+        Assert.Equal("by token", custom.Children[2].TextContent);
+    }
+
+    [Fact]
     public void TheRunsListShowsProgressAndOnlyARunningOneCanBeCancelled()
     {
         using var ctx = new BunitContext();

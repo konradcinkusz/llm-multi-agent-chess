@@ -64,7 +64,7 @@ public static class ResultsModel
     public const int LossesSlot = 7;
     public const int ForfeitsSlot = 4;
 
-    public static string Number(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
+    public static string Number(double value, string format) => NumberText.Fixed(value, format);
 
     /// <summary>Half the width of a 95 % interval: the "±" printed next to a rating.</summary>
     public static double HalfWidth(double low, double high) => (high - low) / 2;

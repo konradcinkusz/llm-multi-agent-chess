@@ -11,6 +11,7 @@ public class PremiumEstimateTests
         new("gpt", "GPT", 1, true),
         new("claude", "Claude", 0.33, true),
         new("random", "Random", null, true),
+        new("local", "Local", null, true),
     ];
 
     [Fact]
@@ -35,9 +36,19 @@ public class PremiumEstimateTests
     [Fact]
     public void AModelWithoutAKnownMultiplierIsUnknownAndLeftOutOfTheTotal()
     {
-        var estimates = PremiumEstimate.For(Catalog, ["gpt", "random"], 2);
+        var estimates = PremiumEstimate.For(Catalog, ["gpt", "local"], 2);
 
         Assert.Null(estimates[1].Requests);
+        Assert.Equal(80, PremiumEstimate.Known(estimates));
+    }
+
+    [Fact]
+    public void TheRandomPlayerCostsNothingWhateverTheCatalogueListsForIt()
+    {
+        // The catalogue lists no multiplier for Random here; it still is not "unknown", because it calls no model.
+        var estimates = PremiumEstimate.For(Catalog, ["gpt", "random"], 2);
+
+        Assert.Equal(0, estimates[1].Requests);
         Assert.Equal(80, PremiumEstimate.Known(estimates));
     }
 

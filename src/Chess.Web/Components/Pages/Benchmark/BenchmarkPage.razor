@@ -177,9 +177,9 @@
                                     <tr>
                                         <td>@row.Player <span class="muted">@(row.Role == "candidate" ? "candidate" : "opponent")</span></td>
                                         <td class="num">@row.Games</td>
-                                        <td class="num">@TournamentFormat.Requests(row.PremiumRequests)</td>
-                                        <td class="num">@TournamentFormat.Credits(row.AiCredits)</td>
-                                        <td class="num">@TournamentFormat.Usd(row.Usd)</td>
+                                        <td class="num">@TournamentFormat.Requests(row.Player, row.PremiumRequests)</td>
+                                        <td class="num">@TournamentFormat.Credits(row.Player, row.AiCredits)</td>
+                                        <td class="num">@TournamentFormat.Usd(row.Player, row.Usd)</td>
                                         <td>@TournamentFormat.Basis(row.Basis, row.SampleMoves)</td>
                                     </tr>
                                 }
@@ -191,7 +191,7 @@
                         Known total: @TournamentFormat.Requests(estimate.Totals.PremiumRequests) premium requests
                         @if (estimate.Totals.UnknownPremium > 0)
                         {
-                            <span>, plus @estimate.Totals.UnknownPremium with an unknown multiplier</span>
+                            <span>, plus @estimate.Totals.UnknownPremium @(estimate.Totals.UnknownPremium == 1 ? "player" : "players") billed by token, counted in AI credits</span>
                         }
                         · @TournamentFormat.Credits(estimate.Totals.AiCredits) · @TournamentFormat.Usd(estimate.Totals.Usd)
                         @if (estimate.Totals.UnknownUsd > 0)

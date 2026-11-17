@@ -113,10 +113,10 @@
                                     var cost = CostOf(estimate.ModelId, gamesPerModel);
                                     <tr>
                                         <td>@PromptStyleChoices.Label(estimate.ModelId, _models, _styles)</td>
-                                        <td>@TournamentFormat.Price(Find(estimate.ModelId)?.Pricing)</td>
-                                        <td class="num">@TournamentFormat.Requests(estimate.Requests)</td>
-                                        <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
-                                        <td class="num">@TournamentFormat.Usd(cost?.Usd)</td>
+                                        <td>@TournamentFormat.Price(estimate.ModelId, Find(estimate.ModelId)?.Pricing)</td>
+                                        <td class="num">@TournamentFormat.Requests(estimate.ModelId, estimate.Requests)</td>
+                                        <td class="num">@TournamentFormat.Credits(estimate.ModelId, cost?.AiCredits)</td>
+                                        <td class="num">@TournamentFormat.Usd(estimate.ModelId, cost?.Usd)</td>
                                         <td>@TournamentFormat.Basis(cost?.Basis, cost?.SampleMoves)</td>
                                     </tr>
                                 }
@@ -165,8 +165,12 @@
                         @foreach (var estimate in created.EstimatedPremiumRequests)
                         {
                             <li>
-                                @estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)
-                                @if (estimate.EstimatedAiCredits is { } credits)
+                                @estimate.ModelId: @TournamentFormat.Requests(estimate.ModelId, estimate.EstimatedPremiumRequests)
+                                @if (TournamentFormat.IsFree(estimate.ModelId))
+                                {
+                                    @* The random player is free in every column: one word says so. *@
+                                }
+                                else if (estimate.EstimatedAiCredits is { } credits)
                                 {
                                     <span>· @TournamentFormat.Credits(credits) · @TournamentFormat.Usd(estimate.EstimatedUsd) (@TournamentFormat.Basis(estimate.TokenBasis, estimate.SampleMoves))</span>
                                 }
