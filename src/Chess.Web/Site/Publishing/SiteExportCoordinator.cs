@@ -5,8 +5,8 @@ namespace Chess.Web.Site.Publishing;
 
 /// <summary>
 /// Runs one export or publish at a time: the admin page and auto-publish share the export folder. It keeps the last results
-/// for the page, and PublishedThrough, the export time of the last successful publish, which auto-publish compares with the
-/// newest finished game. It starts at the app's start, so a restart does not publish by itself.
+/// for the page, and PublishedThrough, the export time of the last successful publish. Auto-publish decides by the number of
+/// finished games (<see cref="ISiteActivity"/>), not by this time.
 /// </summary>
 public sealed class SiteExportCoordinator(
     ISitePublisher publisher,
