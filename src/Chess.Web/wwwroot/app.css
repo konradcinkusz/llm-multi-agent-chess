@@ -867,17 +867,7 @@ body:has(.broadcast-layout) #components-reconnect-modal {
    static pages use are repeated here, unscoped. The interactive pages keep their own copies.
    ========================================================================== */
 
-/* A caption that only screen readers announce. */
-.visually-hidden {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-}
+/* The screen-reader-only caption (.visually-hidden) is defined once, earlier in this file. */
 
 .back {
     margin: 0 0 var(--space-3);
