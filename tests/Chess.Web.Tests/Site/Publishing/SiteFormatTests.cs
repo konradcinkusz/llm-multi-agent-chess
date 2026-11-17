@@ -13,6 +13,17 @@ public class SiteFormatTests
     public void Sizes_read_in_the_largest_fitting_unit(long bytes, string expected) =>
         Assert.Equal(expected, SiteFormat.Size(bytes));
 
+    [Theory]
+    [InlineData(36_500_000L, "3.4% of the 1 GB limit of a GitHub Pages site", false)]
+    [InlineData(1L << 30, "100.0% of the 1 GB limit of a GitHub Pages site", true)]
+    [InlineData(900L * 1024 * 1024, "87.9% of the 1 GB limit of a GitHub Pages site", true)]
+    [InlineData(800L * 1024 * 1024, "78.1% of the 1 GB limit of a GitHub Pages site", false)]
+    public void The_export_size_is_shown_against_the_pages_limit(long bytes, string share, bool warns)
+    {
+        Assert.Equal(share, SiteFormat.PagesShare(bytes));
+        Assert.Equal(warns, SiteFormat.NearPagesLimit(bytes));
+    }
+
     [Fact]
     public void Stamps_are_utc_to_the_minute() =>
         Assert.Equal("2026-10-25 14:03 UTC", SiteFormat.Stamp(new DateTimeOffset(2026, 10, 25, 14, 3, 40, TimeSpan.Zero)));

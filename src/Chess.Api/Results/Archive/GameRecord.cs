@@ -57,6 +57,6 @@ public static class GameRecordJson
     public static string RelativePath(GameRecord record)
     {
         var at = record.PlayedAt.UtcDateTime;
-        return $"games/{at:yyyy}/{at:MM}/{record.Id:D}.json";
+        return FormattableString.Invariant($"games/{at:yyyy}/{at:MM}/{record.Id:D}.json");
     }
 }

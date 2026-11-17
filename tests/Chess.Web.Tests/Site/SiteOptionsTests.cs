@@ -1,5 +1,6 @@
 extern alias ChessWeb;
 
+using System.Text.RegularExpressions;
 using Chess.Web.Site;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +32,38 @@ public class SiteOptionsTests(ConfiguredSiteFixture site) : IClassFixture<Config
             Assert.DoesNotContain("Unsafe", html, StringComparison.Ordinal);
         }
     }
+
+    [Fact]
+    public void With_a_public_address_every_page_names_its_canonical_address_and_repeats_it_as_og_url()
+    {
+        Assert.Equal("https://owner.github.io/repo/", CanonicalOf("index.html"));
+        Assert.Equal("https://owner.github.io/repo/games/", CanonicalOf("games/index.html"));
+        Assert.Equal("https://owner.github.io/repo/games/page-2/", CanonicalOf("games/page-2/index.html"));
+        Assert.Equal("https://owner.github.io/repo/head-to-head/alpha--beta/", CanonicalOf("head-to-head/alpha--beta/index.html"));
+        foreach (var (path, html) in site.Pages)
+        {
+            Assert.Matches("<link rel=\"canonical\" href=\"https://owner\\.github\\.io/repo/[^\"]*\"", html);
+            Assert.Contains("<meta property=\"og:url\" content=\"https://owner.github.io/repo/", html, StringComparison.Ordinal);
+        }
+
+        string CanonicalOf(string page) =>
+            Regex.Match(site.Pages[page], "<link rel=\"canonical\" href=\"([^\"]*)\"").Groups[1].Value;
+    }
+
+    [Theory]
+    [InlineData("https://owner.github.io/repo/", "index.html", "https://owner.github.io/repo/")]
+    [InlineData("https://owner.github.io/repo", "games/index.html", "https://owner.github.io/repo/games/")]
+    [InlineData("https://owner.github.io/", "tournaments/index.html", "https://owner.github.io/tournaments/")]
+    [InlineData(null, "index.html", null)]
+    public void The_canonical_address_is_the_public_address_plus_the_folder_of_the_page(string? publicUrl, string page, string? expected) =>
+        Assert.Equal(expected, new SiteFrame(0, SiteDataSet.Now, 0, null, [], publicUrl).Canonical(page));
+
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("/relative/")]
+    [InlineData("  ")]
+    public void An_unsafe_public_address_gives_no_canonical_link(string unsafeUrl) =>
+        Assert.Null(SiteLinks.Safe(unsafeUrl));
 
     [Fact]
     public void Options_bind_from_arena_site_and_drop_an_unsafe_support_link()
@@ -76,6 +109,7 @@ public sealed class ConfiguredSiteFixture : ExportedSite
 {
     public override Task InitializeAsync() => ExportWith(false,
         ("Arena:Site:YouTubeUrl", "https://www.youtube.com/@arena/live"),
+        ("Arena:Site:PublicUrl", "https://owner.github.io/repo/"),
         ("Arena:Site:SupportLinks:0:Label", "Ko-fi"),
         ("Arena:Site:SupportLinks:0:Url", "https://ko-fi.com/arena"),
         ("Arena:Site:SupportLinks:1:Label", "Unsafe"),

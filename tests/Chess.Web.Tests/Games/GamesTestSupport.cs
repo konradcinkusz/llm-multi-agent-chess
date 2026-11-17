@@ -55,10 +55,10 @@ internal static class Fixtures
         """;
 
     public static object Summary(string id, string white, string black, string state = "finished", string result = "1-0",
-        string? termination = "checkmate", int plies = 2) => new
+        string? termination = "checkmate", int plies = 2, string? tournamentId = null) => new
         {
             id,
-            tournamentId = (string?)null,
+            tournamentId,
             white = new { kind = "llm", modelId = white },
             black = new { kind = "llm", modelId = black },
             rated = true,

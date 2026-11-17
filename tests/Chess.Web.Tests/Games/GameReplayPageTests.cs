@@ -107,6 +107,47 @@ public class GameReplayPageTests
         Assert.Equal("100", cut.Find("[data-testid=replay-scrub]").GetAttribute("value"));
     }
 
+    private const string RunId = "77777777-7777-7777-7777-777777777777";
+
+    private static FakeHandler GameOfRun(bool benchmark) => Routes.Answer(new Dictionary<string, Func<HttpResponseMessage>>
+    {
+        ["GET /api/models"] = Reply.Json(Fixtures.Models),
+        [$"GET /api/games/{Fixtures.FinishedId}"] = Reply.Json(Fixtures.Json(Fixtures.Detail(
+            Fixtures.Summary(Fixtures.FinishedId, "gpt", "claude", tournamentId: RunId),
+            Fixtures.StartFen, Fixtures.AfterE4,
+            Fixtures.Move(1, "white", "e4", Fixtures.AfterE4)))),
+        [$"GET /api/games/{Fixtures.FinishedId}/pgn"] = Reply.Pgn(Fixtures.Pgn),
+        [$"GET /api/games/{Fixtures.FinishedId}/usage"] = Reply.Json(Fixtures.Json(Fixtures.Usage(Fixtures.FinishedId, 1.5))),
+        [$"GET /api/attempts?gameId={Fixtures.FinishedId}&page=1"] = Reply.Json(Fixtures.Json(Fixtures.Page([], 0))),
+        [$"GET /api/benchmarks/{RunId}"] = benchmark
+            ? Reply.Json($$"""{"id":"{{RunId}}","name":"Run","candidate":"gpt","opponents":["claude"],"gamesPerOpponent":2,"status":"running","gamesTotal":2,"gamesFinished":1,"createdAt":"2026-10-24T10:00:00Z","finishedAt":null}""")
+            : Reply.Json("{}", HttpStatusCode.NotFound),
+    });
+
+    [Fact]
+    public void AGameOfABenchmarkRunLinksToTheBenchmarkPageNotTheTournamentPage()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, GameOfRun(benchmark: true), Fixtures.FinishedId);
+
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("[data-testid='replay-summary'] a")));
+        var link = cut.Find("[data-testid='replay-summary'] a");
+        Assert.Equal($"/benchmark/{RunId}", link.GetAttribute("href"));
+        Assert.Equal("Benchmark", link.TextContent);
+    }
+
+    [Fact]
+    public void AGameOfATournamentStillLinksToTheTournamentPage()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, GameOfRun(benchmark: false), Fixtures.FinishedId);
+
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("[data-testid='replay-summary'] a")));
+        var link = cut.Find("[data-testid='replay-summary'] a");
+        Assert.Equal($"/tournaments/{RunId}", link.GetAttribute("href"));
+        Assert.Equal("Tournament", link.TextContent);
+    }
+
     [Fact]
     public void TheStepButtonsFormOneGroupAndTheBoardAndMovesSitInCards()
     {

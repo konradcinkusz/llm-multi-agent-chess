@@ -97,6 +97,51 @@ public class SiteExportTests(SiteExportFixture site) : IClassFixture<SiteExportF
     }
 
     [Fact]
+    public void Every_page_describes_itself_for_search_and_sharing_and_names_no_canonical_address_without_a_public_url()
+    {
+        foreach (var (path, html) in Site.Pages)
+        {
+            Assert.Matches("<meta name=\"description\" content=\"[^\"]{20,}\"", html);
+            Assert.Contains("<meta property=\"og:title\" content=\"", html, StringComparison.Ordinal);
+            Assert.Contains("<meta property=\"og:description\" content=\"", html, StringComparison.Ordinal);
+            Assert.Contains("<meta property=\"og:type\" content=\"website\"", html, StringComparison.Ordinal);
+            Assert.False(html.Contains("rel=\"canonical\"", StringComparison.Ordinal), $"{path} names a canonical address with no public URL.");
+        }
+
+        var descriptions = Site.Pages.Where(page => !page.Key.StartsWith("games/", StringComparison.Ordinal))
+            .Select(page => Regex.Match(page.Value, "<meta name=\"description\" content=\"([^\"]*)\"").Groups[1].Value)
+            .ToArray();
+        Assert.Equal(descriptions.Length, descriptions.Distinct().Count());
+    }
+
+    [Fact]
+    public void The_snapshot_strip_is_a_named_region_and_every_scrolling_box_can_take_focus()
+    {
+        foreach (var (path, html) in Site.Pages)
+        {
+            Assert.Contains("<section class=\"site-strip\"", html, StringComparison.Ordinal);
+            Assert.Contains("aria-label=\"Snapshot\"", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("<div class=\"site-strip", html, StringComparison.Ordinal);
+            Assert.DoesNotMatch("<div class=\"table-wrap[^\"]*\"(?![^>]*tabindex=\"0\")", html);
+            Assert.DoesNotMatch("<pre(?![^>]*tabindex=\"0\")", html);
+        }
+    }
+
+    [Fact]
+    public void Every_rule_the_static_pages_share_with_the_interactive_ones_is_in_the_global_stylesheet()
+    {
+        // The static pages carry no scope attribute of the interactive pages, so a rule that lives only in a scoped
+        // stylesheet never reaches them: the visually hidden headers showed on the public site.
+        var css = File.ReadAllText(Path.Combine(Site.Directory, "assets", "app.css"));
+        foreach (var rule in new[] { "hero-leader", "headline", "h2h-hero", "tournament-facts", "games-pager", "back", "visually-hidden" })
+        {
+            Assert.Contains($".{rule} {{", css, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("Public static site", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_index_starts_with_the_big_picture()
     {
         var html = Site.Pages["index.html"];

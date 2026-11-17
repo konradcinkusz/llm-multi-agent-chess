@@ -29,7 +29,7 @@
 
                 <div class="engine-body">
                     <h3 class="engine-heading">Prompt sent</h3>
-                    <pre class="engine-text" data-testid="entry-prompt">@entry.Prompt</pre>
+                    <pre class="engine-text" tabindex="0" data-testid="entry-prompt">@entry.Prompt</pre>
 
                     <h3 class="engine-heading">Reply</h3>
                     @if (entry.RawReply is null)
@@ -38,7 +38,7 @@
                     }
                     else
                     {
-                        <pre class="engine-text" data-testid="entry-reply">@entry.RawReply</pre>
+                        <pre class="engine-text" tabindex="0" data-testid="entry-reply">@entry.RawReply</pre>
                     }
 
                     <h3 class="engine-heading">Reasoning</h3>
@@ -48,7 +48,7 @@
                     }
                     else
                     {
-                        <pre class="engine-text" data-testid="entry-reasoning">@entry.Reasoning</pre>
+                        <pre class="engine-text" tabindex="0" data-testid="entry-reasoning">@entry.Reasoning</pre>
                     }
                 </div>
             </details>

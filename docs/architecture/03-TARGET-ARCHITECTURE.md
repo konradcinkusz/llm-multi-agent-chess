@@ -603,8 +603,9 @@ current position at once; only new moves are paced.
 ## 11. Public results site: a static export on GitHub Pages (owner decision 2026-10-25, ADR-013)
 
 The owner wants a public page with all the results and charts, without exposing the app or a database. The local app
-renders a **static snapshot** of everything public and pushes it to the repository's `gh-pages` branch; GitHub Pages serves
-that branch. No server, no database and no script runs on the public side.
+renders a **static snapshot** of everything public; GitHub Pages serves the snapshot that the `publish-site` GitHub Actions
+workflow builds from the results archive and deploys (ADR-013, amended 2026-11-17). The app can also push its own export to a
+branch, as an advanced option that does not serve the public URL. No server, no database and no script runs on the public side.
 
 **What the site holds** (relative links only, so it works under `https://<owner>.github.io/<repo>/`):
 
@@ -618,6 +619,9 @@ that branch. No server, no database and no script runs on the public side.
 | `about/index.html` | the project one-pager (today `docs/index.html`) |
 | `data/*.json` | the same snapshot as JSON: leaderboard, matrix, history, breakdown, games, usage |
 | `assets/` | `app.css`, the scoped styles bundle, the favicon; `.nojekyll` at the root |
+
+Games that ended undecided (result `*`, termination `aborted`) are not on the site and have no page, PGN or log. A game the
+API has no PGN for gets its page without a `game.pgn` and without the Download link.
 
 Every page carries the snapshot time (UTC), the number of rated games, a "Watch live" link (`Arena:Site:YouTubeUrl`) and the
 support links (`Arena:Site:SupportLinks`, label + URL each). Interactive controls (filters, start, cancel, pickers) are not
@@ -636,14 +640,15 @@ public interface ISitePublisher { Task<SitePublishResult> PublishAsync(string si
 public sealed record SitePublishResult(bool Published, string? Commit, string Detail, DateTimeOffset At);
 ```
 
-**How it is published.** `GitSitePublisher` keeps its own clone in `Arena:Site:WorkDir` (never the owner's working tree),
-replaces the content of the `gh-pages` branch with the export as **one orphan commit** and force-pushes it, so the branch
-never grows a history and `main` is never touched. It uses the `git` on the owner's machine and its existing credentials;
-nothing is stored by the app. Triggers: "Export" and "Publish" on `/admin/site` (status, last result, size, link to the
-site), and automatically every `Arena:Site:AutoPublishMinutes` (default 0 = off) when a game has finished since the last
-publish. One-time owner step: Settings → Pages → Source: *Deploy from a branch*, `gh-pages`, `/ (root)`. The
-`deploy-pages` workflow stops deploying (the one-pager moves into the export as `about/`) and only checks that
-`docs/index.html` still assembles.
+**How it is published.** The public URL is deployed by `.github/workflows/publish-site.yml` (one-time owner step: Settings →
+Pages → Source: *GitHub Actions*). The in-app option: `GitSitePublisher` keeps its own clone in `Arena:Site:WorkDir` (never the
+owner's working tree), replaces the content of `Arena:Site:Branch` (default `gh-pages`) with the export as **one orphan commit**
+and force-pushes it, so the branch never grows a history and `main` is never touched. It refuses the remote's default branch,
+`main`, `master` and a branch whose tip it did not author. It uses the `git` on the owner's machine and its existing
+credentials; nothing is stored by the app. Triggers: "Export" and "Publish" on `/admin/site` (status, last result, size against
+the 1 GB Pages limit), and automatically every `Arena:Site:AutoPublishMinutes` (default 0 = off) when the number of finished
+games has changed since the last publish. The `deploy-pages` workflow deploys nothing; it only checks that `docs/index.html`
+still assembles.
 
 **What becomes public:** everything on those pages, including prompts, replies, reasoning and costs. Nothing else (no
 configuration, no secrets, no attempts of aborted games).

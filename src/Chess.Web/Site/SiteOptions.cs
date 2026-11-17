@@ -6,6 +6,12 @@ public sealed class SiteOptions
     /// <summary>The "Watch live" link (<c>Arena:Site:YouTubeUrl</c>). Not rendered when empty or not an http(s) address.</summary>
     public string? YouTubeUrl { get; set; }
 
+    /// <summary>
+    /// The address the site is served at (<c>Arena:Site:PublicUrl</c>), such as <c>https://owner.github.io/repo/</c>. With it each page
+    /// names its canonical address; without it the pages carry none. The publishing options bind the same key for the admin page.
+    /// </summary>
+    public string? PublicUrl { get; set; }
+
     /// <summary>Support links, a label and a URL each (<c>Arena:Site:SupportLinks</c>). Only http(s) links are rendered.</summary>
     public List<SupportLink> SupportLinks { get; set; } = [];
 

@@ -8,8 +8,9 @@ using Chess.Web.Tests.Support;
 namespace Chess.Web.Tests.Site;
 
 /// <summary>
-/// A fixed snapshot of the arena for the export tests: three models, one tournament, 24 finished games (one aborted), and
-/// two games still open that the games list must leave out. Every number is canned; nothing is computed by the API.
+/// A fixed snapshot of the arena for the export tests: three models, one tournament, 24 finished games (one has no PGN, one
+/// belongs to a benchmark run that is not in the tournament list), and four games the games list must leave out: two still
+/// open and two that finished undecided (aborted). Every number is canned; nothing is computed by the API.
 /// </summary>
 internal static class SiteDataSet
 {
@@ -27,6 +28,21 @@ internal static class SiteDataSet
     public static readonly Guid OpenGame = Guid.Parse("00000000-0000-4000-8000-0000000000aa");
 
     public static readonly Guid QueuedGame = Guid.Parse("00000000-0000-4000-8000-0000000000bb");
+
+    /// <summary>A queued game of a cancelled tournament: finished, result <c>*</c>, termination aborted, and the API has no PGN for it.</summary>
+    public static readonly Guid AbortedGame = Guid.Parse("00000000-0000-4000-8000-0000000000cc");
+
+    /// <summary>A game cut off by an app restart: the same shape as <see cref="AbortedGame"/>, outside any tournament.</summary>
+    public static readonly Guid RestartedGame = Guid.Parse("00000000-0000-4000-8000-0000000000dd");
+
+    /// <summary>A decided game the API has no PGN for (409): its page is exported without a PGN file and without the Download link.</summary>
+    public static readonly Guid NoPgnGame = GameId(5);
+
+    /// <summary>The run of a benchmark: games carry its id as their tournament id, but it is not in <c>/api/tournaments</c>.</summary>
+    public static readonly Guid BenchmarkRun = Guid.Parse("7d3a5c1e-0000-4000-8000-0000000000b1");
+
+    /// <summary>The game of the benchmark run.</summary>
+    public static readonly Guid BenchmarkGame = GameId(20);
 
     public static Guid GameId(int index) => Guid.Parse($"00000000-0000-4000-8000-{index:000000000000}");
 
@@ -145,13 +161,18 @@ internal static class SiteDataSet
         {
             var white = Models[i % 3];
             var black = Models[(i + 1) % 3];
-            var aborted = i == 5;
-            var result = aborted ? "*" : (i % 3) switch { 0 => "1-0", 1 => "0-1", _ => "1/2-1/2" };
-            games.Add(new GameSummaryDto(GameId(i), i < 12 ? Tournament : null,
+            var result = (i % 3) switch { 0 => "1-0", 1 => "0-1", _ => "1/2-1/2" };
+            Guid? run = i < 12 ? Tournament : i == 20 ? BenchmarkRun : null;
+            games.Add(new GameSummaryDto(GameId(i), run,
                 new PlayerSpec("llm", white), new PlayerSpec("llm", black), true,
-                "finished", result, aborted ? "aborted" : "checkmate", 40 + i,
+                "finished", result, "checkmate", 40 + i,
                 Now.AddMinutes(-i), Now.AddMinutes(-i).AddSeconds(30)));
         }
+
+        games.Add(new GameSummaryDto(AbortedGame, Tournament, new PlayerSpec("llm", "alpha"), new PlayerSpec("llm", "gamma"), true,
+            "finished", "*", "aborted", 0, Now.AddMinutes(-3), Now.AddMinutes(-2)));
+        games.Add(new GameSummaryDto(RestartedGame, null, new PlayerSpec("llm", "beta"), new PlayerSpec("llm", "gamma"), true,
+            "finished", "*", "aborted", 12, Now.AddMinutes(-4), Now.AddMinutes(-3)));
 
         games.Add(new GameSummaryDto(OpenGame, null, new PlayerSpec("llm", "alpha"), new PlayerSpec("llm", "beta"), true,
             "running", "*", null, 7, Now, null));

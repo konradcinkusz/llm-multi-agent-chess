@@ -1,51 +1,105 @@
 name: publish-site
 
 # Builds the public results site from the results archive (results/, docs/RESULTS-ARCHIVE.md) and deploys it to GitHub Pages.
+# This workflow is what serves the public URL (ADR-013, amended). One manual step, once: Settings, Pages, Source = GitHub Actions.
+# Until then the build job runs and the deploy job fails. The in-app "Publish" to a gh-pages branch is a separate, advanced
+# option and does not serve the public URL.
+#
 # Pull requests that add games are checked by the `build and test` job of ci.yml (ResultsArchiveTests replays every file).
-# One manual step, once: Settings, Pages, Source = GitHub Actions. Until then this job builds and uploads, and the deploy fails.
+#
+# It runs when the archive changes and when the code that makes the site changes. A workflow_run after CI was considered and
+# not used: it cannot filter by path, so every push to main would redeploy. The build job runs the site and archive tests
+# itself before it exports, so a change to the site code never reaches the public URL untested.
 
 on:
   push:
     branches: [main]
     paths:
       - 'results/**'
+      - 'src/Chess.Web/Site/**'
+      - 'src/Chess.Web/Components/Site/**'
+      - 'src/Chess.Web/Components/Charts/**'
+      - 'src/Chess.Web/Components/Shared/**'
+      - 'src/Chess.Web/Components/Pages/Results/**'
+      - 'src/Chess.Web/Components/Pages/HeadToHead/**'
+      - 'src/Chess.Web/wwwroot/**'
+      - 'src/Chess.Api/Results/**'
+      - 'src/Chess.Rating/**'
+      - 'src/Chess.Engine/**'
+      - 'global.json'
+      - 'Directory.Packages.props'
       - '.github/workflows/publish-site.yml'
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
+# Nothing is granted by default. The build job reads the repository; only the deploy job may write Pages.
+permissions: {}
+
 jobs:
   build:
     name: Build the site from the archive
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
+
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: Directory.Packages.props
 
       - run: dotnet build src/Chess.Api -c Release -warnaserror
       - run: dotnet build src/Chess.Web -c Release -warnaserror
 
+      # The code that renders the site is tested before it is allowed to publish anything.
+      - name: Test the site and the archive
+        run: |
+          dotnet test tests/Chess.Web.Tests --filter "FullyQualifiedName~Chess.Web.Tests.Site"
+          dotnet test tests/Chess.Api.Tests --filter "FullyQualifiedName~Chess.Api.Tests.Results"
+
+      # The state `done` means the games are in the database and their rating snapshots are written (ArchiveImportService), so
+      # the rating history is complete when the site is exported. A large archive takes a few minutes (one snapshot batch per game).
       - name: Start the API on the archive (fake LLM, in-memory database)
         run: |
           Database__Provider=InMemory Llm__Provider=Fake \
           Arena__Results__Archive__ImportFolder="$GITHUB_WORKSPACE/results" \
           ASPNETCORE_URLS=http://127.0.0.1:5080 \
             nohup dotnet src/Chess.Api/bin/Release/net10.0/Chess.Api.dll > api.log 2>&1 &
-          for i in $(seq 1 60); do
-            curl -fs http://127.0.0.1:5080/api/results/archive/status | grep -q '"state":"done"' && exit 0
-            sleep 1
+          api_pid=$!
+          for i in $(seq 1 900); do
+            if curl -fs http://127.0.0.1:5080/api/results/archive/status | grep -q '"state":"done"'; then
+              curl -fs http://127.0.0.1:5080/api/results/archive/status
+              echo
+              exit 0
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "The API stopped before the archive was imported:"
+              cat api.log
+              exit 1
+            fi
+            sleep 2
           done
+          echo "The archive was not imported within 30 minutes:"
           cat api.log
           exit 1
+
+      - name: Check that the rating history is there
+        run: |
+          games=$(find results/games -name '*.json' 2>/dev/null | wc -l)
+          echo "Archive: $games game file(s)"
+          if [ "$games" -gt 0 ]; then
+            curl -fs http://127.0.0.1:5080/api/ratings/history | grep -q '"model"' || {
+              echo "The archive has games but the API has no rating history."
+              cat api.log
+              exit 1
+            }
+          fi
 
       - name: Export the site
         working-directory: src/Chess.Web
@@ -54,20 +108,41 @@ jobs:
           ASPNETCORE_URLS: http://127.0.0.1:5070
           services__api__http__0: http://127.0.0.1:5080
           Arena__Site__ExportOnceTo: ${{ github.workspace }}/_site
-        run: dotnet bin/Release/net10.0/Chess.Web.dll
+        run: |
+          # The address the site is served at: https://<owner>.github.io/<repo>/, or the root of an <owner>.github.io repository.
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          if [ "${repo,,}" = "${owner}.github.io" ]; then
+            export Arena__Site__PublicUrl="https://${owner}.github.io/"
+          else
+            export Arena__Site__PublicUrl="https://${owner}.github.io/${repo}/"
+          fi
+          dotnet bin/Release/net10.0/Chess.Web.dll
 
       - name: Check the export
         run: |
           test -s _site/index.html
-          ! grep -rl '<script' _site --include='*.html'
+          if grep -rl '<script' _site --include='*.html'; then
+            echo "A page of the public site has a script element."
+            exit 1
+          fi
+          size=$(du -sb _site | cut -f1)
+          echo "The export is $size bytes (the Pages limit is 1073741824)"
+          # Fail before the deploy does: 90% of the 1 GB limit of a GitHub Pages site.
+          test "$size" -lt 966367641
 
       - uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
   deploy:
+    name: Deploy to GitHub Pages
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

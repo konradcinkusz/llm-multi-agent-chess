@@ -18,6 +18,7 @@ public static class GameRecordFolder
         var records = new List<GameRecord>();
         var errors = new List<string>();
         var seen = new Dictionary<Guid, string>();
+        var siteKeys = new Dictionary<string, (string Model, string File)>(StringComparer.Ordinal);
         var games = Path.Combine(root, "games");
         if (!Directory.Exists(games)) return new ArchiveRead(records, errors);
 
@@ -35,11 +36,37 @@ public static class GameRecordFolder
                 continue;
             }
 
+            if (!CheckPages(record, relative, siteKeys, errors)) continue;
+
             seen[record.Id] = relative;
             records.Add(record);
         }
 
         return new ArchiveRead(records, errors);
+    }
+
+    /// <summary>
+    /// Two model ids that differ only by case or by characters the site turns into dashes would get one page on the public
+    /// site, and the build of the site would fail after the merge. They are refused here instead, at the file that adds the second.
+    /// </summary>
+    private static bool CheckPages(GameRecord record, string file, Dictionary<string, (string Model, string File)> siteKeys, List<string> errors)
+    {
+        var ok = true;
+        foreach (var model in new[] { record.White.Model, record.Black.Model })
+        {
+            var key = GameRecordValidator.SiteKey(model);
+            if (!siteKeys.TryGetValue(key, out var first))
+            {
+                siteKeys[key] = (model, file);
+            }
+            else if (!string.Equals(first.Model, model, StringComparison.Ordinal))
+            {
+                errors.Add($"{file}: model '{model}' and model '{first.Model}' (in {first.File}) would share one page on the public site; use one spelling");
+                ok = false;
+            }
+        }
+
+        return ok;
     }
 
     private static GameRecord? ReadFile(string file, string relative, List<string> errors)

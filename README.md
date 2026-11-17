@@ -85,7 +85,7 @@ The navigation lists them in this order. Attempts and Site sit under **More** at
 | Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, player and legality. The legality filter is applied by the API, so it covers every page. Times are UTC. |
 | Viewer requests | `/admin/requests` | Not in the navigation. The requests playing now, the queue with cancel, the recent requests, and a simulate form in Mock mode. See [Viewer-paid games](#viewer-paid-games). |
 | Broadcast plan | `/broadcast/plan` | Add games one by one (White and Black), see the estimated cost of the broadcast, press Start; pause, resume or stop (after a confirmation) from the list, and delete a leftover draft. |
-| Site | `/admin/site` | Export the public results site, publish it to the `gh-pages` branch, and see the last export and publish. See [Public results site](#public-results-site). |
+| Site | `/admin/site` | Export the public results site of your own database and, as an advanced option, publish it to a branch; see the last export, its size against the Pages limit, and the last publish. The public URL is served by the `publish-site` workflow, not by this. See [Public results site](#public-results-site). |
 | Broadcast (OBS) | `/broadcast` | The live page, linked from the navigation as "Live broadcast". It is also the page OBS captures. |
 
 Copilot's `auto` model is hidden from the model pickers unless `Arena:ShowAutoModel` is `true`: it picks a different model for each request, so it is not one player.
@@ -146,35 +146,46 @@ The owner's setup is in [docs/REQUESTS.md](docs/REQUESTS.md): the API keys, the 
 
 ## Public results site
 
-The results, head-to-head, games, tournaments and this one-page description can be published as a static site on
-GitHub Pages ([ADR-013](docs/architecture/05-DECISIONS.md)). The app makes a snapshot on your machine and pushes it to the
-`gh-pages` branch. Nothing runs online: no server, no database and no script on the public side, and the site lags the
-live app by at most the auto-publish interval. The live game stays on YouTube.
+The results, head-to-head, games, tournaments and this one-page description are published as a static site on GitHub Pages
+([ADR-013](docs/architecture/05-DECISIONS.md)). Nothing runs online: no server, no database and no script on the public side.
+The live game stays on YouTube.
 
-**One-time setup, in this order.**
+**The public URL is deployed by the `publish-site` GitHub Actions workflow** (`.github/workflows/publish-site.yml`). It builds
+the site from the results archive in `results/` ([docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARCHIVE.md)): it starts the API on the
+fake profile, imports the archive (games and their rating snapshots), exports the site and deploys it. It runs on a push to
+`main` that changes `results/`, the code that makes the site, or the workflow itself, and by hand (Actions, publish-site, Run
+workflow). The site is the archive's ranking: it shows the archived games, without prompts or replies, and not the games in
+your own database.
 
-1. Open `/admin/site` in the app and press **Publish**. That creates the `gh-pages` branch on the remote. GitHub offers no
-   branch to serve until it exists.
-2. On GitHub: Settings → Pages → Source: *Deploy from a branch*, branch `gh-pages`, folder `/ (root)`.
+**One-time setup.** On GitHub: Settings → Pages → Source: *GitHub Actions*. Until you set it, the build job of the workflow
+runs and the deploy job fails. The `deploy-pages` workflow deploys nothing; it only checks that `docs/index.html` still
+assembles.
 
-The `deploy-pages` workflow no longer deploys anything; it only checks that `docs/index.html` still assembles.
+**What becomes public.** The archive holds only the moves and figures of finished rated games, no prompts, replies or
+reasoning. Games that ended undecided (aborted: a cancelled tournament's queued games, a game cut off by a restart) are not on
+the site, and neither are their attempts.
 
-**Publishing.** Open `/admin/site` in the app. *Export* writes the site to `Arena:Site:ExportDirectory` (the folder is
-emptied first). *Publish* exports afresh and force-pushes the export to `gh-pages` as one commit, so the branch never
-grows a history. The app uses the `git` on your machine and its existing credentials; it stores none. A failed step is
-shown on the page with git's message, and `main` and your working tree are never touched.
+### Publishing from the app (advanced)
 
-**What becomes public.** Everything on the site, including prompts, replies, reasoning and costs. Nothing else is sent:
-no configuration, no secrets, no attempts of aborted games.
+The app can also export the site of **your own database**, with prompts, replies, reasoning and costs, and push it to a branch.
+This is not what serves the public URL: with the Pages source set to GitHub Actions, a branch is not served at all. Use it to
+look at your own site (*Export*), or to host the export somewhere that serves a branch.
+
+Open `/admin/site`. *Export* writes the site to `Arena:Site:ExportDirectory` (a folder the export made is emptied first; a
+folder with other content is refused). *Publish* exports afresh and force-pushes the export to `Arena:Site:Branch` as one
+commit, so the branch never grows a history. The app uses the `git` on your machine and its existing credentials; it stores
+none. A failed step is shown on the page with git's message. `main` and your working tree are never touched, and the
+publisher refuses to write the remote's default branch, `main`, `master`, or a branch whose last commit it did not make.
+Everything in this export is public, including prompts, replies, reasoning and costs; no configuration or secrets are sent.
 
 | Option (`Arena:Site:…`) | Default | Meaning |
 |---|---|---|
 | `Remote` | the `origin` of the repository the app runs from | Where to push. A local path also works. |
-| `Branch` | `gh-pages` | The branch GitHub Pages serves. |
-| `WorkDir` | a folder in the system temp directory | The publisher's own clone, deleted and recreated on each publish. Give it a folder of its own. |
-| `ExportDirectory` | a folder in the system temp directory | Where the export is written, emptied before each export. |
-| `PublicUrl` | `https://<owner>.github.io/<repo>/`, derived from a GitHub remote | The address shown on the page. |
-| `AutoPublishMinutes` | `0` (off) | Publish every N minutes when a game has finished since the last publish. A restart does not publish by itself. |
+| `Branch` | `gh-pages` | The branch the in-app *Publish* force-pushes to. Never the remote's default branch, `main` or `master`. |
+| `WorkDir` | a folder in the system temp directory | The publisher's own clone, deleted and recreated on each publish. Give it a folder of its own, outside the repository. |
+| `ExportDirectory` | a folder in the system temp directory | Where the export is written, emptied before each export. Outside the repository, and not inside `WorkDir`. |
+| `PublicUrl` | `https://<owner>.github.io/<repo>/`, derived from a GitHub remote | The address shown on the page, and the canonical address in each page of the export. |
+| `AutoPublishMinutes` | `0` (off) | Publish every N minutes when the number of finished games has changed since the last publish. A restart does not publish by itself. |
 | `YouTubeUrl` | unset | The "Watch live" link. Not shown when empty or not an http(s) address. |
 | `SupportLinks` | none | Support links, each with a `Label` and a `Url`. Only http(s) links are shown. |
 | `FullLogGames` | `300` | The newest this many games keep their engine log on the site. Older games say so instead of showing a log. |

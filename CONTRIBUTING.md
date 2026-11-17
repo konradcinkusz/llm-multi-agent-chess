@@ -81,8 +81,9 @@ The file format and the checks are in [docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARC
    dotnet test tests/Chess.Api.Tests --filter ResultsArchiveTests
    ```
 
-   It replays every game on the engine and reports any file that does not parse, is illegal, sits at the wrong path or repeats
-   a game id.
+   It replays every game on the engine and reports any file that does not parse, is illegal, sits at the wrong path, repeats
+   a game id, starts from a position other than the standard one, names a model with characters outside `A-Z a-z 0-9 . _ @ ~ : / + -`,
+   spells a model so that it would share a page with another spelling (`GPT-5` and `gpt-5`), or is dated in the future.
 
 6. **Commit only the new files and open a pull request:**
 
@@ -97,6 +98,9 @@ The file format and the checks are in [docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARC
 
 Rules for the files: never edit or rename a file that is already in `results/`. A wrong game is removed by a pull request that
 deletes its file. Each game id appears once.
+
+After the merge, the `publish-site` workflow builds the public site from the archive and deploys it to GitHub Pages
+(Settings, Pages, Source = GitHub Actions; see [Public results site](README.md#public-results-site)).
 
 ## Secrets
 

@@ -17,13 +17,24 @@ namespace Chess.Web.Tests.Site;
 /// The real web app with its API answering from <see cref="SiteDataSet"/>, a fixed clock and the given configuration. The
 /// export runs through the registered <see cref="ISiteExporter"/>, so the tests cover the registration as well.
 /// </summary>
-internal sealed class SiteExportApp(bool empty = false, params (string Key, string Value)[] settings) : WebApplicationFactory<ChessWeb::Program>
+internal sealed class SiteExportApp : WebApplicationFactory<ChessWeb::Program>
 {
-    public FakeHandler Api { get; } = new(request => SiteDataSet.Respond(request, empty));
+    private readonly (string Key, string Value)[] _settings;
+
+    public SiteExportApp(bool empty = false, params (string Key, string Value)[] settings)
+    {
+        _settings = settings;
+        Api = new FakeHandler(request => Override?.Invoke(request) ?? SiteDataSet.Respond(request, empty));
+    }
+
+    /// <summary>Answers a call before the data set does; null leaves the call to the data set. Lets a test make one call fail.</summary>
+    public Func<RecordedRequest, HttpResponseMessage?>? Override { get; set; }
+
+    public FakeHandler Api { get; }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        foreach (var (key, value) in settings)
+        foreach (var (key, value) in _settings)
         {
             builder.UseSetting(key, value);
         }

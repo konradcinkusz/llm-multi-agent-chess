@@ -142,9 +142,14 @@ public sealed class SiteFakePublisher(bool published = true) : ISitePublisher
 
 public sealed class SiteFakeActivity : ISiteActivity
 {
-    public DateTimeOffset? Latest { get; set; }
+    /// <summary>The number of finished games the API reports.</summary>
+    public int Finished { get; set; }
 
-    public Task<DateTimeOffset?> LatestFinishedAsync(CancellationToken ct) => Task.FromResult(Latest);
+    /// <summary>When set, the API cannot answer.</summary>
+    public bool Down { get; set; }
+
+    public Task<int> FinishedGamesAsync(CancellationToken ct) =>
+        Down ? throw new HttpRequestException("The API is down") : Task.FromResult(Finished);
 }
 
 public static class SiteTestOptions

@@ -3,7 +3,8 @@
 @using Chess.Web.Components.Shared.Game
 @using Chess.Web.Site
 
-<SiteLayout Title="Games" Frame="Frame" Active="games">
+<SiteLayout Title="Games" Frame="Frame" Active="games" Path="@SitePaths.GamesPage(Page)"
+            Description="Every finished game of the arena, newest first, with its result, how it ended, its length and its estimated cost.">
     <div class="page-header">
         <h1>Games</h1>
         <p class="page-lede">Every finished game the arena has played, newest first. Costs are estimates.</p>

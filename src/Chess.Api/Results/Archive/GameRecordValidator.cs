@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.RegularExpressions;
 using Chess.Engine;
 
 namespace Chess.Api.Results.Archive;
@@ -7,10 +9,15 @@ namespace Chess.Api.Results.Archive;
 /// the result must be one the rules (or a forfeit, or an adjudication) can produce. A replay proves the game is a possible game; it
 /// cannot prove which model played it, so the archive stays a matter of review (docs/RESULTS-ARCHIVE.md).
 /// </summary>
-public static class GameRecordValidator
+public static partial class GameRecordValidator
 {
     public const int MaxMoves = 1000;
     public const int MaxModelLength = 100;
+    public const int MaxBestSanLength = 12;
+    public const int MaxTokens = 10_000_000;
+
+    /// <summary>How far past the clock a game may be dated (clocks differ between machines).</summary>
+    public static readonly TimeSpan FutureTolerance = TimeSpan.FromDays(1);
 
     private static readonly string[] Results = ["1-0", "0-1", "1/2-1/2"];
     private static readonly string[] Kinds = ["llm", "random"];
@@ -19,7 +26,11 @@ public static class GameRecordValidator
     private static readonly string[] BoardTerminations = ["checkmate", "stalemate", "insufficient-material", "fifty-move", "threefold"];
     private static readonly string[] RunnerTerminations = ["forfeit-white", "forfeit-black", "adjudicated", "budget"];
 
-    public static IReadOnlyList<string> Validate(GameRecord record)
+    /// <summary>
+    /// The problems of a record, empty when it is valid. <paramref name="now"/> is the clock the playing date is checked against
+    /// (<see cref="TimeProvider.System"/> when null): a game cannot have been played in the future.
+    /// </summary>
+    public static IReadOnlyList<string> Validate(GameRecord record, DateTimeOffset? now = null)
     {
         var errors = new List<string>();
         if (record.Version != GameRecord.CurrentVersion)
@@ -43,6 +54,7 @@ public static class GameRecordValidator
         }
 
         if (record.PlayedAt.Year < 2024) errors.Add("playedAt must be a date from 2024 on");
+        if (record.PlayedAt > (now ?? TimeProvider.System.GetUtcNow()) + FutureTolerance) errors.Add("playedAt must not be in the future");
         if (errors.Count > 0) return errors;
 
         var board = BoardOf(record.StartFen, errors);
@@ -60,9 +72,10 @@ public static class GameRecordValidator
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(side.Model) || side.Model.Length > MaxModelLength || side.Model.Any(char.IsControl))
+        if (string.IsNullOrEmpty(side.Model) || side.Model.Length > MaxModelLength || !ModelId().IsMatch(side.Model)
+            || side.Model.Contains("--", StringComparison.Ordinal))
         {
-            errors.Add($"{name}.model must be 1 to {MaxModelLength} characters without control characters");
+            errors.Add($"{name}.model must be 1 to {MaxModelLength} characters from A-Z a-z 0-9 . _ @ ~ : / + - (and no '--')");
         }
         else if (side.Kind == "random" && side.Model != "random")
         {
@@ -70,13 +83,24 @@ public static class GameRecordValidator
         }
     }
 
+    /// <summary>
+    /// The arena starts every game from the standard position, so that is the only start a rated game can have. A file may leave
+    /// <c>startFen</c> out or give the standard position; any other position would let a game begin from a won one.
+    /// </summary>
     private static ChessBoard? BoardOf(string? startFen, List<string> errors)
     {
-        if (string.IsNullOrWhiteSpace(startFen)) return ChessBoard.StartingPosition();
+        var standard = ChessBoard.StartingPosition();
+        if (string.IsNullOrWhiteSpace(startFen)) return standard;
         try
         {
             var board = new ChessBoard();
             board.LoadFen(startFen);
+            if (board.ToFen() != standard.ToFen())
+            {
+                errors.Add("startFen must be the standard starting position or left out: the arena plays only from it");
+                return null;
+            }
+
             return board;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -92,6 +116,12 @@ public static class GameRecordValidator
         {
             var move = record.Moves[i];
             var ply = i + 1;
+            if (move is null)
+            {
+                errors.Add($"ply {ply}: the move is empty");
+                return;
+            }
+
             if (Games.GameTermination.FromStatus(board) is not null)
             {
                 errors.Add($"ply {ply}: the game was already over");
@@ -114,7 +144,14 @@ public static class GameRecordValidator
     {
         if (move.Attempts is < 1 or > 20) errors.Add($"ply {ply}: attempts must be 1 to 20");
         if (move.LatencyMs is < 0 or > 3_600_000) errors.Add($"ply {ply}: latencyMs must be 0 to 3600000");
-        if (move.InputTokens is < 0 || move.OutputTokens is < 0) errors.Add($"ply {ply}: tokens must not be negative");
+        if (move.InputTokens is < 0 or > MaxTokens || move.OutputTokens is < 0 or > MaxTokens)
+        {
+            errors.Add($"ply {ply}: tokens must be 0 to {MaxTokens}");
+        }
+        if (move.BestSan is { } best && (best.Length is 0 or > MaxBestSanLength || !San().IsMatch(best)))
+        {
+            errors.Add($"ply {ply}: bestSan must be a move in SAN of at most {MaxBestSanLength} characters");
+        }
         if (move.CentipawnLoss is < 0 or > 100_000) errors.Add($"ply {ply}: centipawnLoss must be 0 to 100000");
     }
 
@@ -148,4 +185,26 @@ public static class GameRecordValidator
             errors.Add($"{record.Termination} needs {side} to move and the other side to win");
         }
     }
+
+    /// <summary>
+    /// The key two model ids share when they would get the same page on the public site: the same lower-case letters, digits,
+    /// dots and dashes after every other character becomes a dash. It is the rule of <c>SitePaths.Slug</c> in Chess.Web, which
+    /// cannot be referenced from here, so the two must change together.
+    /// </summary>
+    public static string SiteKey(string model)
+    {
+        var builder = new StringBuilder(model.Length);
+        foreach (var ch in model.ToLowerInvariant())
+        {
+            builder.Append(ch is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '.' or '-' ? ch : '-');
+        }
+
+        return builder.ToString();
+    }
+
+    [GeneratedRegex(@"^[A-Za-z0-9._@~:/+-]+\z", RegexOptions.CultureInvariant)]
+    private static partial Regex ModelId();
+
+    [GeneratedRegex(@"^[A-Za-z0-9+#=\-]+\z", RegexOptions.CultureInvariant)]
+    private static partial Regex San();
 }
