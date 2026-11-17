@@ -2,7 +2,8 @@
 @using Chess.Web.Components.Pages.Games
 @using Chess.Web.Site
 
-<SiteLayout Title="@($"{Pair.A} vs {Pair.B}")" Frame="Frame" Active="head-to-head">
+<SiteLayout Title="@($"{Pair.A} vs {Pair.B}")" Frame="Frame" Active="head-to-head" Path="@Pair.SitePath"
+            Description="@($"{Pair.A} against {Pair.B}: the RQC with its interval, the reading in words and the games the two played.")">
     <p class="back"><a href="@Frame.Link(SitePaths.HeadToHead)">← All pairs</a></p>
 
     <div class="page-header">
@@ -47,7 +48,7 @@
             }
             else
             {
-                <div class="table-wrap table-compact">
+                <div class="table-wrap table-compact" tabindex="0" role="region" aria-label="Direct games">
                     <table class="h2h-games">
                         <thead>
                             <tr>

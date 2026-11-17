@@ -77,7 +77,8 @@ public sealed class SiteExporter(
     {
         var watchLive = SiteLinks.Safe(options.YouTubeUrl);
         var support = SiteLinks.Support(options);
-        return depth => new SiteFrame(depth, snapshot.TakenAt, snapshot.Board.Games, watchLive, support);
+        var publicUrl = SiteLinks.Safe(options.PublicUrl);
+        return depth => new SiteFrame(depth, snapshot.TakenAt, snapshot.Board.Games, watchLive, support, publicUrl);
     }
 
     private static ResultsInputs ResultsInputsFor(SiteSnapshot snapshot)

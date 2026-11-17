@@ -6,7 +6,8 @@
 
 @* One finished game of the public site (03 §11): its position at every ply, the move list, the usage and the engine log.
    Nothing here runs a script; the boards are picked by their #ply-n anchors (SitePlyBoard). *@
-<SiteLayout Title="@Matchup" Frame="Frame" Active="games">
+<SiteLayout Title="@Matchup" Frame="Frame" Active="games" Path="@SitePaths.Game(Summary.Id)"
+            Description="@($"{Matchup}: result {Summary.Result}, {Game.Moves.Count} plies, with the position at every ply, the moves and the engine log.")">
     <p class="back"><a href="@Frame.Link(SitePaths.Games)">← All games</a></p>
 
     <div class="page-header">
