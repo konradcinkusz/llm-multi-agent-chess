@@ -14,17 +14,31 @@
         <p class="page-lede">The Super Chat queue of the 24-hour stream: what is playing, what waits, and what was turned away.</p>
     </div>
 
-    @if (_queue is null)
+    @if (!_loaded)
+    {
+        <p class="muted" role="status">Loading the queue…</p>
+    }
+    else if (_queue is null)
     {
         <section class="card" aria-labelledby="requests-off">
             <h2 id="requests-off">No queue</h2>
             <p class="muted" data-testid="requests-unavailable">
                 Viewer requests are not answering. Requests are off in this configuration, or the API is not reachable.
             </p>
+            @if (_queueError is not null)
+            {
+                <p class="status-error" role="alert" data-testid="requests-refresh-error">@_queueError</p>
+            }
         </section>
     }
     else
     {
+        @if (_queueError is not null)
+        {
+            @* The last queue stays on the page and is asked for again every few seconds. *@
+            <p class="status-error" role="alert" data-testid="requests-refresh-error">Could not refresh the queue: @_queueError</p>
+        }
+
         <section class="card stack" aria-labelledby="requests-playing" data-testid="requests-playing">
             <h2 id="requests-playing">Playing</h2>
             @if (_queue.Playing is { } playing)
@@ -175,6 +189,8 @@
     private bool _busy;
     private string? _message;
     private string? _error;
+    private string? _queueError;
+    private bool _loaded;
 
     private string _payerId = "";
     private string _payerName = "";
@@ -182,12 +198,17 @@
     private string _currency = "USD";
     private string _text = "";
 
+    /// <summary>How often the page asks again. Overridden by tests only.</summary>
+    [Parameter]
+    public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(3);
+
     private readonly CancellationTokenSource _stop = new();
     private Task? _refresh;
 
     protected override async Task OnInitializedAsync()
     {
         _queue = await ReadQueueAsync(_stop.Token);
+        _loaded = true;
         _refresh = RefreshAsync();
     }
 
@@ -195,12 +216,22 @@
     {
         try
         {
-            return await Api.GetRequestQueueAsync(ct);
+            var queue = await Api.GetRequestQueueAsync(ct);
+            _queueError = null;
+            return queue;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
-            // Without the requests API the page says so; the next refresh tries again.
+            // Viewer-paid games are off: the page says so.
+            _queueError = null;
             return null;
+        }
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
+        {
+            // The API did not answer (a refusal, an open circuit, a timeout): the last queue stays on the page, with the
+            // reason, and the next refresh tries again. Without one the page says the requests are not answering.
+            _queueError = ApiFailure.Describe(ex);
+            return _queue;
         }
     }
 
@@ -232,9 +263,9 @@
             _simulateAvailable = false;
             _message = "Simulate is off: the API is not in Mock mode.";
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _stop.Token))
         {
-            _error = $"The message was not simulated: {ex.Message}";
+            _error = $"The message was not simulated: {ApiFailure.Describe(ex)}";
         }
         finally
         {
@@ -253,9 +284,9 @@
         {
             await work();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _stop.Token))
         {
-            _error = $"{failure}: {ex.Message}";
+            _error = $"{failure}: {ApiFailure.Describe(ex)}";
         }
         finally
         {
@@ -268,17 +299,29 @@
     /// <summary>Re-reads the queue every three seconds, so the page follows the stream without a reload.</summary>
     private async Task RefreshAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        using var timer = new PeriodicTimer(PollInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(_stop.Token))
             {
-                var queue = await ReadQueueAsync(_stop.Token);
-                await InvokeAsync(() =>
+                try
                 {
-                    _queue = queue;
-                    StateHasChanged();
-                });
+                    var queue = await ReadQueueAsync(_stop.Token);
+                    await InvokeAsync(() =>
+                    {
+                        _queue = queue;
+                        StateHasChanged();
+                    });
+                }
+                catch (Exception ex) when (ApiFailure.IsFailure(ex, _stop.Token))
+                {
+                    // Not an API failure (ReadQueueAsync handles those) but never a reason to stop refreshing.
+                    await InvokeAsync(() =>
+                    {
+                        _queueError = ApiFailure.Describe(ex);
+                        StateHasChanged();
+                    });
+                }
             }
         }
         catch (OperationCanceledException)

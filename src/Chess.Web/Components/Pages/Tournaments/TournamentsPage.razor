@@ -49,6 +49,7 @@
                             <option value="@limit">@limit</option>
                         }
                     </select>
+                    <span class="field-hint">The server allows at most <code>Arena:MaxConcurrentGames</code> (2 by default) and says so if this is more.</span>
                 </label>
             </div>
 
@@ -193,7 +194,10 @@
 
     @if (_tournaments is null)
     {
-        <p>Loading tournaments…</p>
+        @if (_listError is null)
+        {
+            <p>Loading tournaments…</p>
+        }
     }
     else if (_tournaments.Count == 0)
     {
@@ -252,12 +256,16 @@
     private readonly HashSet<string> _selectedStyles = [PlayerId.DefaultStyle];
 
     private IReadOnlyList<TournamentDto>? _tournaments;
+    /// <summary>How often the page asks again. Overridden by tests only.</summary>
+    [Parameter]
+    public TimeSpan PollInterval { get; set; } = TournamentFormat.RefreshInterval;
+
     private string? _listError;
 
     private string _name = "";
     private readonly HashSet<string> _selected = [];
     private int _gamesPerPair = 2;
-    private int _maxConcurrency = TournamentFormRules.MaxConcurrencyLimit;
+    private int _maxConcurrency = TournamentFormRules.DefaultConcurrency;
     private bool _submitting;
     private string? _createError;
     private TournamentCreatedDto? _created;
@@ -283,9 +291,9 @@
             _models = await Api.GetModelsAsync(_cts.Token);
             _choices = _models.Where(model => model.Enabled).ToArray();
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _modelsError = ex.Message;
+            _modelsError = ApiFailure.Describe(ex);
         }
 
         var styles = await PromptStyleChoices.LoadAsync(Api, _cts.Token);
@@ -300,21 +308,34 @@
     private async Task PollAsync()
     {
         var ct = _cts.Token;
-        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        using var timer = new PeriodicTimer(PollInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                // The fields change on a timer thread, outside any UI event: re-render explicitly.
-                await InvokeAsync(async () =>
+                try
                 {
-                    await LoadTournamentsAsync(ct);
-                    StateHasChanged();
-                });
+                    // The fields change on a timer thread, outside any UI event: re-render explicitly.
+                    await InvokeAsync(async () =>
+                    {
+                        await LoadTournamentsAsync(ct);
+                        StateHasChanged();
+                    });
+                }
+                catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
+                {
+                    // A timeout is a TaskCanceledException the page's token did not cause: show it and keep polling.
+                    await InvokeAsync(() =>
+                    {
+                        _listError = ApiFailure.Describe(ex);
+                        StateHasChanged();
+                    });
+                }
             }
         }
         catch (OperationCanceledException)
         {
+            // The page was left: the loop ends.
         }
     }
 
@@ -325,9 +346,10 @@
             _tournaments = await Api.GetTournamentsAsync(ct);
             _listError = null;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
         {
-            _listError = ex.Message;
+            // The list stays as it was; the message says why it is not current.
+            _listError = ApiFailure.Describe(ex);
         }
     }
 
@@ -386,7 +408,7 @@
         {
             _costs = await Api.GetCostInputsAsync(_cts.Token);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
             _costs = null;
         }
@@ -405,9 +427,9 @@
             _selected.Clear();
             await LoadTournamentsAsync(_cts.Token);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _createError = $"The tournament was not created: {ex.Message}";
+            _createError = $"The tournament was not created: {ApiFailure.Describe(ex)}";
         }
         finally
         {

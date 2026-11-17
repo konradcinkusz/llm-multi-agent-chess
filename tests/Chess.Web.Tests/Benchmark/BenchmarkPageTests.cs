@@ -116,7 +116,8 @@ public class BenchmarkPageTests
         Assert.Equal("fake-a@high", body.GetProperty("candidate").GetString());
         Assert.Equal(new[] { "fake-b", "random" }, body.GetProperty("opponents").EnumerateArray().Select(o => o.GetString()));
         Assert.Equal(2, body.GetProperty("gamesPerOpponent").GetInt32());
-        Assert.Equal(2, body.GetProperty("maxConcurrency").GetInt32());
+        // The form starts on 1, the one value every API accepts (Arena:MaxConcurrentGames can be 1); it was 2.
+        Assert.Equal(1, body.GetProperty("maxConcurrency").GetInt32());
         Assert.Contains("/benchmark/44444444-4444-4444-4444-444444444444", cut.Markup);
     }
 

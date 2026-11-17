@@ -299,6 +299,10 @@
     private IReadOnlyList<ModelDto> _candidates = [];
 
     private IReadOnlyList<BenchmarkDto>? _benchmarks;
+    /// <summary>How often the page asks again. Overridden by tests only.</summary>
+    [Parameter]
+    public TimeSpan PollInterval { get; set; } = TournamentFormat.RefreshInterval;
+
     private string? _listError;
 
     private string _name = "";
@@ -311,7 +315,7 @@
     private bool _allOpponents = true;
     private readonly HashSet<string> _chosen = [];
     private int _gamesPerOpponent = DefaultGamesPerOpponent;
-    private int _maxConcurrency = BenchmarkFormRules.MaxConcurrencyLimit;
+    private int _maxConcurrency = TournamentFormRules.DefaultConcurrency;
     private bool _submitting;
     private string? _createError;
     private BenchmarkCreatedDto? _created;
@@ -352,9 +356,9 @@
             _candidates = BenchmarkChoices.Candidates(_models);
             ChooseCandidate(_candidates.FirstOrDefault()?.Id);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _modelsError = ex.Message;
+            _modelsError = ApiFailure.Describe(ex);
         }
 
         var styles = await PromptStyleChoices.LoadAsync(Api, _cts.Token);
@@ -369,21 +373,34 @@
     private async Task PollAsync()
     {
         var ct = _cts.Token;
-        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        using var timer = new PeriodicTimer(PollInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                // The runs change on a timer thread, outside any UI event: re-render explicitly.
-                await InvokeAsync(async () =>
+                try
                 {
-                    await LoadBenchmarksAsync(ct);
-                    StateHasChanged();
-                });
+                    // The runs change on a timer thread, outside any UI event: re-render explicitly.
+                    await InvokeAsync(async () =>
+                    {
+                        await LoadBenchmarksAsync(ct);
+                        StateHasChanged();
+                    });
+                }
+                catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
+                {
+                    // A timeout is a TaskCanceledException the page's token did not cause: show it and keep polling.
+                    await InvokeAsync(() =>
+                    {
+                        _listError = ApiFailure.Describe(ex);
+                        StateHasChanged();
+                    });
+                }
             }
         }
         catch (OperationCanceledException)
         {
+            // The page was left: the loop ends.
         }
     }
 
@@ -394,9 +411,10 @@
             _benchmarks = await Api.GetBenchmarksAsync(ct);
             _listError = null;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
         {
-            _listError = ex.Message;
+            // The list stays as it was; the message says why it is not current.
+            _listError = ApiFailure.Describe(ex);
         }
     }
 
@@ -435,7 +453,7 @@
         {
             _costs = await Api.GetCostInputsAsync(_cts.Token);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
             _costs = null;
         }
@@ -457,9 +475,9 @@
             _name = "";
             await LoadBenchmarksAsync(_cts.Token);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _createError = $"The benchmark was not created: {ex.Message}";
+            _createError = $"The benchmark was not created: {ApiFailure.Describe(ex)}";
         }
         finally
         {

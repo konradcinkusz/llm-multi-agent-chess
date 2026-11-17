@@ -24,6 +24,12 @@ else
     var running = TournamentFormat.IsRunning(benchmark.Status);
     var ratingInterval = BenchmarkFormat.Interval(summary.RatingLow, summary.RatingHigh);
 
+    @if (_refreshError is not null)
+    {
+        @* A refresh failed: the last report stays, and the page asks again on its own. *@
+        <p class="status-error" role="alert" data-testid="report-refresh-error">Could not refresh the report: @_refreshError</p>
+    }
+
     <div class="page-header">
         <h1>@benchmark.Name</h1>
         <p class="page-lede">
@@ -171,10 +177,16 @@ else
     [Parameter]
     public Guid Id { get; set; }
 
+    /// <summary>How often the page asks again. Overridden by tests only.</summary>
+    [Parameter]
+    public TimeSpan PollInterval { get; set; } = TournamentFormat.RefreshInterval;
+
     private readonly CancellationTokenSource _cts = new();
 
     private BenchmarkReportDto? _report;
     private string? _error;
+    private string? _refreshError;
+    private bool _notFound;
     private bool _polling;
 
     private string _markdownHref = "";
@@ -184,7 +196,8 @@ else
 
     private string Title => _report?.Benchmark.Name ?? "Benchmark report";
 
-    private bool Live => _error is null && (_report is null || TournamentFormat.IsRunning(_report.Benchmark.Status));
+    /// <summary>Whether the page keeps asking: a report that has not loaded yet is asked for again, a missing one is not.</summary>
+    private bool Live => !_notFound && (_report is null || TournamentFormat.IsRunning(_report.Benchmark.Status));
 
     private IReadOnlyList<RankedBar> _bars = [];
 
@@ -192,6 +205,8 @@ else
     {
         _report = null;
         _error = null;
+        _refreshError = null;
+        _notFound = false;
         await LoadAsync(_cts.Token);
         if (!_polling && Live)
         {
@@ -203,17 +218,29 @@ else
     private async Task PollAsync()
     {
         var ct = _cts.Token;
-        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        using var timer = new PeriodicTimer(PollInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                // The report changes on a timer thread, outside any UI event: re-render explicitly.
-                await InvokeAsync(async () =>
+                try
                 {
-                    await LoadAsync(ct);
-                    StateHasChanged();
-                });
+                    // The report changes on a timer thread, outside any UI event: re-render explicitly.
+                    await InvokeAsync(async () =>
+                    {
+                        await LoadAsync(ct);
+                        StateHasChanged();
+                    });
+                }
+                catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
+                {
+                    // A timeout is a TaskCanceledException the page's token did not cause: show it and keep polling.
+                    await InvokeAsync(() =>
+                    {
+                        Fail(ex);
+                        StateHasChanged();
+                    });
+                }
 
                 if (!Live)
                 {
@@ -223,6 +250,7 @@ else
         }
         catch (OperationCanceledException)
         {
+            // The page was left: the loop ends.
         }
         finally
         {
@@ -250,13 +278,33 @@ else
                 .Select(row => new RankedBar(row.Opponent, row.Score * 100))
                 .ToArray();
             _error = null;
+            _refreshError = null;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
+        {
+            Fail(ex);
+        }
+    }
+
+    /// <summary>
+    /// A failed load. With a report on the page it stays, with a note that it is not current; without one the page says why
+    /// there is none. Either way the polling goes on, except for a benchmark that does not exist.
+    /// </summary>
+    private void Fail(Exception ex)
+    {
+        if (ex is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound })
         {
             _report = null;
-            _error = ex.StatusCode == System.Net.HttpStatusCode.NotFound
-                ? "No benchmark has this id."
-                : $"Could not load the report: {ex.Message}";
+            _notFound = true;
+            _error = "No benchmark has this id.";
+        }
+        else if (_report is null)
+        {
+            _error = $"Could not load the report: {ApiFailure.Describe(ex)}";
+        }
+        else
+        {
+            _refreshError = ApiFailure.Describe(ex);
         }
     }
 

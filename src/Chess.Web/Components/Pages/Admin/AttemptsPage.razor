@@ -170,7 +170,7 @@
         {
             _models = await Api.GetModelsAsync();
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        catch (Exception)
         {
             _models = [];
         }
@@ -244,7 +244,7 @@
 
             _result = result;
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        catch (Exception)
         {
             if (loadId != _loadId)
             {

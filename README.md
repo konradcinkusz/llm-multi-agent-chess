@@ -267,6 +267,22 @@ The Copilot check is never Unhealthy, and `/health` answers HTTP 200 even when a
 
 **403 `Cross-origin request rejected`.** The API and the web app refuse any request whose `Origin` header names another site, or whose `Sec-Fetch-Site` is `cross-site` (ADR-006, amended). A browser sends those headers when a page on another site makes the call. A 403 therefore means a foreign page reached the app through your browser, not that the app is broken. Open the arena at <http://localhost:5070> or <http://127.0.0.1:5070>. To allow another origin of your own, add it to `Arena:AllowedOrigins` in the API's configuration. Requests with no `Origin` header, such as `curl`, are allowed.
 
+### Troubleshooting: what the web app shows when the API is away
+
+The web app (port 5070) asks the API (port 5080) for everything it shows. When the API stops, is restarting or hangs, the pages keep working and say so in plain words; none of this needs a reload.
+
+| You see | What it means and what to do |
+|---|---|
+| The status strip says *The arena API is not answering. Checking again shortly.* (or *…answered with an error…*) | The API did not answer the strip's last check. The strip asks again every 10 seconds and shows the three services again as soon as the API answers. Start the API, or check its log, if it stays. |
+| A page shows *Could not load …: The arena API is not answering right now. This page tries again on its own.* | The web app stopped calling the API for a while after repeated failures (a circuit breaker), and the page you opened asked during that time. Lists, tournaments, benchmarks and the request queue ask again every few seconds, keep the last figures they had, and clear the message by themselves once the API answers. The Games page and the replay load once: open them again. |
+| *The arena API took too long to answer.* | A call went unanswered for longer than the timeout (60 seconds a try, 150 seconds in all). The page keeps what it had and, where it polls, asks again. |
+| *The tournament was not created: …* (also for a benchmark) | The text after the colon is the reason the API gave, for example that the concurrency is above `Arena:MaxConcurrentGames`. Creating something is **not** retried automatically, so a late failure cannot create it several times: check the list before you press the button again. The concurrency starts on 1; raise it up to `Arena:MaxConcurrentGames` (2 by default). |
+| *Page not found* inside the normal layout, with a link to Results | The address does not exist (the HTTP status is 404). Use the navigation or the link. |
+| *Something went wrong on this page* with a *Reload the page* button | A page threw an unexpected error. The rest of the app is unaffected; pick another page, or reload. |
+| A bar at the bottom of the window: *The arena stopped responding on this page. Reload* | The browser lost its live connection to the web app, for example because the web app restarted. Reload the page. |
+
+Each page shows its own *Loading …* line first: the web app does not wait for the API before it sends a page. A live game that goes quiet for 45 seconds (the API sends a heartbeat every 15) reconnects on its own.
+
 ## Project layout
 
 ```
