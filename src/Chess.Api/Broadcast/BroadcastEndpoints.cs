@@ -80,6 +80,10 @@ public static class BroadcastEndpoints
                 $"DurationHours must be at most {MaxDurationHours}.");
         }
 
+        // PostgreSQL keeps microseconds (timestamptz), so a window edge with a 100 ns digit would read back shorter than the slots
+        // planned against it. Plan on the precision that is stored, so the answer, the database and the slot check agree.
+        request = request with { StartsAt = ToMicroseconds(request.StartsAt) };
+
         var listing = await catalog.GetModelsAsync(ct);
         var inputs = await costs.ForAsync(listing, ct);
 
@@ -198,6 +202,9 @@ public static class BroadcastEndpoints
             return ValidationProblemFor("slots", "At least one slot is required.");
         }
 
+        edits = edits
+            .Select(edit => edit with { PlannedStart = ToMicroseconds(edit.PlannedStart), PlannedEnd = ToMicroseconds(edit.PlannedEnd) })
+            .ToList();
         var errors = SlotErrors(edits, schedule);
         if (errors is not null)
         {
@@ -382,10 +389,13 @@ public static class BroadcastEndpoints
         WhiteModel = slot.White.ModelId,
         BlackKind = slot.Black.Kind,
         BlackModel = slot.Black.ModelId,
-        PlannedStart = slot.PlannedStart,
-        PlannedEnd = slot.PlannedEnd,
+        PlannedStart = ToMicroseconds(slot.PlannedStart),
+        PlannedEnd = ToMicroseconds(slot.PlannedEnd),
         State = SlotState.Pending,
     };
+
+    /// <summary>Drops the 100 ns digit, the one precision a .NET time has and a PostgreSQL <c>timestamptz</c> does not.</summary>
+    private static DateTimeOffset ToMicroseconds(DateTimeOffset time) => time.AddTicks(-(time.Ticks % 10));
 
     private static SlotDto ToSlotDto(BroadcastSlotEntity slot) => new(slot.Id, slot.Index,
         new PlayerSpec(slot.WhiteKind, slot.WhiteModel), new PlayerSpec(slot.BlackKind, slot.BlackModel),
