@@ -150,7 +150,9 @@ the variant, not the harness crashing.
 
 Run by the owner, on a machine with the Copilot CLI logged in. It starts `Chess.Api` with the real gateway and plays
 one rated game: `random` as White against the model as Black, capped at 20 plies (`Arena:MaxPlies`). It then prints
-the result, the model's attempts and its latency.
+the result, the model's attempts and its latency, then the game's usage (`GET /api/games/{id}/usage`: requests, tokens and AI
+credits per side) so the owner can compare the credits with the Copilot usage page and confirm that 1 AI unit is 1 AI credit.
+It waits for `/api/status` to report `copilot` as `Ready`.
 
 ```bash
 ARENA_CONNECTION_STRING='Host=localhost;Database=chess;Username=...;Password=...' scripts/smoke-copilot.sh <model-id>
@@ -182,5 +184,5 @@ The connection string is passed only to the API process and never printed. The A
 
 **Status.** Every refusal path above was exercised: running it with no arguments exits 2 with the usage line. It has not
 been run against a live Copilot login, so the one-game result above is not yet observed. The game endpoints it calls
-(`POST /api/games`, `GET /api/games/{id}`) are on `main`, so the owner's live run is the remaining step. `shellcheck` is not
-installed here, so the shell lint was not re-run for this status.
+(`POST /api/games`, `GET /api/games/{id}`) are on `main`, so the owner's live run is the remaining step. `shellcheck` 0.9.0 reports
+nothing on `scripts/*.sh`.

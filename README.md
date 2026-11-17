@@ -219,7 +219,7 @@ rate against your invoice.
   column says what it had: `reported` (the runtime reported every reply), `estimated` (the app priced at least one reply from
   token prices), `partial` (some replies had no cost), `unknown` (none had one), or `free` (the random side).
 - **Unverified conversion.** The runtime reports usage in nano-AI units. The app assumes 1 AI unit = 1 AI credit. The owner's live
-  run has not confirmed it yet; [`scripts/smoke-copilot.sh`](scripts/smoke-copilot.sh) prints the credits each request reports.
+  run has not confirmed it yet; [`scripts/smoke-copilot.sh`](scripts/smoke-copilot.sh) prints the credits each request reports and the game's usage from `GET /api/games/{id}/usage`.
 - **Estimates before you commit.** The tournament form, the benchmark page and the broadcast planner estimate the cost before
   anything is saved. The estimate is the expected moves per side (40) × the tokens per move × the model's prices. A model with
   stored moves uses its own average tokens per move; one without is assumed to use 700 input and 300 output tokens per move.
