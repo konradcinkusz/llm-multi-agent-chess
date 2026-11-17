@@ -232,7 +232,8 @@ Open `http://localhost:5070/results` on the streaming machine or in a browser on
 
 It starts the app with the fake profile, plans a one-hour schedule with 50 ms moves and 1 s gaps, starts it, prints
 `/api/broadcast/now` until the schedule is finished (or fails after 120 s), prints the standings and stops the app it started. It
-needs the .NET 10 SDK, `curl` and `jq`, and port 5080 must be free. The fake profile does not play Copilot; use it to check the
+needs the .NET 10 SDK, `curl`, `jq` and a `date` that can subtract an hour (GNU `-d`, or BSD `-v`; the script stops with a message
+otherwise), and port 5080 must be free. The fake profile does not play Copilot; use it to check the
 plumbing, and check the live models from the planner page before the first real day.
 
 ## 8. Viewer-paid requests on the stream

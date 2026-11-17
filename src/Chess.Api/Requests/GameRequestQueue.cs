@@ -8,10 +8,11 @@ namespace Chess.Api.Requests;
 
 /// <summary>
 /// The FIFO of paid game requests (03 §15.1, §15.4). The broadcast runner takes one at a time with <see cref="TakeNextAsync"/>.
-/// A request is played at most twice: a failure requeues it once, then credits the payer.
+/// A request is played at most twice: a failure requeues it once, then credits the payer. Nothing is taken until the start-up
+/// recovery has closed the requests a previous process left playing (<see cref="RequestRecoveryGate"/>).
 /// </summary>
-public sealed class GameRequestQueue(IDbContextFactory<ArenaDbContext> factory, IOptions<RequestOptions> options, TimeProvider clock)
-    : IGameRequestQueue
+public sealed class GameRequestQueue(IDbContextFactory<ArenaDbContext> factory, IOptions<RequestOptions> options, TimeProvider clock,
+    RequestRecoveryGate? recovery = null) : IGameRequestQueue
 {
     /// <summary>The attempts a request gets before it is credited: requeued once, then credited (03 §15.4).</summary>
     public const int MaxAttempts = 2;
@@ -23,6 +24,12 @@ public sealed class GameRequestQueue(IDbContextFactory<ArenaDbContext> factory, 
 
     public async Task<QueuedRequest?> TakeNextAsync(CancellationToken ct)
     {
+        // A request that is playing now, taken in this process, must not be mistaken for one a restart left behind.
+        if (recovery is not null)
+        {
+            await recovery.Ready.WaitAsync(ct);
+        }
+
         await using var db = await factory.CreateDbContextAsync(ct);
         for (var attempt = 0; attempt < TakeAttempts; attempt++)
         {
@@ -97,29 +104,39 @@ public sealed class GameRequestQueue(IDbContextFactory<ArenaDbContext> factory, 
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>The owner cancels a queued request. Its price is credited back. Only a queued request can be cancelled.</summary>
+    /// <summary>
+    /// The owner cancels a queued request. Its price is credited back. Only a queued request can be cancelled. The status change is
+    /// one conditional update, like <see cref="TakeNextAsync"/>: a request the runner took meanwhile is not cancelled, so it is never
+    /// both played and credited. On PostgreSQL the update and the credit are one transaction.
+    /// </summary>
     public async Task<CancelOutcome> CancelAsync(Guid requestId, CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        var request = await db.GameRequests.FirstOrDefaultAsync(r => r.Id == requestId, ct);
-        if (request is null)
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            return new CancelOutcome(null, Found: false, Error: null);
-        }
+            db.ChangeTracker.Clear();
+            await using var transaction = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
 
-        if (request.Status != RequestStatus.Queued)
-        {
-            return new CancelOutcome(null, Found: true, Error: $"The request is {request.Status}; only a queued request can be cancelled.");
-        }
+            var now = clock.GetUtcNow();
+            if (!await TryMarkCancelledAsync(db, requestId, now, ct))
+            {
+                var current = await db.GameRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == requestId, ct);
+                return current is null
+                    ? new CancelOutcome(null, Found: false, Error: null)
+                    : new CancelOutcome(null, Found: true, Error: $"The request is {current.Status}; only a queued request can be cancelled.");
+            }
 
-        var now = clock.GetUtcNow();
-        request.Status = RequestStatus.Cancelled;
-        request.Reason = "cancelled by the owner";
-        request.FinishedAt = now;
-        await PayerLedger.CreditAsync(db, request, now, ct);
-        await db.SaveChangesAsync(ct);
+            var request = await db.GameRequests.FirstAsync(r => r.Id == requestId, ct);
+            await PayerLedger.CreditAsync(db, request, now, ct);
+            await db.SaveChangesAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(ct);
+            }
 
-        return new CancelOutcome(Map(request, null), Found: true, Error: null);
+            return new CancelOutcome(Map(request, null), Found: true, Error: null);
+        });
     }
 
     /// <summary>The queue as the stream and the owner see it: what plays, what waits and in what order, and what recently finished.</summary>
@@ -179,6 +196,35 @@ public sealed class GameRequestQueue(IDbContextFactory<ArenaDbContext> factory, 
         request.Status = RequestStatus.Playing;
         request.StartedAt = now;
         request.Attempts++;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>Marks a queued request as cancelled. A conditional update on PostgreSQL; a checked save on the InMemory provider.</summary>
+    private static async Task<bool> TryMarkCancelledAsync(ArenaDbContext db, Guid id, DateTimeOffset now, CancellationToken ct)
+    {
+        const string reason = "cancelled by the owner";
+        if (db.Database.IsRelational())
+        {
+            // One UPDATE that only matches a queued row: if the runner took the request first, nothing changes here.
+            var rows = await db.GameRequests
+                .Where(r => r.Id == id && r.Status == RequestStatus.Queued)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(r => r.Status, RequestStatus.Cancelled)
+                    .SetProperty(r => r.Reason, reason)
+                    .SetProperty(r => r.FinishedAt, now), ct);
+            return rows == 1;
+        }
+
+        var request = await db.GameRequests.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (request is null || request.Status != RequestStatus.Queued)
+        {
+            return false;
+        }
+
+        request.Status = RequestStatus.Cancelled;
+        request.Reason = reason;
+        request.FinishedAt = now;
         await db.SaveChangesAsync(ct);
         return true;
     }

@@ -94,6 +94,38 @@ public class OriginGuardTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("attacker.example:5070")]
+    [InlineData("attacker.example")]
+    [InlineData("localhost:9999")]
+    public async Task Foreign_host_is_rejected_on_a_plain_read(string host)
+    {
+        await using var app = new WebApp();
+        var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        request.Headers.Host = host;
+
+        var response = await app.CreateClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Contains("Host rejected", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("localhost:5070")]
+    [InlineData("127.0.0.1:5070")]
+    [InlineData("[::1]:5070")]
+    public async Task Owner_hosts_are_accepted_without_an_origin(string host)
+    {
+        await using var app = new WebApp();
+        var request = new HttpRequestMessage(HttpMethod.Post, Negotiate);
+        request.Headers.Host = host;
+
+        var response = await app.CreateClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     [Fact]
     public async Task Arena_AllowedOrigins_is_honoured_by_the_web_app()
     {

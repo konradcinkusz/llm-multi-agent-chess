@@ -70,7 +70,12 @@ echo "The API is up."
 
 # One hour of planned games, with the window already past: the runner plays the slots back to back, instead of
 # waiting an hour of wall-clock time for each planned start. The assumed move latency is set so that seven games fill the hour.
-starts_at="$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')"
+# `date -d` is GNU; BSD and macOS date use `-v-1H`. Without either the script stops with a clear message.
+if ! starts_at="$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)" \
+    && ! starts_at="$(date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"; then
+    echo "This script needs a date that can subtract an hour (GNU date -d, or BSD date -v). Install GNU coreutils." >&2
+    exit 1
+fi
 plan_body="$(jq -n --arg startsAt "${starts_at}" '{
     name: "Smoke test",
     models: ["random", "fake-a", "fake-b"],

@@ -103,6 +103,13 @@ public sealed class RequestMenu(IDbContextFactory<ArenaDbContext> factory, Model
             return new SidePrice(null, null, $"{model} is not offered by the gateway right now.");
         }
 
+        // Under RequireApiKeyModels only a model the catalog lists as custom may be quoted: a configured id that a Copilot model
+        // shares is listed as the Copilot model, and its game would run on the subscription (03 §15.2).
+        if (options.RequireApiKeyModels && !listed.Custom)
+        {
+            return new SidePrice(playerId, null, $"{model} is not a bring-your-own-key model, so it cannot be quoted.");
+        }
+
         // The player's own history first, then its model's, then the style's assumption (03 §15.2).
         var playerHistory = history.GetValueOrDefault(entry.PlayerId) ?? history.GetValueOrDefault(model);
         var usd = RequestPricing.SideEstimateUsd(model, listed.Pricing, playerHistory, options.Styles[style], usdPerAiCredit);

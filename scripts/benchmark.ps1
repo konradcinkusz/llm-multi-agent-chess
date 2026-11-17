@@ -99,7 +99,7 @@ function Write-Utf8File([string] $Path, [string] $Text) {
     [System.IO.File]::WriteAllText($Path, $Text + "`n", [System.Text.UTF8Encoding]::new($false))
 }
 
-if (Test-EnvSet $env:CI -or Test-EnvSet $env:GITHUB_ACTIONS) {
+if ((Test-EnvSet $env:CI) -or (Test-EnvSet $env:GITHUB_ACTIONS)) {
     Exit-Benchmark 2 'refusing to run under CI: a benchmark plays real games against a live arena (see docs/BENCHMARK.md)'
 }
 
