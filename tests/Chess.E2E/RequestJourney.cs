@@ -5,8 +5,10 @@ using static Microsoft.Playwright.Assertions;
 namespace Chess.E2E;
 
 /// <summary>
-/// Journey 6 (03 §15, mock intake): a $1 Super Chat is simulated on the admin page, queued, and the stream shows the
-/// payer in its queue panel. The "playing" step waits for V3, when the broadcast runner takes requests.
+/// Journey 6 (03 §15, mock intake): a $1 Super Chat is simulated on the admin page and queued. The broadcast runner takes
+/// requests only while a schedule is running or paused, so the journey then starts a short schedule through the API (its
+/// slots begin an hour away, so the request is the first game), and the stream names the payer in its status line while
+/// the requested game is on the board.
 /// </summary>
 [Collection(ArenaCollection.Name)]
 public sealed class RequestJourney(ArenaFixture arena)
@@ -35,9 +37,18 @@ public sealed class RequestJourney(ArenaFixture arena)
         await Expect(admin.GetByTestId("requests-message")).ToContainTextAsync("Sent to the intake");
         await Expect(admin.GetByTestId("requests-queued")).ToContainTextAsync(Payer);
 
-        var stream = await context.NewPageAsync();
-        await stream.GotoAsync("/broadcast");
-        // The request panels are gone from the stream; the viewer's request shows in the status line.
-        await Expect(stream.GetByTestId("broadcast-status")).ToContainTextAsync(Payer);
+        // A queued request stays queued while no schedule is active; starting one makes the runner play it.
+        var scheduleId = await arena.StartBroadcastAsync();
+        try
+        {
+            var stream = await context.NewPageAsync();
+            await stream.GotoAsync("/broadcast");
+            // The request panels are gone from the stream; the status line names the payer while their game is on air.
+            await Expect(stream.GetByTestId("broadcast-status")).ToContainTextAsync(Payer);
+        }
+        finally
+        {
+            await arena.StopBroadcastAsync(scheduleId);
+        }
     }
 }
