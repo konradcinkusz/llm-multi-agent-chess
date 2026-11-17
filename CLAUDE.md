@@ -15,6 +15,10 @@ dotnet build Chess.sln -warnaserror
 dotnet test Chess.sln
 ```
 
+PostgreSQL-backed tests (`tests/Chess.Api.Tests/Postgres`) run only when `ARENA_TEST_POSTGRES` holds a connection string, and the CI job
+`postgres` runs them. After a change to an entity or `ArenaDbContext`, run `dotnet tool restore` and
+`dotnet ef migrations has-pending-model-changes --project src/Chess.Api`: it must pass.
+
 The SDK is pinned in `global.json` (10.0.x). Package versions live only in
 `Directory.Packages.props`. Install the SDK when missing:
 `sudo apt-get update && sudo apt-get install -y dotnet-sdk-10.0`.
@@ -137,4 +141,5 @@ Fixes merged to `main`, with their pull request numbers in brackets. Keep them i
 - **Order before projecting on PostgreSQL (#78).** `RatedGameLoader` projected to a record and then ordered it. Npgsql cannot
   translate an `OrderBy` over a constructed record, so `/api/ratings` and `/api/ratings/matrix` answered 500 and the Results
   page did not load. The InMemory provider evaluates that query fine, so the tests did not catch it. Put `OrderBy` before
-  `Select` in any query that runs on PostgreSQL. A test on the InMemory provider does not prove the translation.
+  `Select` in any query that runs on PostgreSQL. A test on the InMemory provider does not prove the translation: a query that reads data back belongs in the PostgreSQL tests too
+  (`Chess.Api.Tests.Postgres`, which play a game and call every read endpoint against a real server).
