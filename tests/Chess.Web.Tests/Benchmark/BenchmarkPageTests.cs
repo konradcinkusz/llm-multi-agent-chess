@@ -73,6 +73,26 @@ public class BenchmarkPageTests
     }
 
     [Fact]
+    public void AFormNobodyHasTouchedShowsNoProblemsButStaysDisabled()
+    {
+        using var ctx = new BunitContext();
+        Mount(ctx, Defaults());
+        var cut = ctx.Render<BenchmarkPage>();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("#start-benchmark")));
+
+        Assert.Empty(cut.FindAll(".benchmark-problem"));
+        Assert.DoesNotContain("Give the benchmark a name", cut.Markup);
+        Assert.Single(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-benchmark").HasAttribute("disabled"));
+
+        cut.Find("#games-per-opponent").Change("4");
+
+        cut.WaitForAssertion(() => Assert.Contains("Give the benchmark a name.", cut.Markup));
+        Assert.Empty(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-benchmark").HasAttribute("disabled"));
+    }
+
+    [Fact]
     public void ChoosingOpponentsListsThemAndStartNeedsOne()
     {
         using var ctx = new BunitContext();

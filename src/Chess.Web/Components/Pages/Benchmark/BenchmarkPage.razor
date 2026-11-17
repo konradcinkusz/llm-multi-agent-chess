@@ -33,12 +33,12 @@
             <div class="field-row">
                 <label class="field">
                     Name
-                    <input id="benchmark-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" />
+                    <input id="benchmark-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" @bind:after="Touch" />
                 </label>
 
                 <label class="field">
                     Candidate
-                    <select id="candidate" value="@_candidateId" @onchange="e => ChooseCandidate(e.Value?.ToString())">
+                    <select id="candidate" value="@_candidateId" @onchange="e => { Touch(); ChooseCandidate(e.Value?.ToString()); }">
                         @foreach (var model in _candidates)
                         {
                             <option value="@model.Id">@BenchmarkChoices.Label(model)</option>
@@ -50,7 +50,7 @@
                 {
                     <label class="field">
                         Reasoning effort
-                        <select id="effort" value="@_effort" @onchange="e => _effort = e.Value?.ToString()">
+                        <select id="effort" value="@_effort" @onchange="e => { Touch(); _effort = e.Value?.ToString(); }">
                             @foreach (var effort in efforts)
                             {
                                 <option value="@effort">@effort@(effort == CandidateDefaultEffort ? " (default)" : "")</option>
@@ -62,7 +62,7 @@
 
                 <label class="field">
                     Candidate's prompt style
-                    <select id="candidate-style" data-testid="candidate-style" @bind="_candidateStyle">
+                    <select id="candidate-style" data-testid="candidate-style" @bind="_candidateStyle" @bind:after="Touch">
                         @foreach (var style in _styles)
                         {
                             <option value="@style.Id">@style.DisplayName</option>
@@ -75,7 +75,7 @@
             <div class="field-row">
                 <label class="field">
                     Games per opponent
-                    <select id="games-per-opponent" @bind="_gamesPerOpponent">
+                    <select id="games-per-opponent" @bind="_gamesPerOpponent" @bind:after="Touch">
                         @foreach (var games in GamesPerOpponentChoices)
                         {
                             <option value="@games">@games@(games == DefaultGamesPerOpponent ? " (default)" : "")</option>
@@ -86,7 +86,7 @@
 
                 <label class="field">
                     Max concurrency
-                    <select id="max-concurrency" @bind="_maxConcurrency">
+                    <select id="max-concurrency" @bind="_maxConcurrency" @bind:after="Touch">
                         @for (var limit = 1; limit <= BenchmarkFormRules.MaxConcurrencyLimit; limit++)
                         {
                             <option value="@limit">@limit</option>
@@ -104,7 +104,7 @@
                 <legend>Opponents</legend>
                 <label class="field">
                     Opponents' prompt style
-                    <select id="opponent-style" data-testid="opponent-style" @bind="_opponentStyle">
+                    <select id="opponent-style" data-testid="opponent-style" @bind="_opponentStyle" @bind:after="Touch">
                         @foreach (var style in _styles)
                         {
                             <option value="@style.Id">@style.DisplayName</option>
@@ -114,11 +114,11 @@
                 </label>
                 <div class="chips">
                     <label class="chip">
-                        <input id="opponents-all" type="radio" name="opponents" checked="@_allOpponents" @onchange="() => _allOpponents = true" />
+                        <input id="opponents-all" type="radio" name="opponents" checked="@_allOpponents" @onchange="() => { Touch(); _allOpponents = true; }" />
                         All other enabled models (@_defaultOpponents.Count)
                     </label>
                     <label class="chip">
-                        <input id="opponents-choose" type="radio" name="opponents" checked="@(!_allOpponents)" @onchange="() => _allOpponents = false" />
+                        <input id="opponents-choose" type="radio" name="opponents" checked="@(!_allOpponents)" @onchange="() => { Touch(); _allOpponents = false; }" />
                         Choose opponents
                     </label>
                 </div>
@@ -202,9 +202,18 @@
                 </div>
             }
 
-            @foreach (var problem in Problems)
+            @* What is missing is said after the first interaction, not before the user has touched anything. Start stays
+               disabled until the form is valid either way. *@
+            @if (!_touched)
             {
-                <p class="benchmark-problem error-text">@problem</p>
+                <p class="field-hint benchmark-hint" data-testid="form-hint">Start is available once the form is complete.</p>
+            }
+            else
+            {
+                @foreach (var problem in Problems)
+                {
+                    <p class="benchmark-problem error-text">@problem</p>
+                }
             }
 
             <div class="cluster">
@@ -316,6 +325,11 @@
     private string? _createError;
     private BenchmarkCreatedDto? _created;
 
+    /// <summary>False until the user has changed something: the problems of the form are not shown on a form nobody has touched.</summary>
+    private bool _touched;
+
+    private void Touch() => _touched = true;
+
     private ModelDto? CandidateModel => _models?.FirstOrDefault(model => model.Id == _candidateId);
 
     private IReadOnlyList<string>? CandidateEfforts => CandidateModel?.ReasoningEfforts;
@@ -418,6 +432,7 @@
 
     private void Toggle(string modelId, object? selected)
     {
+        _touched = true;
         if (selected is true)
         {
             _chosen.Add(modelId);
@@ -455,6 +470,7 @@
             var request = new CreateBenchmarkRequest(_name.Trim(), CandidatePlayer!, opponents, _gamesPerOpponent, _maxConcurrency);
             _created = await Api.CreateBenchmarkAsync(request, _cts.Token);
             _name = "";
+            _touched = false;
             await LoadBenchmarksAsync(_cts.Token);
         }
         catch (HttpRequestException ex)

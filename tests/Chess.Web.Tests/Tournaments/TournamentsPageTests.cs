@@ -130,6 +130,35 @@ public class TournamentsPageTests
     }
 
     [Fact]
+    public void AFormNobodyHasTouchedShowsNoProblemsButStaysDisabled()
+    {
+        var handler = Serve.Routes(new Dictionary<string, Reply>
+        {
+            ["GET /api/models"] = Serve.Ok(Fixtures.Models),
+            ["GET /api/tournaments"] = Serve.Ok(Fixtures.Tournaments()),
+        });
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, handler);
+
+        var cut = ctx.Render<TournamentsPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains("No tournaments yet", cut.Markup));
+        Assert.Empty(cut.FindAll(".tournament-problem"));
+        Assert.DoesNotContain("Give the tournament a name", cut.Markup);
+        Assert.DoesNotContain("Choose at least two models", cut.Markup);
+        Assert.Single(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-tournament").HasAttribute("disabled"));
+
+        cut.Find("#model-gpt").Change(true);
+
+        // The first interaction brings the problems in; the hint goes.
+        cut.WaitForAssertion(() => Assert.Contains("Give the tournament a name.", cut.Markup));
+        Assert.Contains("Choose at least two models.", cut.Markup);
+        Assert.Empty(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-tournament").HasAttribute("disabled"));
+    }
+
+    [Fact]
     public void StartStaysDisabledUntilTheFormIsValid()
     {
         var handler = Serve.Routes(new Dictionary<string, Reply>
