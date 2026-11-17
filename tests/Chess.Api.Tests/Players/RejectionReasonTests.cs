@@ -101,6 +101,9 @@ public class RejectionReasonTests
     [InlineData("\"Nf3\"", "Nf3")]
     [InlineData("0-0", "O-O")]
     [InlineData("Nf3!", "Nf3")]
+    [InlineData("**Nf3**", "Nf3")]
+    [InlineData("1. **Nf3**", "Nf3")]
+    [InlineData("`Nf3`.", "Nf3")]
     public void TheCandidateIsTheMoveWithoutDecoration(string reply, string expected)
     {
         Assert.Equal(expected, RejectionClassifier.Candidate(reply));

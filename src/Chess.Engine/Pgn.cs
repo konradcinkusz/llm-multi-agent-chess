@@ -2,12 +2,13 @@ using System.Text;
 
 namespace Chess.Engine;
 
-// PGN export: Seven Tag Roster, FEN/SetUp for non-standard starts, movetext wrapped at 80 columns.
+// PGN export: Seven Tag Roster, Termination, FEN/SetUp for non-standard starts, movetext wrapped at 80 columns.
 // Pure: no I/O, no clock. Moves are replayed on a board, so only legal SAN can be written.
 public static class Pgn
 {
     private const int MaxLineLength = 80;
     private const string ResultTag = "Result";
+    private const string TerminationTag = "Termination";
 
     private static readonly string[] Results = { "1-0", "0-1", "1/2-1/2", "*" };
 
@@ -19,11 +20,16 @@ public static class Pgn
 
     private static readonly HashSet<string> ManagedTags = new(StringComparer.Ordinal)
     {
-        "Event", "Site", "Date", "Round", "White", "Black", ResultTag, "SetUp", "FEN",
+        "Event", "Site", "Date", "Round", "White", "Black", ResultTag, TerminationTag, "SetUp", "FEN",
     };
 
+    /// <param name="termination">
+    /// How the game ended (a word such as <c>checkmate</c> or <c>forfeit-white</c>), written as the <c>Termination</c> tag
+    /// after <c>Result</c>. Left out, a <c>Termination</c> entry in <paramref name="tags"/> is used; with neither, no such tag is written.
+    /// </param>
     public static string Write(
-        IReadOnlyDictionary<string, string> tags, string? startFen, IEnumerable<string> sanMoves, string result)
+        IReadOnlyDictionary<string, string> tags, string? startFen, IEnumerable<string> sanMoves, string result,
+        string? termination = null)
     {
         if (Array.IndexOf(Results, result) < 0)
             throw new ArgumentException($"'{result}' is not a PGN result.", nameof(result));
@@ -37,6 +43,9 @@ public static class Pgn
         foreach (var (name, placeholder) in Roster)
             AppendTag(sb, name, Tag(tags, name, placeholder));
         AppendTag(sb, ResultTag, result);
+        var endedBy = !string.IsNullOrWhiteSpace(termination) ? termination : tags.GetValueOrDefault(TerminationTag);
+        if (!string.IsNullOrWhiteSpace(endedBy))
+            AppendTag(sb, TerminationTag, endedBy);
         if (!isStandardStart)
         {
             AppendTag(sb, "SetUp", "1");

@@ -23,10 +23,6 @@ public static class RejectionClassifier
         @"^(?:[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=?[QRBN])?|[a-h][1-8][a-h][1-8][qrbn]?|O-O(?:-O)?|0-0(?:-0)?)$",
         RegexOptions.CultureInvariant);
 
-    private static readonly Regex LeadingMoveNumber = new(@"^\d+\s*\.+\s*", RegexOptions.CultureInvariant);
-    private static readonly char[] Wrapping = ['"', '\'', '`', ' ', '\t', '\r', '\n'];
-    private static readonly char[] Trailing = ['.', ',', ';', ':', '!', '?', '+', '#', '"', '\'', '`', ' ', '\t', '\r', '\n'];
-
     /// <summary>The kind and the reason text for a reply that <see cref="MoveNotation.TryResolve"/> did not accept.</summary>
     /// <param name="board">The position the reply was given for.</param>
     /// <param name="reply">The reply as the model wrote it.</param>
@@ -55,12 +51,8 @@ public static class RejectionClassifier
         return new Rejection(Illegal, $"illegal: \"{candidate}\" is not a legal move in this position.");
     }
 
-    /// <summary>The reply with the wrapping, the move number and the trailing punctuation removed, as <see cref="MoveNotation"/> reads it.</summary>
-    public static string Candidate(string reply)
-    {
-        var text = LeadingMoveNumber.Replace(reply.Trim(Wrapping), string.Empty).TrimEnd(Trailing);
-        return text.StartsWith("0-0", StringComparison.Ordinal) ? text.Replace('0', 'O') : text;
-    }
+    /// <summary>The reply with the wrapping, the move number and the trailing punctuation removed: <see cref="MoveNotation.Clean"/>, the rule <see cref="MoveNotation.TryResolve"/> reads it by.</summary>
+    public static string Candidate(string reply) => MoveNotation.Clean(reply);
 
     /// <summary>
     /// Drops the check mark, the capture mark and, for a piece, the disambiguation: <c>Rac7</c>, <c>Rfc7</c> and <c>Rxc7+</c>

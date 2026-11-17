@@ -75,7 +75,7 @@ internal sealed class GameRun(
         stored.Result = end.Result;
         stored.Termination = end.Termination;
         stored.FinishedAt = clock.GetUtcNow();
-        stored.Pgn = Pgn.Write(Tags(stored), stored.StartFen, sans, end.Result);
+        stored.Pgn = Pgn.Write(Tags(stored), stored.StartFen, sans, end.Result, end.Termination);
         await db.SaveChangesAsync(ct);
     }
 

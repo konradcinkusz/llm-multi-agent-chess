@@ -36,6 +36,27 @@ public class StockfishIntegrationTests
     }
 
     [StockfishFact]
+    public async Task Real_stockfish_completes_the_handshake_probe()
+    {
+        await using var analyzer = new StockfishAnalyzer(Binary, depth: 1);
+
+        await analyzer.ProbeAsync(CancellationToken.None);
+
+        Assert.True(analyzer.IsAvailable);
+    }
+
+    [StockfishFact]
+    public async Task Real_stockfish_scores_a_position_drawn_by_the_rules_as_zero()
+    {
+        await using var analyzer = new StockfishAnalyzer(Binary, depth: 1);
+
+        // Fifty-move rule reached with a rook up: the rules draw it, so Stockfish's opinion is not used.
+        var score = await analyzer.EvaluateAsync("4k3/8/8/8/8/8/R7/4K3 w - - 100 80", CancellationToken.None);
+
+        Assert.Equal(0, score);
+    }
+
+    [StockfishFact]
     public async Task A_cancelled_search_retires_the_process_and_the_next_call_starts_a_new_one()
     {
         await using var engine = new ProcessUciEngine(Binary);
