@@ -37,7 +37,7 @@ public sealed class ArenaApiClient(HttpClient http)
     public async Task<string> GetGamePgnAsync(Guid id, CancellationToken ct = default)
     {
         using var response = await http.GetAsync($"/api/games/{id}/pgn", ct);
-        response.EnsureSuccessStatusCode();
+        await ApiFailure.EnsureSuccessAsync(response, ct);
         return await response.Content.ReadAsStringAsync(ct);
     }
 
@@ -98,7 +98,7 @@ public sealed class ArenaApiClient(HttpClient http)
     public async Task<string> GetBenchmarkReportMarkdownAsync(Guid id, CancellationToken ct = default)
     {
         using var response = await http.GetAsync($"/api/benchmarks/{id}/report?format=md", ct);
-        response.EnsureSuccessStatusCode();
+        await ApiFailure.EnsureSuccessAsync(response, ct);
         return await response.Content.ReadAsStringAsync(ct);
     }
 
@@ -134,7 +134,7 @@ public sealed class ArenaApiClient(HttpClient http)
     {
         using (response)
         {
-            response.EnsureSuccessStatusCode();
+            await ApiFailure.EnsureSuccessAsync(response, ct);
             return await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct)
                 ?? throw new InvalidOperationException($"Empty body from {response.RequestMessage?.RequestUri}.");
         }
@@ -143,7 +143,7 @@ public sealed class ArenaApiClient(HttpClient http)
     private static async Task EnsureSuccessAsync(Task<HttpResponseMessage> send, CancellationToken ct)
     {
         using var response = await send;
-        response.EnsureSuccessStatusCode();
+        await ApiFailure.EnsureSuccessAsync(response, ct);
     }
 
     /// <summary>Appends the non-null parameters to <paramref name="path"/>, percent-encoded.</summary>
