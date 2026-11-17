@@ -33,10 +33,17 @@ running; detach with `Ctrl-b d` in tmux and reattach with `tmux attach`.
 2. Optionally set the name and the pacing (move delay 4000 ms and game gap 30 min by default; the gap is typed in minutes). There is no start time or duration.
 3. Pick a White player and a Black player (each model also appears with each reasoning effort it offers, and in each ticked prompt style) and press **Add game**. Repeat for every game, one line per game. **Up**, **Down** and **Delete** change the list.
 4. Under the list, **Estimated cost of the broadcast** shows the total premium requests, AI credits and USD of the games added, and each model's share, before anything is sent.
-5. Press **Start**. The app saves the games as a schedule that begins now and starts it in one click. The games play in list order. Each game starts after the previous one ends plus the game gap, and the next start time shown on the page is recalculated from the games already played. Start is disabled while another broadcast is playing or paused.
+5. Press **Start**. The app sends the games in one call (`POST /api/broadcast/schedules`, below), which checks them, saves the
+   schedule and starts it. The games play in list order. Each game starts after the previous one ends plus the game gap, and
+   the next start time shown on the page is recalculated from the games already played. Start is disabled while another
+   broadcast is playing or paused. If the API refuses, the page shows why, nothing is saved, and the games stay on the page.
+6. Under **Broadcasts**, each row has **Start** (a draft or scheduled day), **Pause**, **Resume**, **Stop** and, for a draft,
+   **Delete**. **Stop** asks for a second click ("Yes, stop"), because it cancels the day and aborts the game in play. While a
+   day is running or paused the list reloads every 5 seconds, so Start frees itself when the day ends.
 
-The schedule window is the span of the games, so a long list is limited to 168 hours.
-Only one day plays at a time. A second start while one is playing or paused is refused.
+The random player is free: the estimate shows it as "free". A schedule holds at most 500 games, and its window is the span of
+the games, so a long list is limited to 168 hours. Only one day plays at a time. A second start while one is playing or
+paused is refused.
 
 ### Through the API
 
@@ -61,10 +68,37 @@ Content-Type: application/json
 }
 ```
 
-The answer (201) is the schedule and its slots, saved as a draft. Then:
+The answer (201) is the schedule and its slots, saved as a draft. The plan is capped at 500 games, and `assumedPlies` and
+`assumedMoveLatencyMs` must be finite (plies positive, latency not negative): a request that breaks a rule is a `400`. A
+`startsAt` with an offset is stored as UTC.
+
+To start a day from games you pick yourself (what the page does), one call validates, saves and optionally starts it, in
+order, with the times laid out by the API:
+
+```http
+POST /api/broadcast/schedules
+Content-Type: application/json
+
+{
+  "name": "LLM Chess 24h",
+  "pacing": { "moveDelayMs": 4000, "gameGapSeconds": 1800 },
+  "games": [
+    { "white": { "kind": "llm", "modelId": "<model id>" }, "black": { "kind": "random", "modelId": "random" } }
+  ],
+  "start": true
+}
+```
+
+`startsAt` (default: now, to the whole second), `assumedPlies` (80), `assumedMoveLatencyMs` (40000) and `seed` (1) are optional.
+The random player is `{"kind":"random","modelId":"random"}`; any other player is kind `llm`. The answer (201) is the schedule;
+with `"start": true` its status is `running`. A refusal (400 for a bad game, 409 when another broadcast is playing or paused)
+saves nothing: a start the broadcast runner refuses removes the schedule that was just saved, so no draft is left behind.
+
+Then:
 
 | Step | Call | Answer |
 |---|---|---|
+| Delete a draft | `DELETE /api/broadcast/schedules/{id}` | 204, 404, or 409 when it is not a draft |
 | Edit the slots of a draft or scheduled day | `PUT /api/broadcast/schedules/{id}/slots` (the array order is the play order) | 200 |
 | Start (Draft or Scheduled → Running) | `POST /api/broadcast/schedules/{id}/start` | 200, 404 or 409 |
 | Pause after the current move | `POST /api/broadcast/schedules/{id}/pause` | 200, 404 or 409 |

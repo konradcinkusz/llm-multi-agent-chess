@@ -15,9 +15,10 @@ namespace Chess.Api.Broadcast;
 public sealed record SlotEdit(PlayerSpec White, PlayerSpec Black, DateTimeOffset PlannedStart, DateTimeOffset PlannedEnd);
 
 /// <summary>
-/// The <c>/api/broadcast</c> routes (03 §9.2): plan a day (saved as a draft), list and read schedules, replace the slots
-/// of a draft or scheduled schedule, and <c>/now</c> for the broadcast page and OBS. Nothing here plays a game; the
-/// control routes hand the schedule to the broadcast runner.
+/// The <c>/api/broadcast</c> routes (03 §9.2): plan a day (saved as a draft), create a schedule from picked games in one
+/// call (additive), list and read schedules, delete a draft, replace the slots of a draft or scheduled schedule, and
+/// <c>/now</c> for the broadcast page and OBS. Nothing here plays a game; the control routes hand the schedule to the
+/// broadcast runner.
 /// </summary>
 public static class BroadcastEndpoints
 {
@@ -30,6 +31,16 @@ public static class BroadcastEndpoints
     /// <summary>The longest window a plan may cover. A week of slots is already far beyond one broadcast day.</summary>
     public const int MaxDurationHours = 168;
 
+    /// <summary>The longest schedule name, as the planner page limits it.</summary>
+    public const int MaxNameLength = 120;
+
+    /// <summary>
+    /// How far a slot may overrun the schedule window and still count as inside it. A stored time keeps microseconds
+    /// (PostgreSQL <c>timestamptz</c>) while a client's has 100 ns, so a window that ends exactly on a slot's end can read back
+    /// a few hundred nanoseconds short.
+    /// </summary>
+    private static readonly TimeSpan WindowTolerance = TimeSpan.FromMilliseconds(1);
+
     private const string LlmKind = "llm";
     private const string RandomKind = "random";
 
@@ -37,8 +48,10 @@ public static class BroadcastEndpoints
     {
         var broadcast = endpoints.MapGroup("/broadcast");
         broadcast.MapPost("/plan", PlanAsync);
+        broadcast.MapPost("/schedules", CreateAsync);
         broadcast.MapGet("/schedules", ListAsync);
         broadcast.MapGet("/schedules/{id:guid}", GetAsync);
+        broadcast.MapDelete("/schedules/{id:guid}", DeleteAsync);
         broadcast.MapPut("/schedules/{id:guid}/slots", ReplaceSlotsAsync);
         broadcast.MapGet("/now", NowAsync);
         broadcast.MapPost("/schedules/{id:guid}/start", (Guid id, IBroadcastController controller,
@@ -80,9 +93,10 @@ public static class BroadcastEndpoints
                 $"DurationHours must be at most {MaxDurationHours}.");
         }
 
-        // PostgreSQL keeps microseconds (timestamptz), so a window edge with a 100 ns digit would read back shorter than the slots
-        // planned against it. Plan on the precision that is stored, so the answer, the database and the slot check agree.
-        request = request with { StartsAt = ToMicroseconds(request.StartsAt) };
+        // Npgsql refuses a timestamptz with an offset, so the window is stored in UTC whatever offset was sent. PostgreSQL also
+        // keeps only microseconds, so a window edge with a 100 ns digit would read back shorter than the slots planned against
+        // it: plan on the precision that is stored, so the answer, the database and the slot check agree.
+        request = request with { StartsAt = ToMicroseconds(request.StartsAt.ToUniversalTime()) };
 
         var listing = await catalog.GetModelsAsync(ct);
         var inputs = await costs.ForAsync(listing, ct);
@@ -134,6 +148,197 @@ public static class BroadcastEndpoints
             slots.OrderBy(s => s.Index).Select(ToSlotDto).ToList());
         return TypedResults.Created($"/api/broadcast/schedules/{schedule.Id}", detail);
     }
+
+    /// <summary>
+    /// Creates a schedule from the games a person picked, in one call: validates them like <c>PUT .../slots</c>, saves the
+    /// schedule and its slots together, and starts it when <see cref="CreateScheduleRequest.Start"/> is set. A refusal leaves
+    /// nothing behind: a start the controller refuses removes the schedule it just saved.
+    /// </summary>
+    private static async Task<IResult> CreateAsync(
+        CreateScheduleRequest? request,
+        IBroadcastController controller,
+        IDbContextFactory<ArenaDbContext> factory,
+        ModelCatalog catalog,
+        CostInputs costs,
+        TimeProvider clock,
+        CancellationToken ct)
+    {
+        if (request is null)
+        {
+            return Problem(StatusCodes.Status400BadRequest, "Invalid schedule", "A schedule request is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return ValidationProblemFor("name", "Name is required.");
+        }
+
+        if (request.Name.Trim().Length > MaxNameLength)
+        {
+            return ValidationProblemFor("name", $"Name must be at most {MaxNameLength} characters.");
+        }
+
+        if (request.Pacing is null)
+        {
+            return ValidationProblemFor("pacing", "Pacing is required.");
+        }
+
+        if (request.Games is null || request.Games.Count == 0)
+        {
+            return ValidationProblemFor("games", "At least one game is required.");
+        }
+
+        if (request.Games.Count > BroadcastPlanner.MaxSlots)
+        {
+            return ValidationProblemFor("games", $"A schedule holds at most {BroadcastPlanner.MaxSlots} games.");
+        }
+
+        if (request.Games.Any(game => game?.White is null || game.Black is null
+                || string.IsNullOrWhiteSpace(game.White.ModelId) || string.IsNullOrWhiteSpace(game.Black.ModelId)))
+        {
+            return ValidationProblemFor("games", "Every game needs a White and a Black player, each with a model id.");
+        }
+
+        var startsAt = ToMicroseconds((request.StartsAt ?? WholeSeconds(clock.GetUtcNow())).ToUniversalTime());
+        if (startsAt.Year is < 2000 or > 2200)
+        {
+            return ValidationProblemFor("startsAt", "StartsAt must be between the years 2000 and 2200.");
+        }
+
+        IReadOnlyList<(DateTimeOffset Start, DateTimeOffset End)> windows;
+        try
+        {
+            windows = BroadcastPlanner.Layout(request.Games.Count, startsAt, request.AssumedPlies,
+                request.AssumedMoveLatencyMs, request.Pacing);
+        }
+        catch (InvalidPlanException ex)
+        {
+            return ValidationProblemFor("games", ex.Message);
+        }
+
+        var edits = request.Games
+            .Select((game, index) => new SlotEdit(game.White, game.Black, windows[index].Start, windows[index].End))
+            .ToList();
+        var models = edits.SelectMany(edit => new[] { edit.White.ModelId, edit.Black.ModelId })
+            .Distinct(StringComparer.Ordinal).ToList();
+
+        var listing = await catalog.GetModelsAsync(ct);
+        if (listing.Warning is null && ModelErrors(models, listing) is { } modelErrors)
+        {
+            return TypedResults.ValidationProblem(modelErrors);
+        }
+
+        var spanTicks = (windows[^1].End - startsAt).Ticks;
+        var hours = (int)((spanTicks + TimeSpan.TicksPerHour - 1) / TimeSpan.TicksPerHour);
+        var schedule = new BroadcastScheduleEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = request.Name.Trim(),
+            Status = ScheduleStatus.Draft,
+            StartsAt = startsAt,
+            EndsAt = startsAt.AddHours(Math.Max(1, hours)),
+            MoveDelayMs = request.Pacing.MoveDelayMs,
+            GameGapSeconds = request.Pacing.GameGapSeconds,
+            Seed = request.Seed,
+            Models = models,
+            CreatedAt = clock.GetUtcNow(),
+        };
+        if (SlotErrors(edits, schedule) is { } slotErrors)
+        {
+            return TypedResults.ValidationProblem(slotErrors);
+        }
+
+        await using (var db = await factory.CreateDbContextAsync(ct))
+        {
+            if (request.Start && await ChannelBusyAsync(db, ct))
+            {
+                return ChannelBusy();
+            }
+
+            db.BroadcastSchedules.Add(schedule);
+            db.BroadcastSlots.AddRange(edits.Select((edit, index) => ToSlotEntity(schedule.Id, index, edit)));
+            await db.SaveChangesAsync(ct);
+        }
+
+        if (request.Start)
+        {
+            BroadcastCommandResult started;
+            try
+            {
+                started = await controller.StartAsync(schedule.Id, ct);
+            }
+            catch
+            {
+                await RemoveDraftAsync(factory, schedule.Id);
+                throw;
+            }
+
+            if (started != BroadcastCommandResult.Accepted)
+            {
+                // Lost a race with another start: leave no draft behind.
+                await RemoveDraftAsync(factory, schedule.Id);
+                return ChannelBusy();
+            }
+        }
+
+        var inputs = await costs.ForAsync(listing, ct);
+        await using var read = await factory.CreateDbContextAsync(ct);
+        var loaded = await LoadAsync(read, schedule.Id, ct);
+        if (loaded is null)
+        {
+            return NotFound(schedule.Id);
+        }
+
+        var (stored, slots) = loaded.Value;
+        var detail = new ScheduleDetailDto(ToScheduleDto(stored, slots, inputs, costs.UsdPerAiCredit),
+            slots.Select(ToSlotDto).ToList());
+        return TypedResults.Created($"/api/broadcast/schedules/{schedule.Id}", detail);
+    }
+
+    /// <summary>Deletes a draft and its slots. Only a draft: a schedule that has started is history, and 409 says so.</summary>
+    private static async Task<IResult> DeleteAsync(Guid id, IDbContextFactory<ArenaDbContext> factory, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var schedule = await db.BroadcastSchedules.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (schedule is null)
+        {
+            return NotFound(id);
+        }
+
+        if (schedule.Status != ScheduleStatus.Draft)
+        {
+            return Conflict(schedule.Status, "Only a draft can be deleted.");
+        }
+
+        db.BroadcastSlots.RemoveRange(await db.BroadcastSlots.Where(s => s.ScheduleId == id).ToListAsync(ct));
+        db.BroadcastSchedules.Remove(schedule);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.NoContent();
+    }
+
+    private static Task<bool> ChannelBusyAsync(ArenaDbContext db, CancellationToken ct) =>
+        db.BroadcastSchedules.AnyAsync(s => s.Status == ScheduleStatus.Running || s.Status == ScheduleStatus.Paused, ct);
+
+    private static ProblemHttpResult ChannelBusy() => Problem(StatusCodes.Status409Conflict, "Another broadcast is playing",
+        "Stop or finish the broadcast that is running or paused before starting this one.");
+
+    /// <summary>Removes a schedule this request created and could not start. Not cancellable: the cleanup must finish.</summary>
+    private static async Task RemoveDraftAsync(IDbContextFactory<ArenaDbContext> factory, Guid id)
+    {
+        await using var db = await factory.CreateDbContextAsync(CancellationToken.None);
+        var schedule = await db.BroadcastSchedules.FirstOrDefaultAsync(s => s.Id == id && s.Status == ScheduleStatus.Draft);
+        if (schedule is null)
+        {
+            return;
+        }
+
+        db.BroadcastSlots.RemoveRange(await db.BroadcastSlots.Where(s => s.ScheduleId == id).ToListAsync());
+        db.BroadcastSchedules.Remove(schedule);
+        await db.SaveChangesAsync(CancellationToken.None);
+    }
+
+    private static DateTimeOffset WholeSeconds(DateTimeOffset at) =>
+        new(at.Ticks - at.Ticks % TimeSpan.TicksPerSecond, at.Offset);
 
     private static async Task<IResult> ListAsync(
         IDbContextFactory<ArenaDbContext> factory,
@@ -211,19 +416,7 @@ public static class BroadcastEndpoints
             return TypedResults.ValidationProblem(errors);
         }
 
-        var replaced = edits.Select((edit, index) => new BroadcastSlotEntity
-        {
-            Id = Guid.NewGuid(),
-            ScheduleId = schedule.Id,
-            Index = index,
-            WhiteKind = edit.White.Kind,
-            WhiteModel = edit.White.ModelId,
-            BlackKind = edit.Black.Kind,
-            BlackModel = edit.Black.ModelId,
-            PlannedStart = edit.PlannedStart,
-            PlannedEnd = edit.PlannedEnd,
-            State = SlotState.Pending,
-        }).ToList();
+        var replaced = edits.Select((edit, index) => ToSlotEntity(schedule.Id, index, edit)).ToList();
 
         // Two saves: the (schedule, index) key is unique, so the old rows must be gone before the new ones are inserted.
         db.BroadcastSlots.RemoveRange(existing);
@@ -322,8 +515,11 @@ public static class BroadcastEndpoints
         return errors.Count > 0 ? errors : null;
     }
 
-    /// <summary>Checks that the edited slots are playable: known players, a proper window, in play order, no overlap.</summary>
-    private static Dictionary<string, string[]>? SlotErrors(IReadOnlyList<SlotEdit> edits, BroadcastScheduleEntity schedule)
+    /// <summary>
+    /// Checks that the edited slots are playable: known players, a proper window, in play order, no overlap. Public so that
+    /// the Web tests' stand-in API validates slots with the same rules the routes do.
+    /// </summary>
+    public static Dictionary<string, string[]>? SlotErrors(IReadOnlyList<SlotEdit> edits, BroadcastScheduleEntity schedule)
     {
         var errors = new List<string>();
         DateTimeOffset? previousEnd = null;
@@ -364,7 +560,7 @@ public static class BroadcastEndpoints
                 errors.Add($"{label}: the slot must end after it starts.");
             }
 
-            if (edit.PlannedStart < schedule.StartsAt || edit.PlannedEnd > schedule.EndsAt)
+            if (edit.PlannedStart < schedule.StartsAt - WindowTolerance || edit.PlannedEnd > schedule.EndsAt + WindowTolerance)
             {
                 errors.Add($"{label}: the slot must lie inside the schedule window.");
             }
@@ -379,6 +575,21 @@ public static class BroadcastEndpoints
 
         return errors.Count == 0 ? null : new Dictionary<string, string[]> { ["slots"] = errors.ToArray() };
     }
+
+    /// <summary>A slot as stored: times in UTC, because Npgsql refuses a <c>timestamptz</c> with an offset.</summary>
+    private static BroadcastSlotEntity ToSlotEntity(Guid scheduleId, int index, SlotEdit edit) => new()
+    {
+        Id = Guid.NewGuid(),
+        ScheduleId = scheduleId,
+        Index = index,
+        WhiteKind = edit.White.Kind,
+        WhiteModel = edit.White.ModelId,
+        BlackKind = edit.Black.Kind,
+        BlackModel = edit.Black.ModelId,
+        PlannedStart = edit.PlannedStart.ToUniversalTime(),
+        PlannedEnd = edit.PlannedEnd.ToUniversalTime(),
+        State = SlotState.Pending,
+    };
 
     private static BroadcastSlotEntity ToSlotEntity(Guid scheduleId, PlannedSlot slot) => new()
     {

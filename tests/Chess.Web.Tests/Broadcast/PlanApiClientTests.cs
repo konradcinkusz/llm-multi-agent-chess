@@ -28,6 +28,9 @@ public class PlanApiClientTests
         await client.PauseAsync(Id);
         await client.ResumeAsync(Id);
         await client.StopAsync(Id);
+        await client.CreateScheduleAsync(new CreateScheduleRequest("Day", new PacingProfile(4000, 20),
+            [new ScheduleGame(new PlayerSpec("llm", "gpt"), new PlayerSpec("random", "random"))], Start: true));
+        await client.DeleteScheduleAsync(Id);
 
         var routes = handler.Requests.Select(request => $"{request.Method} {request.Target}").ToArray();
         Assert.Equal(
@@ -38,8 +41,53 @@ public class PlanApiClientTests
                 $"POST /api/broadcast/schedules/{Id:D}/pause",
                 $"POST /api/broadcast/schedules/{Id:D}/resume",
                 $"POST /api/broadcast/schedules/{Id:D}/stop",
+                "POST /api/broadcast/schedules",
+                $"DELETE /api/broadcast/schedules/{Id:D}",
             ],
             routes);
+    }
+
+    [Fact]
+    public async Task ADeleteTheApiRefusesSurfacesTheProblemDetail()
+    {
+        var handler = new FakeHandler(_ => Canned.Json(
+            """{"title":"Schedule status does not allow this","detail":"The schedule is running. Only a draft can be deleted."}""",
+            HttpStatusCode.Conflict));
+        var client = new BroadcastApiClient(Canned.Client(handler));
+
+        var error = await Assert.ThrowsAsync<BroadcastApiException>(() => client.DeleteScheduleAsync(Id));
+
+        Assert.Equal(409, error.StatusCode);
+        Assert.Equal("The schedule is running. Only a draft can be deleted.", error.Message);
+    }
+
+    [Fact]
+    public async Task ACreateTheApiRefusesSurfacesItsValidationMessages()
+    {
+        var handler = new FakeHandler(_ => Canned.Json(
+            """{"title":"One or more validation errors occurred.","errors":{"slots":["Slot 1: the Black random player's model must be 'random'."]}}""",
+            HttpStatusCode.BadRequest));
+        var client = new BroadcastApiClient(Canned.Client(handler));
+
+        var error = await Assert.ThrowsAsync<BroadcastApiException>(() => client.CreateScheduleAsync(
+            new CreateScheduleRequest("Day", new PacingProfile(4000, 20), [], Start: true)));
+
+        Assert.Equal("Slot 1: the Black random player's model must be 'random'.", error.Message);
+    }
+
+    [Fact]
+    public void TheWebCopyOfTheCreateRequestRoundTripsWithTheApi()
+    {
+        var web = new CreateScheduleRequest("Day", new PacingProfile(4000, 20),
+            [new ScheduleGame(new PlayerSpec("llm", "gpt"), new PlayerSpec("random", "random"))], Start: true,
+            StartsAt: At, AssumedPlies: 80, AssumedMoveLatencyMs: 40_000, Seed: 3);
+        var webJson = JsonSerializer.Serialize(web, Json);
+
+        var api = JsonSerializer.Deserialize<ApiBroadcast.CreateScheduleRequest>(webJson, Json)!;
+
+        Assert.Equal(webJson, JsonSerializer.Serialize(api, Json));
+        Assert.True(api.Start);
+        Assert.Equal("random", api.Games[0].Black.Kind);
     }
 
     [Fact]

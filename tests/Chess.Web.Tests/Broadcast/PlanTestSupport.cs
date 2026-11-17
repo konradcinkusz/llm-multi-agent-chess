@@ -11,8 +11,9 @@ namespace Chess.Web.Tests.Broadcast;
 
 /// <summary>
 /// A stand-in for the <c>/api/broadcast</c> routes that behaves like the API where the planner page can see it: plans
-/// come from the real <c>Chess.Api</c> planner, and schedule commands follow the controller's state rules (409 when
-/// refused). Every request is recorded, so tests can assert what was sent and what was not.
+/// come from the real <c>Chess.Api</c> planner, a created schedule is laid out and checked by the real planner and slot
+/// rules (so a player sent with the wrong kind is refused with the API's own message), and schedule commands follow the
+/// controller's state rules (409 when refused). Every request is recorded, so tests can assert what was sent and what was not.
 /// </summary>
 internal sealed class FakeBroadcast
 {
@@ -35,17 +36,38 @@ internal sealed class FakeBroadcast
 
     private readonly Dictionary<Guid, Stored> _schedules = [];
 
+    // The page polls from a timer thread while a test reads and changes the fake, so every access takes this lock.
+    private readonly object _gate = new();
+    private readonly List<RecordedRequest> _seen = [];
+
     private readonly bool _stylesAvailable;
 
     public FakeBroadcast(bool stylesAvailable = true)
     {
         _stylesAvailable = stylesAvailable;
-        Handler = new FakeHandler(Answer);
+        Handler = new FakeHandler(request =>
+        {
+            lock (_gate)
+            {
+                _seen.Add(request);
+                return Answer(request);
+            }
+        });
     }
 
     public FakeHandler Handler { get; }
 
-    public IReadOnlyList<RecordedRequest> Requests => Handler.Requests;
+    /// <summary>A snapshot of every request received so far.</summary>
+    public IReadOnlyList<RecordedRequest> Requests
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _seen];
+            }
+        }
+    }
 
     public Guid SeedSchedule(string status, string name = "Spring day")
     {
@@ -55,13 +77,29 @@ internal sealed class FakeBroadcast
             Slot(0, "gpt", "claude", new DateTimeOffset(2026, 10, 24, 10, 0, 0, TimeSpan.Zero)),
             Slot(1, "claude", "gpt", new DateTimeOffset(2026, 10, 24, 11, 0, 0, TimeSpan.Zero)),
         };
-        _schedules[id] = new Stored(name, status, slots);
+        lock (_gate)
+        {
+            _schedules[id] = new Stored(name, status, slots);
+        }
+
         return id;
     }
 
-    public void SetStatus(Guid id, string status) => _schedules[id] = _schedules[id] with { Status = status };
+    public void SetStatus(Guid id, string status)
+    {
+        lock (_gate)
+        {
+            _schedules[id] = _schedules[id] with { Status = status };
+        }
+    }
 
-    public string StatusOf(Guid id) => _schedules[id].Status;
+    public string StatusOf(Guid id)
+    {
+        lock (_gate)
+        {
+            return _schedules[id].Status;
+        }
+    }
 
     private HttpResponseMessage Answer(RecordedRequest request)
     {
@@ -89,6 +127,11 @@ internal sealed class FakeBroadcast
             return Plan(request.Body!);
         }
 
+        if (request.Method == "POST" && path == "/api/broadcast/schedules")
+        {
+            return Create(request.Body!);
+        }
+
         if (request.Method == "GET" && path == "/api/broadcast/schedules")
         {
             return Canned.Json(JsonSerializer.Serialize(_schedules.Select(pair => Dto(pair.Key, pair.Value)).ToList(), Json));
@@ -99,6 +142,11 @@ internal sealed class FakeBroadcast
             && Guid.TryParse(parts[3], out var id) && _schedules.TryGetValue(id, out var stored))
         {
             var action = parts.Length == 5 ? parts[4] : "";
+            if (request.Method == "DELETE" && action == "")
+            {
+                return Delete(id, stored);
+            }
+
             if (request.Method == "PUT" && action == "slots")
             {
                 return ReplaceSlots(id, stored, request.Body!);
@@ -128,6 +176,91 @@ internal sealed class FakeBroadcast
         };
     }
 
+    /// <summary>
+    /// <c>POST /api/broadcast/schedules</c>: lays the games out with the API's planner, checks them with the API's slot rules
+    /// and the listed models, then saves a draft or, with <c>start</c>, a running schedule. A refusal saves nothing.
+    /// </summary>
+    private HttpResponseMessage Create(string body)
+    {
+        var create = JsonSerializer.Deserialize<ApiBroadcast.CreateScheduleRequest>(body, Json)!;
+        var startsAt = new DateTimeOffset(2026, 10, 24, 10, 0, 0, TimeSpan.Zero);
+
+        IReadOnlyList<(DateTimeOffset Start, DateTimeOffset End)> windows;
+        try
+        {
+            windows = ApiBroadcast.BroadcastPlanner.Layout(create.Games.Count, startsAt, create.AssumedPlies,
+                create.AssumedMoveLatencyMs, create.Pacing);
+        }
+        catch (ApiBroadcast.InvalidPlanException ex)
+        {
+            return Problem(HttpStatusCode.BadRequest, new { title = "Invalid", errors = new { games = new[] { ex.Message } } });
+        }
+
+        var edits = create.Games.Select((game, index) =>
+            new ApiBroadcast.SlotEdit(game.White, game.Black, windows[index].Start, windows[index].End)).ToList();
+        var models = edits.SelectMany(edit => new[] { edit.White.ModelId, edit.Black.ModelId }).Distinct().ToList();
+        var unknown = models.FirstOrDefault(model => !Inputs.ContainsKey(Chess.Api.Catalog.ModelVariant.BaseOf(model)));
+        if (unknown is not null)
+        {
+            return Problem(HttpStatusCode.BadRequest,
+                new { title = "Invalid", errors = new { models = new[] { $"The model '{unknown}' is not one the gateway offers." } } });
+        }
+
+        var hours = (int)Math.Ceiling((windows[^1].End - startsAt).TotalHours);
+        var window = new ApiBroadcast.BroadcastScheduleEntity { StartsAt = startsAt, EndsAt = startsAt.AddHours(hours), Models = models };
+        if (ApiBroadcast.BroadcastEndpoints.SlotErrors(edits, window) is { } errors)
+        {
+            return Problem(HttpStatusCode.BadRequest, new { title = "One or more validation errors occurred.", errors });
+        }
+
+        if (create.Start && OtherChannelBusy(Guid.Empty))
+        {
+            return Problem(HttpStatusCode.Conflict, new
+            {
+                title = "Another broadcast is playing",
+                detail = "Stop or finish the broadcast that is running or paused before starting this one.",
+            });
+        }
+
+        var id = Guid.NewGuid();
+        var slots = edits.Select((edit, index) => new SlotDto(Guid.NewGuid(), index,
+            new PlayerSpec(edit.White.Kind, edit.White.ModelId), new PlayerSpec(edit.Black.Kind, edit.Black.ModelId),
+            edit.PlannedStart, edit.PlannedEnd, "pending", null)).ToList();
+        _schedules[id] = new Stored(create.Name.Trim(), create.Start ? "running" : "draft", slots);
+        return new HttpResponseMessage(HttpStatusCode.Created)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(Detail(id, _schedules[id]), Json), System.Text.Encoding.UTF8, "application/json"),
+        };
+    }
+
+    private HttpResponseMessage Delete(Guid id, Stored stored)
+    {
+        if (stored.Status != "draft")
+        {
+            return Refused(stored.Status, "Only a draft can be deleted.");
+        }
+
+        _schedules.Remove(id);
+        return new HttpResponseMessage(HttpStatusCode.NoContent);
+    }
+
+    private static HttpResponseMessage Problem(HttpStatusCode status, object body) => new(status)
+    {
+        Content = new StringContent(JsonSerializer.Serialize(body, Json), System.Text.Encoding.UTF8, "application/problem+json"),
+    };
+
+    /// <summary>The schedules the fake holds, as stored, for tests that count them.</summary>
+    public IReadOnlyList<(string Name, string Status, int Games)> Schedules
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _schedules.Values.Select(stored => (stored.Name, stored.Status, stored.Slots.Count))];
+            }
+        }
+    }
+
     private HttpResponseMessage ReplaceSlots(Guid id, Stored stored, string body)
     {
         if (stored.Status is not ("draft" or "scheduled"))
@@ -136,7 +269,8 @@ internal sealed class FakeBroadcast
         }
 
         var edits = JsonSerializer.Deserialize<List<SlotEdit>>(body, Json)!;
-        var slots = edits.Select((edit, index) => new SlotDto(Guid.NewGuid(), index, edit.White, edit.Black,
+        var slots = edits.Select((edit, index) => new SlotDto(Guid.NewGuid(), index,
+            new PlayerSpec(edit.White.Kind, edit.White.ModelId), new PlayerSpec(edit.Black.Kind, edit.Black.ModelId),
             edit.PlannedStart, edit.PlannedEnd, "pending", null)).ToList();
         _schedules[id] = stored with { Slots = slots };
         return Canned.Json(JsonSerializer.Serialize(Detail(id, _schedules[id]), Json));

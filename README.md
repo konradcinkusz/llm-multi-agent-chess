@@ -84,7 +84,7 @@ The navigation lists them in this order:
 | Games | `/games`, `/games/{id}` | Paged archive. Replay shows the same move table, engine log and game summary as the live page, with each move's attempts, latency, centipawn loss and best move, and a PGN download. |
 | Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, model and legality. |
 | Viewer requests | `/admin/requests` | Not in the navigation. The requests playing now, the queue with cancel, the recent requests, and a simulate form in Mock mode. See [Viewer-paid games](#viewer-paid-games). |
-| Broadcast plan | `/broadcast/plan` | Add games one by one (White and Black), see the estimated cost of the broadcast, press Start; pause, resume or stop from the list. |
+| Broadcast plan | `/broadcast/plan` | Add games one by one (White and Black), see the estimated cost of the broadcast, press Start; pause, resume or stop (after a confirmation) from the list, and delete a leftover draft. |
 | Site | `/admin/site` | Export the public results site, publish it to the `gh-pages` branch, and see the last export and publish. See [Public results site](#public-results-site). |
 | Broadcast (OBS) | `/broadcast` | The live page, linked from the navigation as "Live broadcast". It is also the page OBS captures. |
 
