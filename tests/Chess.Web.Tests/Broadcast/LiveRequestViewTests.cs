@@ -29,22 +29,6 @@ public class LiveRequestViewTests
         Assert.Null(LiveRequestView.RequestedBy(null, game));
     }
 
-    [Fact]
-    public void RejectionsNameThePayerAndTheMenuAndNeverShowTheReason()
-    {
-        var queue = Queue(recent: [
-                Request("Bo", "gpt", "claude", "rejected", reason: "price above the largest tier"),
-                Request("Cy", "gpt", "claude", "played"),
-                Request("Di", "gpt", "claude", "rejected"),
-                Request("Ed", "gpt", "claude", "rejected"),
-            ]);
-
-        var lines = LiveRequestView.RejectionLines(queue);
-
-        Assert.Equal(["@Bo: credit kept, see the menu", "@Di: credit kept, see the menu"], lines);
-        Assert.DoesNotContain(lines, line => line.Contains("tier", StringComparison.Ordinal));
-    }
-
     [Theory]
     [InlineData(null, "")]
     [InlineData(0, "starts next")]

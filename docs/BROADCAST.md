@@ -146,13 +146,14 @@ The estimate is the normal case, not a ceiling:
 
 ## 3. OBS: Browser Source
 
-The page is a full-screen 1920×1080 layout with no app chrome: the board on the full height, with the status line, the moves
-and the up-next games beside it, with a link to the repository in the header. Each player's
-model and reasoning effort (`model · effort`) show on its side of the board. Everything fits on the one screen; nothing scrolls.
-The row text is 28 px at 1080p (panel headings 25 px), so the stream stays readable on a phone. The same layout fits any
-landscape window, and on a phone held upright `/broadcast` switches to a two-column grid (moves and up next, under the board).
-To force that phone layout on any screen, open
-`/broadcast?view=mobile`. A model without a rating yet shows `prov.` in its rating column. Add the page as a source:
+The page is a full-screen 1920×1080 layout with no app chrome: the board on the full height, and beside it one column that
+takes the rest of the width, with the status line, the moves (which fill the column) and the up-next games, and a link to the
+repository in the header. Each player's model and reasoning effort (`model · effort`) show on its side of the board, and the
+same `model · effort` names are used in the up-next list and the intermission card. Everything fits on the one screen;
+nothing scrolls. The row text is 36 px at 1080p (panel headings 30 px, the floor is 28 px), so the stream stays readable on a
+phone. The same layout fits any landscape window, and on a phone held upright `/broadcast` switches to a two-column grid
+(moves and up next, under the board). To force that phone layout on any screen, open `/broadcast?view=mobile`;
+`/broadcast?theme=light` gives a light background. Add the page as a source:
 
 1. In OBS, select or create a scene for the channel. Set the canvas to **1920×1080** (Settings → Video) and **30 FPS**
    (Settings → Video → Common FPS Values).
@@ -213,8 +214,7 @@ interrupted and its slot is skipped with the note "interrupted by an error".
 
 ## 6. Read the Results page during the stream
 
-Open `http://localhost:5070/results` on the streaming machine or in a browser on the side. It is the same ranking as the mini
-leaderboard on the channel.
+Open `http://localhost:5070/results` on the streaming machine or in a browser on the side. The stage itself shows no ranking.
 
 - Only **finished, decided** games count. The game on air is not in the ranking until it ends, and an interrupted or aborted game
   is never in it.
@@ -251,22 +251,32 @@ The owner's rules, prices and keys are in [docs/REQUESTS.md](REQUESTS.md). This 
   the day ends that hold.
 - A request game is an ordinary rated game. Only the games the broadcast runner plays are paced; nothing else changes.
 
-**Idle replays.** While the broadcast is **running**, no game is on the schedule's slot and **nothing is queued or playing**, the
-`/broadcast` page replays a stored game instead of the intermission card:
+**Intermission and idle replays.** Between two scheduled games the `/broadcast` page shows the **intermission card** over the
+board, which is already set up for the next game: the next start time, the two players and a countdown ("Starts in 12:34", or
+"Starts in 1:29:00" from an hour on, "Starts in a moment" once the start time has passed). No replay plays during that gap. A
+replay plays only when all of these hold:
+
+- the broadcast is **running** (not paused or off air),
+- no game is on the schedule's current slot,
+- **no further game is scheduled** (the "Up next" list is empty), and
+- **nothing is queued or playing** in the request queue.
+
+Then the page replays a stored game instead of the intermission card:
 
 - The game is the best-rated recent finished rated game, with the two models' ratings added. It is not the game just shown.
-- The pace is the schedule's, or one move every 3 s with a 10 s gap when the schedule sends none. Replays cost nothing.
-- A request that arrives during a replay stops the replay at the page's next read of the queue, every 5 s, and the request plays next.
+- The pace is the schedule's move delay, or one move every 3 s when the schedule sends none. The final position stays for 10 s,
+  then the next stored game starts. Replays cost nothing.
+- A request that arrives during a replay, or a game that gets scheduled, stops the replay at the page's next read, every 5 s,
+  and the card returns; a request plays next.
+- With no stored game to replay, the card stays ("The schedule has no further games.").
 
-**Request panels on `/broadcast`.** The OBS page shows:
+**What the stage shows of a request.** The status line names the payer while the request's game is on the board
+("Requested by Ana · Move 12 · GPT is thinking…"). The stage shows no request queue, menu or rejections, and a viewer's
+message text is never shown on the stream.
 
-- **Now playing**, with "requested by" and the payer's display name, while the request's game is on the board.
-- **Next requests**: up to three queued requests, each with its queue position and the estimated wait. The estimate is 20 minutes
-  for each game ahead (`Arena:Requests:EstimatedMinutesPerGame`).
-- **The menu**: each code with its per-side cost, and how to order (`!g <white> vs <black> [style]`).
-- **Recent rejections**, as `@name: credit kept, see the menu`. The page never shows why a command was refused or what was typed.
-
-The panels show only the parsed configuration and the display name. A viewer's message text is never shown on the stream.
+**The page keeps running.** Every read of the poll loop and every game load (the broadcast, the request queue, the schedule, a game) is cut after 20 s,
+and a read that fails or times out is logged and retried on the next poll, so one bad answer or a machine that slept does not
+freeze the stage. While the broadcast cannot be read the header shows "Reconnecting to the arena…".
 
 **Admin.** `/admin/requests` lists what plays, what is queued and what finished recently, with cancel for a queued request. It is
 not in the navigation: open it by its address, `http://localhost:5070/admin/requests`. It has a simulate form in Mock mode only.
