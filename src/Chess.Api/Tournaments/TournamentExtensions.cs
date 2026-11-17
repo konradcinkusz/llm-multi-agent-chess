@@ -37,7 +37,7 @@ public static class TournamentExtensions
                 (int)CostEstimator.AssumedInputTokensPerMove, (int)CostEstimator.AssumedOutputTokensPerMove, models));
         });
 
-        endpoints.MapPost("/tournaments",async Task<Results<Created<TournamentCreatedDto>, ValidationProblem>> (
+        endpoints.MapPost("/tournaments", async Task<Results<Created<TournamentCreatedDto>, ValidationProblem, ProblemHttpResult>> (
             CreateTournamentRequest request,
             TournamentService tournaments,
             ModelCatalog catalog,
@@ -45,6 +45,12 @@ public static class TournamentExtensions
             CancellationToken ct) =>
         {
             var listing = await catalog.GetModelsAsync(ct);
+            if (TournamentRules.GatewayProblem(request.Models ?? [], listing) is { } gatewayProblem)
+            {
+                return TypedResults.Problem(statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "LLM gateway not ready", detail: gatewayProblem);
+            }
+
             var errors = TournamentRules.Validate(request, limits.Value.MaxConcurrentGames, listing);
             if (errors.Count > 0)
             {

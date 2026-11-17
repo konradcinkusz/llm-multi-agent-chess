@@ -1,6 +1,7 @@
 using Chess.Api.Catalog;
 using Chess.Api.Contracts;
 using Chess.Api.Games;
+using Chess.Api.Tournaments;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Options;
@@ -15,7 +16,7 @@ public static class BenchmarkEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapBenchmarkEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/benchmarks", async Task<Results<Created<BenchmarkCreatedDto>, ValidationProblem>> (
+        endpoints.MapPost("/benchmarks", async Task<Results<Created<BenchmarkCreatedDto>, ValidationProblem, ProblemHttpResult>> (
             CreateBenchmarkRequest request,
             BenchmarkService benchmarks,
             ModelCatalog catalog,
@@ -24,6 +25,12 @@ public static class BenchmarkEndpoints
         {
             var listing = await catalog.GetModelsAsync(ct);
             var opponents = BenchmarkRules.OpponentsOf(request, listing);
+            if (TournamentRules.GatewayProblem(opponents.Append(request.Candidate), listing) is { } gatewayProblem)
+            {
+                return TypedResults.Problem(statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "LLM gateway not ready", detail: gatewayProblem);
+            }
+
             var errors = BenchmarkRules.Validate(request, opponents, listing, limits.Value.MaxConcurrentGames);
             if (errors.Count > 0)
             {

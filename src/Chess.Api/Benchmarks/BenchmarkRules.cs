@@ -9,6 +9,12 @@ public static class BenchmarkRules
     /// <summary>Games each opponent plays against the candidate when a request does not say otherwise (03 §12.2).</summary>
     public const int DefaultGamesPerOpponent = 30;
 
+    /// <summary>The most opponents one benchmark may have.</summary>
+    public const int MaxOpponents = 50;
+
+    /// <summary>The most games the candidate may play against each opponent.</summary>
+    public const int MaxGamesPerOpponent = 100;
+
     /// <summary>
     /// The opponents a run plays: the request's list when it names any, else every enabled model in the catalog except the
     /// candidate's model (whatever its effort) and Auto (03 §12.2). The random player is an opponent like any other.
@@ -68,6 +74,10 @@ public static class BenchmarkRules
         {
             errors["opponents"] = ["The candidate cannot be its own opponent."];
         }
+        else if (opponents.Count > MaxOpponents)
+        {
+            errors["opponents"] = [$"A benchmark may have at most {MaxOpponents} opponents."];
+        }
         else
         {
             var problems = opponents.Select(o => ModelVariant.Problem(o, listing)).OfType<string>().ToArray();
@@ -81,6 +91,14 @@ public static class BenchmarkRules
         if (request.GamesPerOpponent < 2 || request.GamesPerOpponent % 2 != 0)
         {
             errors["gamesPerOpponent"] = ["Games per opponent must be an even number, at least 2, so that colours alternate."];
+        }
+        else if (request.GamesPerOpponent > MaxGamesPerOpponent)
+        {
+            errors["gamesPerOpponent"] = [$"Games per opponent may be at most {MaxGamesPerOpponent}."];
+        }
+        else if (!errors.ContainsKey("opponents") && (long)opponents.Count * request.GamesPerOpponent > TournamentRules.MaxGames)
+        {
+            errors["gamesPerOpponent"] = [$"A run may create at most {TournamentRules.MaxGames} games; lower the games per opponent or the number of opponents."];
         }
 
         if (request.MaxConcurrency < 1 || request.MaxConcurrency > maxConcurrentGames)

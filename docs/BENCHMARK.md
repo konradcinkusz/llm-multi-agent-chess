@@ -232,7 +232,9 @@ the sample is small, and it is the number to quote, not the point. The rule of t
 
 **Fingerprint.** The last section names what a reader needs to compare two reports:
 
-- **App version**: the build's version, with the git commit when the build knew it.
+- **App version**: the build's version, with the git commit when the build knew it. The three versions are those of the build
+  that **created the run**, stored with it, not those of the build that renders the report. A run created before they were
+  stored reports the current build's.
 - **Rating formula version**: the version of [RATING.md](RATING.md). Two reports with different formula versions are on
   different scales.
 - **Prompt version**: a hash of the prompt text the models were given. A change to the wording changes it. Two reports
@@ -249,7 +251,7 @@ The scripts use the same endpoints as any client. All paths are under the API (`
 
 | Call | Result |
 |---|---|
-| `POST /api/benchmarks` | `201` with the run and its cost estimate. Body: `{"name","candidate","opponents","gamesPerOpponent","maxConcurrency"}`; `candidate` and `opponents` take full player ids. An unknown effort or an odd number of games is a `400` naming the problem. |
+| `POST /api/benchmarks` | `201` with the run and its cost estimate. Body: `{"name","candidate","opponents","gamesPerOpponent","maxConcurrency"}`; `candidate` and `opponents` take full player ids. An unknown effort, an odd number of games, more than 50 opponents, more than 100 games per opponent or more than 2000 games in all is a `400` naming the problem. While Copilot is not signed in, a run with an LLM is a `503`, as `POST /api/games` is. |
 | `GET /api/benchmarks` | Every benchmark, newest first. |
 | `GET /api/benchmarks/{id}` | One run: `status` (`running`, `finished` or `cancelled`), `gamesFinished` and `gamesTotal`. |
 | `GET /api/benchmarks/{id}/report` | The report as JSON. |
@@ -266,6 +268,9 @@ The API refuses a request from another website, so a page in your browser cannot
 
 - A Copilot candidate on the default profile has **not been run** in the environment that wrote this guide (it has no Copilot
   sign-in). The fake profile runs the whole flow, including a custom endpoint. The owner's live run is the check for Copilot.
+- A gateway error that leaves a move without any reply aborts the game instead of rating a forfeit
+  ([RATING.md §2](RATING.md#2-outcome-of-a-game)), and the run waits 15 s (doubling, up to 2 min) before it starts the next
+  game, so an outage does not drain the run. The aborted games are not replayed: the run ends with fewer rated games.
 - The random player (`random`) can be an opponent, not a candidate. `Auto` is left out of the default opponents.
 - The price data for a Copilot model comes from the Copilot runtime. A model without a price is left out of the estimate, and
   the script says how many.
