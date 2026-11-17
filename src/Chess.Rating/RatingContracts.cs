@@ -22,6 +22,9 @@ public sealed record PairwiseCoefficient(string A, string B, double ExpectedScor
     int HeadToHeadGames, double? HeadToHeadScore);
 public sealed record RatingReport(IReadOnlyList<ModelRating> Models, double WhiteAdvantage, int Games);
 
+/// <summary>A report and every ordered pair of its models (<see cref="RatingCalculator.Matrix"/>).</summary>
+public sealed record RatingWithMatrix(RatingReport Report, IReadOnlyList<PairwiseCoefficient> Matrix);
+
 // Signatures frozen by T0.2; bodies implemented by T1.6 in RatingEngine (RATING.md §3–§6).
 public static class RatingCalculator
 {
@@ -29,6 +32,28 @@ public static class RatingCalculator
         IReadOnlyList<PlayerMoveStats> stats, RatingOptions options) => RatingEngine.Compute(games, stats, options);
     public static PairwiseCoefficient Pairwise(RatingReport report, IReadOnlyList<GameOutcome> games, string a, string b)
         => RatingEngine.Pairwise(report, games, a, b);
+
+    // Additions to the frozen signatures (T0.2). They add a cancellation token and one shared bootstrap; no number changes.
+
+    /// <summary>The same report as <c>Compute(games, stats, options)</c>, stopping when <paramref name="ct"/> is cancelled.</summary>
+    public static RatingReport Compute(IReadOnlyList<GameOutcome> games,
+        IReadOnlyList<PlayerMoveStats> stats, RatingOptions options, CancellationToken ct) => RatingEngine.Compute(games, stats, options, ct);
+
+    /// <summary>
+    /// Every ordered pair of distinct models of <paramref name="report"/>, a-major in the report's order (the diagonal is
+    /// left out). One bootstrap serves all cells, and each cell equals <see cref="Pairwise"/> for the same pair exactly.
+    /// </summary>
+    public static IReadOnlyList<PairwiseCoefficient> Matrix(RatingReport report, IReadOnlyList<GameOutcome> games, CancellationToken ct = default)
+        => RatingEngine.Matrix(report, games, ct);
+
+    /// <summary>
+    /// The report of <c>Compute</c> and its <see cref="Matrix"/> in one pass: when <paramref name="options"/> use the default
+    /// bootstrap (the one <see cref="Pairwise"/> uses) the resamples are fitted once and shared; otherwise the matrix is
+    /// bootstrapped on its own.
+    /// </summary>
+    public static RatingWithMatrix ComputeWithMatrix(IReadOnlyList<GameOutcome> games,
+        IReadOnlyList<PlayerMoveStats> stats, RatingOptions options, CancellationToken ct = default)
+        => RatingEngine.ComputeWithMatrix(games, stats, options, ct);
 
     /// <summary>The same report with its models in the given order. Only the order changes; no number is recomputed.</summary>
     public static RatingReport Order(RatingReport report, RatingOrder order)

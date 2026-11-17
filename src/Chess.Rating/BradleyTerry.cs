@@ -21,7 +21,7 @@ internal static class BradleyTerry
 
     private readonly record struct Game(int White, int Black, double Score);
 
-    internal static Fitted Fit(IReadOnlyList<GameOutcome> games, RatingOptions options)
+    internal static Fitted Fit(IReadOnlyList<GameOutcome> games, RatingOptions options, CancellationToken ct = default)
     {
         if (games.Count == 0)
         {
@@ -45,6 +45,7 @@ internal static class BradleyTerry
 
         for (var iteration = 0; iteration < MaxIterations; iteration++)
         {
+            ct.ThrowIfCancellationRequested();
             var (gradient, hessian) = Derivatives(players, theta, precision, n);
             var step = Solve(hessian, gradient);
             if (options.PriorSigma is null)
@@ -116,12 +117,17 @@ internal static class BradleyTerry
         var dim = n + 1;
         var gradient = new double[dim];
         var hessian = new double[dim, dim];
+
+        // Reused for every game: the three parameters a game touches. The order of the sums is unchanged.
+        Span<int> index = stackalloc int[3];
         foreach (var game in games)
         {
             var e = Sigmoid(K * (theta[game.White] + theta[n] - theta[game.Black]));
             var residual = K * (game.Score - e);
             var weight = K * K * e * (1 - e);
-            var index = new[] { game.White, game.Black, n };
+            index[0] = game.White;
+            index[1] = game.Black;
+            index[2] = n;
             for (var p = 0; p < 3; p++)
             {
                 gradient[index[p]] += Sign[p] * residual;

@@ -16,7 +16,31 @@ internal static class RatingEngine
 
     private sealed record Skill(double Legality, double? MoveQuality, double Quality);
 
-    public static RatingReport Compute(IReadOnlyList<GameOutcome> games, IReadOnlyList<PlayerMoveStats> stats, RatingOptions options)
+    public static RatingReport Compute(IReadOnlyList<GameOutcome> games, IReadOnlyList<PlayerMoveStats> stats, RatingOptions options) =>
+        Compute(games, stats, options, CancellationToken.None);
+
+    public static RatingReport Compute(
+        IReadOnlyList<GameOutcome> games, IReadOnlyList<PlayerMoveStats> stats, RatingOptions options, CancellationToken ct) =>
+        ComputeCore(games, stats, options, ct).Report;
+
+    // The report and every ordered pair of its models, from one bootstrap when the options are the defaults Pairwise uses.
+    public static RatingWithMatrix ComputeWithMatrix(
+        IReadOnlyList<GameOutcome> games, IReadOnlyList<PlayerMoveStats> stats, RatingOptions options, CancellationToken ct)
+    {
+        var core = ComputeCore(games, stats, options, ct);
+        if (core.Ordered.Count == 0)
+        {
+            return new RatingWithMatrix(core.Report, []);
+        }
+
+        var samples = SameBootstrap(options, PairwiseDefaults) ? core.Samples : Bootstrap(core.Ordered, PairwiseDefaults, ct);
+        return new RatingWithMatrix(core.Report, MatrixCells(core.Report, core.Ordered, samples, ct));
+    }
+
+    private sealed record Core(RatingReport Report, List<GameOutcome> Ordered, List<BradleyTerry.Fitted> Samples);
+
+    private static Core ComputeCore(
+        IReadOnlyList<GameOutcome> games, IReadOnlyList<PlayerMoveStats> stats, RatingOptions options, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(games);
         ArgumentNullException.ThrowIfNull(stats);
@@ -26,17 +50,17 @@ internal static class RatingEngine
         var ordered = Canonical(games);
         if (ordered.Count == 0)
         {
-            return new RatingReport(Array.Empty<ModelRating>(), 0, 0);
+            return new Core(new RatingReport(Array.Empty<ModelRating>(), 0, 0), ordered, []);
         }
 
-        var fit = BradleyTerry.Fit(ordered, options);
-        var samples = Bootstrap(ordered, options);
+        var fit = BradleyTerry.Fit(ordered, options, ct);
+        var samples = Bootstrap(ordered, options, ct);
         var models = fit.Ratings.Keys.Order(StringComparer.Ordinal).ToArray();
         var tallies = TallyByModel(ordered);
         var moves = MoveStatistics(stats);
         var skills = models.ToDictionary(m => m, m => SkillOf(m, moves, options.MoveQualityWeight), StringComparer.Ordinal);
         var arena = ArenaScores(models, fit.Ratings, skills, options.ResultWeight);
-        var arenaSamples = ArenaSamples(samples, skills, options.ResultWeight);
+        var arenaSamples = ArenaSamples(samples, skills, options.ResultWeight, ct);
 
         var rows = models.Select(model =>
         {
@@ -54,7 +78,7 @@ internal static class RatingEngine
                 arenaLow, arenaHigh);
         }).ToList();
 
-        return new RatingReport(Sort(rows, RatingOrder.Score), fit.WhiteAdvantage, ordered.Count);
+        return new Core(new RatingReport(Sort(rows, RatingOrder.Score), fit.WhiteAdvantage, ordered.Count), ordered, samples);
     }
 
     // Score: today's leaderboard (RATING.md §6). Conservative: the lower bound of the arena score first, so a model with more
@@ -87,18 +111,65 @@ internal static class RatingEngine
         var rowB = Find(report, b, nameof(b));
 
         // The signature carries no options, so the bootstrap and ResultWeight are the defaults.
-        var defaults = new RatingOptions();
         var ordered = Canonical(games);
+        return PairwiseOf(rowA, rowB, ordered, Bootstrap(ordered, PairwiseDefaults, CancellationToken.None));
+    }
+
+    // Every ordered pair of distinct models of the report, a-major in the report's order: one bootstrap for all cells,
+    // each cell identical to Pairwise(report, games, a, b).
+    public static IReadOnlyList<PairwiseCoefficient> Matrix(
+        RatingReport report, IReadOnlyList<GameOutcome> games, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        ArgumentNullException.ThrowIfNull(games);
+
+        var ordered = Canonical(games);
+        return MatrixCells(report, ordered, Bootstrap(ordered, PairwiseDefaults, ct), ct);
+    }
+
+    private static readonly RatingOptions PairwiseDefaults = new();
+
+    // The resamples depend on these fields only (games, seed, sample count, and the fit's prior and anchor).
+    private static bool SameBootstrap(RatingOptions x, RatingOptions y) =>
+        x.BootstrapSamples == y.BootstrapSamples && x.Seed == y.Seed && x.PriorSigma == y.PriorSigma
+        && x.AnchorModel == y.AnchorModel && x.AnchorRating == y.AnchorRating;
+
+    private static List<PairwiseCoefficient> MatrixCells(
+        RatingReport report, IReadOnlyList<GameOutcome> ordered, IReadOnlyList<BradleyTerry.Fitted> samples, CancellationToken ct)
+    {
+        var cells = new List<PairwiseCoefficient>();
+        foreach (var rowA in report.Models)
+        {
+            foreach (var rowB in report.Models)
+            {
+                if (rowA.Model == rowB.Model)
+                {
+                    continue;
+                }
+
+                ct.ThrowIfCancellationRequested();
+                cells.Add(PairwiseOf(rowA, rowB, ordered, samples));
+            }
+        }
+
+        return cells;
+    }
+
+    private static PairwiseCoefficient PairwiseOf(
+        ModelRating rowA, ModelRating rowB, IReadOnlyList<GameOutcome> ordered, IReadOnlyList<BradleyTerry.Fitted> samples)
+    {
+        var a = rowA.Model;
+        var b = rowB.Model;
         var expected = ExpectedScore(rowA.Rating, rowB.Rating);
         var share = QualityShare(rowA.Quality, rowB.Quality);
-        var rqc = Rqc(rowA.Rating, rowB.Rating, rowA.Quality, rowB.Quality, defaults.ResultWeight);
+        var rqc = Rqc(rowA.Rating, rowB.Rating, rowA.Quality, rowB.Quality, PairwiseDefaults.ResultWeight);
 
         var rqcSamples = new List<double>();
-        foreach (var sample in Bootstrap(ordered, defaults))
+        foreach (var sample in samples)
         {
             if (sample.Ratings.TryGetValue(a, out var ratingA) && sample.Ratings.TryGetValue(b, out var ratingB))
             {
-                rqcSamples.Add(Rqc(ratingA, ratingB, rowA.Quality, rowB.Quality, defaults.ResultWeight));
+                rqcSamples.Add(Rqc(ratingA, ratingB, rowA.Quality, rowB.Quality, PairwiseDefaults.ResultWeight));
             }
         }
 
@@ -219,28 +290,42 @@ internal static class RatingEngine
         return arena;
     }
 
-    // RATING.md §6: each bootstrap resample is refit and anchored like the point estimate.
-    private static List<BradleyTerry.Fitted> Bootstrap(IReadOnlyList<GameOutcome> games, RatingOptions options)
+    // RATING.md §6: each bootstrap resample is refit and anchored like the point estimate. The resamples are drawn first,
+    // in sequence from one seeded generator, so the draws are the ones a sequential loop would make; the fits are
+    // independent of each other and run in parallel, each landing at its own index, so the result does not depend on the schedule.
+    private static List<BradleyTerry.Fitted> Bootstrap(IReadOnlyList<GameOutcome> games, RatingOptions options, CancellationToken ct)
     {
-        var samples = new List<BradleyTerry.Fitted>(options.BootstrapSamples);
-        if (games.Count == 0)
+        if (games.Count == 0 || options.BootstrapSamples == 0)
         {
-            return samples;
+            return [];
         }
 
         var random = new Random(options.Seed);
-        var resample = new GameOutcome[games.Count];
-        for (var b = 0; b < options.BootstrapSamples; b++)
+        var draws = new int[options.BootstrapSamples][];
+        for (var b = 0; b < draws.Length; b++)
         {
-            for (var i = 0; i < resample.Length; i++)
+            var draw = new int[games.Count];
+            for (var i = 0; i < draw.Length; i++)
             {
-                resample[i] = games[random.Next(games.Count)];
+                draw[i] = random.Next(games.Count);
             }
 
-            samples.Add(BradleyTerry.Fit(resample, options));
+            draws[b] = draw;
         }
 
-        return samples;
+        var fits = new BradleyTerry.Fitted[draws.Length];
+        Parallel.For(0, draws.Length, new ParallelOptions { CancellationToken = ct }, b =>
+        {
+            var resample = new GameOutcome[games.Count];
+            for (var i = 0; i < resample.Length; i++)
+            {
+                resample[i] = games[draws[b][i]];
+            }
+
+            fits[b] = BradleyTerry.Fit(resample, options, ct);
+        });
+
+        return [.. fits];
     }
 
     private static List<double> RatingSamples(string model, IEnumerable<BradleyTerry.Fitted> samples) =>
@@ -249,11 +334,12 @@ internal static class RatingEngine
     // RATING.md §6: the arena score of each model on each resample. Each resample has its own field, so a model is
     // scored only against the models that resample rated; a model absent from a resample has no value there.
     private static Dictionary<string, List<double>> ArenaSamples(
-        IReadOnlyList<BradleyTerry.Fitted> samples, IReadOnlyDictionary<string, Skill> skills, double resultWeight)
+        IReadOnlyList<BradleyTerry.Fitted> samples, IReadOnlyDictionary<string, Skill> skills, double resultWeight, CancellationToken ct)
     {
         var values = new Dictionary<string, List<double>>(StringComparer.Ordinal);
         foreach (var sample in samples)
         {
+            ct.ThrowIfCancellationRequested();
             var models = sample.Ratings.Keys.Order(StringComparer.Ordinal).ToArray();
             foreach (var (model, score) in ArenaScores(models, sample.Ratings, skills, resultWeight))
             {
