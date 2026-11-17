@@ -89,9 +89,51 @@ public class SiteGamePageTests
         using var context = new BunitContext();
         var page = Render(context);
 
-        // The start position has 32 pieces; the 12 symbols are defined once for the whole page, not once per board.
+        // The start position has 32 pieces; the 12 piece groups are defined once for the whole page, not once per board.
         Assert.Equal(32, page.Find("figure#ply-0").QuerySelectorAll("use[data-piece]").Count());
-        Assert.Equal(12, page.FindAll("symbol").Count);
+        Assert.Equal(12, page.FindAll("[id^='site-piece-']").Count);
+    }
+
+    [Fact]
+    public void The_sixteen_coordinate_labels_are_defined_once_and_a_board_only_refers_to_them()
+    {
+        using var context = new BunitContext();
+        var page = Render(context);
+
+        var labels = page.FindAll("#site-coords text").Select(text => text.TextContent).ToArray();
+        Assert.Equal(["8", "7", "6", "5", "4", "3", "2", "1", "a", "b", "c", "d", "e", "f", "g", "h"], labels);
+        foreach (var board in page.FindAll("svg.site-board"))
+        {
+            Assert.Empty(board.QuerySelectorAll("text"));
+            Assert.Single(board.QuerySelectorAll("use[href='#site-coords']"));
+        }
+    }
+
+    [Fact]
+    public void A_piece_is_placed_by_x_and_y_alone()
+    {
+        using var context = new BunitContext();
+        var page = Render(context);
+
+        var king = page.Find("figure#ply-0 use[data-piece='K']");
+
+        Assert.Equal(["data-piece", "href", "x", "y"], king.Attributes.Select(a => a.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(("400", "700"), (king.GetAttribute("x"), king.GetAttribute("y")));
+    }
+
+    [Fact]
+    public void A_two_hundred_ply_game_page_stays_under_700_kb()
+    {
+        // Measured at 1 067 482 bytes before the coordinates became one shared group and a piece lost its width and height.
+        var summary = Summary with { PlyCount = 200, Termination = "adjudicated", Result = "1/2-1/2" };
+        using var context = new BunitContext();
+        var game = SiteGameDataSet.Play(summary, SiteGameDataSet.KnightShuffle(200));
+
+        var page = context.Render<SiteGamePage>(parameters => parameters
+            .Add(p => p.Frame, Frame).Add(p => p.Game, game).Add(p => p.KeepsLog, false));
+
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(page.Markup);
+        Assert.True(bytes < 700_000, $"The page is {bytes:N0} bytes.");
     }
 
     [Fact]

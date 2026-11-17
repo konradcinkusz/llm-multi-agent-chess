@@ -55,10 +55,17 @@
             <dl class="site-facts">
                 <dt>Pages</dt><dd id="site-pages">@export.Pages</dd>
                 <dt>Finished games</dt><dd>@export.Games</dd>
-                <dt>Size</dt><dd>@SiteFormat.Size(export.Bytes)</dd>
+                <dt>Size</dt><dd><span id="site-size">@SiteFormat.Size(export.Bytes)</span> <span class="muted" id="site-share">(@SiteFormat.PagesShare(export.Bytes))</span></dd>
                 <dt>Taken</dt><dd>@SiteFormat.Stamp(export.TakenAt)</dd>
                 <dt>Folder</dt><dd><code>@Site.ExportDirectory</code></dd>
             </dl>
+            @if (SiteFormat.NearPagesLimit(export.Bytes))
+            {
+                <p class="callout callout-warning" id="site-size-warning" role="status">
+                    The export is close to the 1 GB limit of a GitHub Pages site. Lower <code>Arena:Site:FullLogGames</code> to drop the
+                    engine log of more games, or the deploy will fail once the limit is passed.
+                </p>
+            }
         }
         else
         {

@@ -67,6 +67,24 @@ public class SitePageTests : IDisposable
     }
 
     [Fact]
+    public void The_export_size_is_shown_against_the_one_gigabyte_limit_and_a_near_limit_is_warned_about()
+    {
+        using var ctx = new BunitContext();
+        var small = Render(ctx, new SiteFakeExporter { TakenAt = Now }, new SiteFakePublisher());
+        Click(small, "Export");
+        small.WaitForAssertion(() => Assert.Contains("of the 1 GB limit", small.Find("#site-share").TextContent));
+        Assert.Empty(small.FindAll("#site-size-warning"));
+
+        using var big = new BunitContext();
+        var near = Render(big, new SiteFakeExporter { Behaviour = _ => new Chess.Web.Site.SiteExportResult(3, 1, 900L * 1024 * 1024, Now) },
+            new SiteFakePublisher());
+        Click(near, "Export");
+
+        near.WaitForAssertion(() => Assert.Contains("87.9%", near.Find("#site-share").TextContent));
+        Assert.Contains("close to the 1 GB limit", near.Find("#site-size-warning").TextContent);
+    }
+
+    [Fact]
     public void A_failing_export_is_shown_as_an_error_and_does_not_throw()
     {
         using var ctx = new BunitContext();
