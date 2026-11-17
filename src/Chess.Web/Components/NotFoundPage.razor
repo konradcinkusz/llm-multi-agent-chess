@@ -1,0 +1,30 @@
+@page "/not-found"
+
+<PageTitle>Page not found · LLM Chess Arena</PageTitle>
+
+@* An unknown address: the router in the circuit, and the status-code re-execute for a direct request (404 either way). *@
+<header class="page-header">
+    <h1>Page not found</h1>
+    <p class="page-lede">There is nothing at this address. It may have been mistyped, or the game or tournament is gone.</p>
+</header>
+
+<div class="card stack" data-testid="not-found">
+    <p>Go back to <a href="/results" data-testid="not-found-results">Results</a>, or pick a page from the navigation above.</p>
+</div>
+
+@code {
+    /// <summary>The route the status-code re-execute renders, and where <c>App.razor</c> turns off interactivity.</summary>
+    public const string Path = "/not-found";
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // A server-rendered response (HttpContext is null in the circuit) is a 404 even when asked for as /not-found.
+        if (HttpContext is { Response.HasStarted: false } context)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

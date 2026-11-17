@@ -106,9 +106,12 @@ These hold on `main`. The CI jobs named in brackets enforce the ones they name.
 
 Fixes merged to `main`, with their pull request numbers in brackets. Keep them in mind before touching the same code.
 
-- **Render mode on the root components.** Without `@rendermode="InteractiveServer"` on `Routes` and `HeadOutlet` in
+- **Render mode on the root components.** Without `@rendermode` on `Routes` and `HeadOutlet` in
   `App.razor`, every page was static SSR and buttons, forms and the live game stream did nothing (#47). Keep the render mode
-  on both. A test pins the root component.
+  on both. It is `InteractiveServer` **without prerender** (`new InteractiveServerRenderMode(prerender: false)`): a prerender
+  awaits the API, so with the API frozen a page load stayed blank for minutes. The one page rendered on the server is
+  `/not-found` (the status-code re-execute target), so that an unknown address answers 404 with the layout. Tests pin
+  the root component.
 - **Link the scoped styles bundle.** Each page's `.razor.css` compiles into `Chess.Web.styles.css`, which must be linked in
   `App.razor` with `@Assets["Chess.Web.styles.css"]`. Without the link every page rendered unstyled (#56). A test pins the link.
 - **Call `StateHasChanged` after a background refresh.** A `PeriodicTimer` reload runs on a timer thread, outside any UI event.
