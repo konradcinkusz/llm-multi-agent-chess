@@ -7,6 +7,10 @@ internal sealed class ScriptedUciEngine : IUciEngine
 {
     private readonly Dictionary<string, UciSearch> _answers = new();
 
+    public bool IsAvailable => true;
+
+    public Task EnsureReadyAsync(CancellationToken ct) => Task.CompletedTask;
+
     public List<(string Fen, string Moves, int Depth)> Requests { get; } = [];
 
     public ScriptedUciEngine Answer(string fen, string moves, UciSearch search)

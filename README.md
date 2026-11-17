@@ -37,7 +37,7 @@ It runs on `localhost` only. Nothing is deployed. Every game, move, LLM attempt 
 | The browser journeys (`tests/Chess.E2E`) | **A Chromium.** Point `E2E_CHROMIUM_PATH` at one, or run `pwsh tests/Chess.E2E/bin/Debug/net10.0/playwright.ps1 install chromium` once. See [Tests and CI](#tests-and-ci). |
 | The default profile | **Docker**, running. The AppHost starts PostgreSQL in a container. |
 | LLM players | **GitHub Copilot CLI** (`copilot`) installed and logged in on this machine. The app uses that login, or the `copilot-github-token` AppHost secret parameter when you set one. The `fake` profile and `random` players do not need it. |
-| Move-quality analysis (optional) | **Stockfish** on `PATH`, or the path in `Analysis:StockfishPath` in `src/Chess.Api/appsettings.json`. Without it the arena still works; move quality is disabled and the ranking uses legality only. |
+| Move-quality analysis (optional) | **Stockfish** on `PATH`, or the path in `Analysis:StockfishPath` in `src/Chess.Api/appsettings.json`. Without it the arena still works; move quality is disabled and the ranking uses legality only. A binary that does not answer the UCI handshake within `Analysis:HandshakeTimeoutSeconds` (default 10), or a search that runs past `Analysis:SearchTimeoutSeconds` (default 60), is stopped and the arena carries on without it (a game that reaches `MaxPlies` is then adjudicated on material); the next try comes after `Analysis:RetryAfterSeconds` (default 30). |
 
 Run `scripts/dev-setup.sh` to see what is installed and what is missing. It only reports; it never installs.
 
@@ -261,6 +261,7 @@ curl -s http://127.0.0.1:5080/health
 | `database` | Degraded, *migrating* | Wait a few seconds; the app is applying migrations on start. |
 | `database` | Unhealthy, with the error message | PostgreSQL is not reachable or the migration failed. Check that Docker is running (default profile) and read the error in the Aspire dashboard. |
 | `stockfish` | Healthy, *available* | Move quality is computed for finished games. `/api/status` reports `"stockfish": "available"`. |
+| `stockfish` | Degraded, *binary does not work — move quality disabled: …* | A binary is configured or on `PATH`, but it could not start or did not answer the UCI handshake in time. The detail names the cause. Check `Analysis:StockfishPath` points at a Stockfish (or another UCI engine). `/api/status` reports `"stockfish": "degraded"`. |
 | `stockfish` | Healthy, *absent — move quality disabled* | Normal without Stockfish. `/api/status` reports `"stockfish": "absent"`. Install it, or set `Analysis:StockfishPath`. |
 
 The Copilot check is never Unhealthy, and `/health` answers HTTP 200 even when a check is Degraded. Tell the states apart by the `status` field of each check, not by the HTTP code.
