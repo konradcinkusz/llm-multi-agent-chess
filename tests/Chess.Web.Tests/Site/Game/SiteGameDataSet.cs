@@ -17,6 +17,9 @@ internal static class SiteGameDataSet
     /// <summary>The page size of <c>GET /api/attempts</c> here, so a game's log takes more than one request.</summary>
     public const int AttemptPageSize = 20;
 
+    /// <summary>Text a model could send: a script element, an event handler and an anchor. The site must show it as text.</summary>
+    public const string Hostile = "<script>alert(1)</script><img src=x onerror=alert(2)> <a href=\"https://evil.example/\">x</a>";
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>The answer to a game call, or null when the call is not one of the game's.</summary>
@@ -43,6 +46,7 @@ internal static class SiteGameDataSet
         return parts.Length switch
         {
             4 => Body(Play(summary, KnightShuffle(summary.PlyCount))),
+            5 when parts[4] == "pgn" && HasNoPgn(summary) => NoPgn(),
             5 when parts[4] == "pgn" => Text(PgnText(summary)),
             _ => null,
         };
@@ -107,13 +111,13 @@ internal static class SiteGameDataSet
                 var model = move.Color == "white" ? summary.White.ModelId : summary.Black.ModelId;
                 if (move.Ply == 1)
                 {
-                    all.Add(new AttemptDto(gameId, 1, 1, model, "Prompt for ply 1", "Qxe9", null, false, 900, null,
+                    all.Add(new AttemptDto(gameId, 1, 1, model, $"Prompt for ply 1 {Hostile}", "Qxe9", null, false, 900, null,
                         summary.CreatedAt, Reasoning: null, InputTokens: 500, OutputTokens: 20, RejectionKind: "illegal"));
                 }
 
                 all.Add(new AttemptDto(gameId, move.Ply, move.Ply == 1 ? 2 : 1, model, $"Prompt for ply {move.Ply}", move.San,
                     move.San, true, 1200, null, summary.CreatedAt,
-                    Reasoning: move.Color == "white" ? "Developing the knight." : null,
+                    Reasoning: move.Color == "white" ? $"Developing the knight. {Hostile}" : null,
                     InputTokens: 500, OutputTokens: 20, ReasoningTokens: null, AiCredits: 1.25));
             }
         }
@@ -121,6 +125,16 @@ internal static class SiteGameDataSet
         var items = all.Skip((page - 1) * AttemptPageSize).Take(AttemptPageSize).ToList();
         return new PageDto<AttemptDto>(items, page, AttemptPageSize, all.Count);
     }
+
+    /// <summary>The games the API writes no PGN for: the one that is only listed for that, and the games that finished undecided.</summary>
+    private static bool HasNoPgn(GameSummaryDto game) => game.Id == SiteDataSet.NoPgnGame || game.Result == "*";
+
+    /// <summary>What the API answers for a game without a PGN: 409 Conflict with a problem body.</summary>
+    private static HttpResponseMessage NoPgn() =>
+        new(HttpStatusCode.Conflict)
+        {
+            Content = new StringContent("""{"title":"No PGN yet","status":409}""", Encoding.UTF8, "application/problem+json"),
+        };
 
     private static HttpResponseMessage Body<T>(T value) =>
         new(HttpStatusCode.OK)

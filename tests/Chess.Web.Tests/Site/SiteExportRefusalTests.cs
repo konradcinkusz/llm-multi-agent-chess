@@ -31,4 +31,52 @@ public class SiteExportRefusalTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task A_failure_while_exporting_a_game_names_the_game()
+    {
+        await using var app = new SiteExportApp
+        {
+            Override = request => request.Target.EndsWith($"{SiteDataSet.GameId(3)}/pgn", StringComparison.Ordinal)
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+                : null,
+        };
+        var directory = Path.Combine(Path.GetTempPath(), "chess-site-fail-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var exporter = app.Services.GetRequiredService<ISiteExporter>();
+
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => exporter.ExportAsync(directory, CancellationToken.None));
+
+            Assert.Contains(SiteDataSet.GameId(3).ToString("D"), failure.Message, StringComparison.Ordinal);
+            Assert.Contains("500", failure.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Games_that_finished_undecided_are_never_asked_for_a_pgn_a_page_or_a_usage()
+    {
+        await using var app = new SiteExportApp();
+        var (directory, _) = await app.ExportAsync();
+
+        try
+        {
+            foreach (var undecided in new[] { SiteDataSet.AbortedGame, SiteDataSet.RestartedGame })
+            {
+                Assert.DoesNotContain(app.Api.Requests, request => request.Target.Contains(undecided.ToString("D"), StringComparison.Ordinal));
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }

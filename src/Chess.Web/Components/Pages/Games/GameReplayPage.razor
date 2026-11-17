@@ -33,7 +33,7 @@ else
             @summary.PlyCount plies · @GameFormat.When(summary.CreatedAt)
             @if (summary.TournamentId is { } tournamentId)
             {
-                <span> · <a href="/tournaments/@tournamentId">Tournament</a></span>
+                <span> · <a href="@(_isBenchmark ? $"/benchmark/{tournamentId}" : $"/tournaments/{tournamentId}")">@(_isBenchmark ? "Benchmark" : "Tournament")</a></span>
             }
         </p>
     </header>
@@ -126,6 +126,7 @@ else
     private GameUsageDto? _usage;
     private string? _usageMessage;
     private int _ply;
+    private bool _isBenchmark;
 
     /// <summary>The game to replay, from the route.</summary>
     [Parameter]
@@ -168,6 +169,7 @@ else
         _usage = null;
         _usageMessage = null;
         _ply = 0;
+        _isBenchmark = false;
 
         try
         {
@@ -185,6 +187,7 @@ else
         }
 
         await LoadAttemptsAsync(id);
+        await LoadBenchmarkAsync(_game.Summary.TournamentId);
 
         // The PGN is written when the game ends, and so is the usage summary: only a finished game has them.
         if (_game.Summary.State == "finished")
@@ -219,6 +222,25 @@ else
         catch (HttpRequestException ex)
         {
             _attemptsError = ex.Message;
+        }
+    }
+
+    /// <summary>A game of a benchmark run has a tournament id too, but its page is /benchmark/{id}, not /tournaments/{id}.</summary>
+    private async Task LoadBenchmarkAsync(Guid? tournamentId)
+    {
+        if (tournamentId is not { } id)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.GetBenchmarkAsync(id, _cts.Token);
+            _isBenchmark = true;
+        }
+        catch (HttpRequestException)
+        {
+            // Not a benchmark (a 404), or the lookup failed: the link stays the tournament's.
         }
     }
 

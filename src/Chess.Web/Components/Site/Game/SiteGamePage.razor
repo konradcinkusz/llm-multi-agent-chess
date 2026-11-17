@@ -14,7 +14,7 @@
         <p class="page-lede" data-section="summary">
             @GameFormat.State(Summary.State) · result @Summary.Result · @GameFormat.Termination(Summary.Termination) ·
             @Game.Moves.Count plies · @GameFormat.When(Summary.CreatedAt)
-            @if (Summary.TournamentId is { } tournamentId)
+            @if (TournamentListed && Summary.TournamentId is { } tournamentId)
             {
                 <span> · <a href="@Frame.Link(SitePaths.Tournament(tournamentId))">Tournament</a></span>
             }
@@ -39,7 +39,10 @@
     <section class="card stack" data-section="moves" aria-labelledby="moves-heading">
         <div class="card-header">
             <h2 id="moves-heading" class="card-title">Moves</h2>
-            <a class="btn btn-sm" href="@SiteGameRules.PgnFileName" download data-section="pgn">Download PGN</a>
+            @if (HasPgn)
+            {
+                <a class="btn btn-sm" href="@SiteGameRules.PgnFileName" download data-section="pgn">Download PGN</a>
+            }
         </div>
         <SiteMoveTable Moves="Game.Moves" />
     </section>
@@ -87,6 +90,14 @@
     /// <summary>False for the games older than the <c>Arena:Site:FullLogGames</c> newest: the page says so instead of a log.</summary>
     [Parameter]
     public bool KeepsLog { get; set; } = true;
+
+    /// <summary>False when the API has no PGN for the game: the page shows no Download link (the file is not written).</summary>
+    [Parameter]
+    public bool HasPgn { get; set; } = true;
+
+    /// <summary>True when the game's tournament has a page on the site. Benchmark runs are not listed as tournaments, so they get no link.</summary>
+    [Parameter]
+    public bool TournamentListed { get; set; } = true;
 
     private GameSummaryDto Summary => Game.Summary;
 

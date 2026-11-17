@@ -206,6 +206,39 @@ public class SiteGamePageTests
         Assert.DoesNotContain("blazor", page.Markup, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void A_model_id_and_a_reply_with_markup_are_text_and_no_link_or_element_comes_of_them()
+    {
+        const string hostile = "<script>alert(1)</script><a href=\"javascript:alert(2)\">x</a>";
+        var summary = Summary with { White = new PlayerSpec("llm", hostile), Black = new PlayerSpec("llm", "beta<img src=x onerror=alert(3)>") };
+        using var context = new BunitContext();
+        var game = SiteGameDataSet.Play(summary, ScholarsMate);
+        var page = context.Render<SiteGamePage>(parameters => parameters
+            .Add(p => p.Frame, Frame)
+            .Add(p => p.Game, game)
+            .Add(p => p.Attempts, new List<EngineEntry>
+            {
+                new(1, 1, hostile, hostile, hostile, hostile, "e4", true, null, 1, 1, 1, null, 0.1, null),
+            }));
+
+        Assert.Empty(page.FindAll("script"));
+        Assert.Empty(page.FindAll("img"));
+        Assert.Empty(page.FindAll("a[href^='javascript' i]"));
+        Assert.Contains("&lt;script&gt;alert(1)&lt;/script&gt;", page.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_game_without_a_pgn_shows_no_download_link()
+    {
+        using var context = new BunitContext();
+        var game = SiteGameDataSet.Play(Summary, ScholarsMate);
+        var page = context.Render<SiteGamePage>(parameters => parameters
+            .Add(p => p.Frame, Frame).Add(p => p.Game, game).Add(p => p.HasPgn, false));
+
+        Assert.Empty(page.FindAll("[data-section='pgn']"));
+        Assert.DoesNotContain("game.pgn", page.Markup, StringComparison.Ordinal);
+    }
+
     private static IRenderedComponent<SiteGamePage> Render(BunitContext context, bool keepsLog = true, GameUsageDto? usage = null)
     {
         var game = SiteGameDataSet.Play(Summary, ScholarsMate);
