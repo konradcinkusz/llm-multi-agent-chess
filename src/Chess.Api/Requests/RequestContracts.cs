@@ -48,6 +48,7 @@ public interface IGameRequestQueue
 /// <summary>The status vocabulary of a request (03 §15.4).</summary>
 public static class RequestStatus
 {
+    /// <summary>Never set by the app today (a request is stored as queued or rejected); kept because persisted values and 03 §15.4 name it.</summary>
     public const string Received = "received";
     public const string Queued = "queued";
     public const string Playing = "playing";
