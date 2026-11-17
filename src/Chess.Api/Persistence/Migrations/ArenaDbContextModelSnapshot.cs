@@ -17,7 +17,7 @@ namespace Chess.Api.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -385,6 +385,8 @@ namespace Chess.Api.Persistence.Migrations
 
                     b.HasKey("GameId", "Ply", "Number");
 
+                    b.HasIndex("CreatedAt", "GameId", "Ply", "Number");
+
                     b.ToTable("move_attempts", (string)null);
                 });
 
@@ -569,6 +571,10 @@ namespace Chess.Api.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AppVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("app_version");
+
                     b.Property<string>("Candidate")
                         .HasColumnType("text")
                         .HasColumnName("candidate");
@@ -580,6 +586,10 @@ namespace Chess.Api.Persistence.Migrations
                     b.Property<DateTimeOffset?>("FinishedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("finished_at");
+
+                    b.Property<string>("FormulaVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("formula_version");
 
                     b.Property<int>("GamesPerPair")
                         .HasColumnType("integer")
@@ -605,6 +615,10 @@ namespace Chess.Api.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
+
+                    b.Property<string>("PromptVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("prompt_version");
 
                     b.Property<string>("Status")
                         .IsRequired()

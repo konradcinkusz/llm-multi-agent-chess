@@ -8,4 +8,13 @@ public sealed class GameRunnerOptions
 
     /// <summary>Plies after which a game is adjudicated (RATING.md §2).</summary>
     public int MaxPlies { get; set; } = 200;
+
+    /// <summary>
+    /// How long tournament and benchmark dispatch waits after a game ended in a technical failure (the gateway errored, see
+    /// <see cref="TechnicalFailureCooldown"/>). It doubles with each failure in a row, up to <see cref="MaxTechnicalCooldown"/>.
+    /// </summary>
+    public TimeSpan TechnicalCooldown { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>The longest pause <see cref="TechnicalCooldown"/> grows to.</summary>
+    public TimeSpan MaxTechnicalCooldown { get; set; } = TimeSpan.FromMinutes(2);
 }

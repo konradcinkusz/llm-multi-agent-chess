@@ -36,6 +36,13 @@ the model's default effort and the `classic` prompt style.
 
 A model that cannot produce legal moves therefore **loses** — it never gets a free move.
 
+**A gateway error is not a forfeit.** A move whose every attempt ended in a gateway error (the Copilot runtime failed, was not
+connected or refused the request; the attempt's kind is `error`) got no reply from the model at all. The game is then
+**aborted**, termination `aborted`, and the rating leaves it out, as it leaves out any aborted game. This holds for every
+game, not only a broadcast's. A timeout, an illegal reply or an unparseable reply is still the model's own failure and still
+a forfeit, and so is a move whose attempts mix errors with those. The formula and the table above are unchanged. After such
+an abort a tournament or benchmark starts no new game for a while (15 s, doubling to 2 min while it keeps failing; ADR-017).
+
 ## 3. Strength — `R` (Bradley–Terry, Elo scale, with first-move advantage)
 
 For a game between White *w* and Black *b*:

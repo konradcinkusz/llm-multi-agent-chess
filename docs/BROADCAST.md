@@ -145,6 +145,7 @@ The app does not stream. Set up the stream in OBS and YouTube:
 **A restart of the app** (a crash, an update, a reboot): a day that was running resumes at its next unfinished slot.
 
 - The slot in play is skipped with the note "interrupted by a restart". Its game is closed as interrupted and is **not rated**.
+- A slot or request game that was saved but had not started is closed as interrupted too, so it is never played unpaced after the restart. Only games that no tournament, benchmark, slot or request owns are queued again.
 - Slots whose start time passed during the downtime are played at once, one after another with the game gap, so the channel catches up.
 - A day that was paused stays paused until you press **Resume**.
 

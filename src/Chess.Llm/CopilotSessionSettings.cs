@@ -45,6 +45,8 @@ internal static class CopilotSessionSettings
         // No tools: an empty allow-list, and every permission request is rejected as a second guard.
         AvailableTools = [],
         Streaming = false,
+        // A conversation is one side of one game (or one move): nothing resumes it, so no workspace is kept on disk for it.
+        InfiniteSessions = new InfiniteSessionConfig { Enabled = false },
         OnPermissionRequest = RejectAllPermissions,
     };
 

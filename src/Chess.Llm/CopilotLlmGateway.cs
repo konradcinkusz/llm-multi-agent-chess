@@ -12,7 +12,8 @@ namespace Chess.Llm;
 /// <see cref="StartAsync"/> (called from the hosted service) and never throws out of it: a runtime that
 /// cannot start, is not signed in or lists no models is reported through <see cref="Status"/>.
 /// </summary>
-public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions<ArenaOptions> arena, ILogger<CopilotLlmGateway> logger) : ILlmGateway
+public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions<ArenaOptions> arena, ILogger<CopilotLlmGateway> logger)
+    : ILlmGateway, ICopilotRuntime
 {
     private static readonly ActivitySource ActivitySource = new("Chess.Llm");
 
@@ -40,6 +41,8 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(_options.StartupTimeout);
 
+            // The start runs in the background (CopilotClientHostedService): until it ends the gateway says so, and is degraded.
+            _status = new LlmGatewayStatus(LlmGatewayState.Unavailable, "Copilot runtime is starting");
             try
             {
                 _client = new CopilotClient(BuildClientOptions());
@@ -92,7 +95,17 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
     public async Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(CancellationToken ct)
     {
         var client = RequireReady();
-        var models = await client.ListModelsAsync(ct);
+        IList<ModelInfo> models;
+        try
+        {
+            models = await client.ListModelsAsync(ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The SDK throws this when the client is not connected or not authenticated (documented on ListModelsAsync).
+            throw new LlmUnavailableException($"The Copilot runtime could not list models: {ex.Message}");
+        }
+
         var priceUnits = await ListPriceUnitsAsync(client, ct);
 
         var copilot = models
@@ -182,8 +195,21 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
             ? CopilotSessionSettings.ForCopilotModel(options)
             : CopilotSessionSettings.ForCustomModel(options, custom);
 
-        var session = await client.CreateSessionAsync(config, ct);
-        return new CopilotConversation(session, options, logger);
+        // Board and think open a session for every move, so a runtime that hangs here must not hold a game for ever.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(_options.SessionStartTimeout);
+        CopilotSession session;
+        try
+        {
+            session = await client.CreateSessionAsync(config, timeout.Token);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"The Copilot runtime did not open a session for {options.ModelId} within {_options.SessionStartTimeout}.", ex);
+        }
+
+        return new CopilotConversation(session, options, logger, (id, token) => client.DeleteSessionAsync(id, token));
     }
 
     // The wire value of Rpc.ModelPolicyState.Disabled; the SDK type itself is experimental.
@@ -243,11 +269,15 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
         private UsageTally _usage = new();
         private readonly List<string> _reasoningBlocks = [];
 
-        public CopilotConversation(CopilotSession session, LlmConversationOptions options, ILogger logger)
+        private readonly Func<string, CancellationToken, Task> _delete;
+
+        public CopilotConversation(CopilotSession session, LlmConversationOptions options, ILogger logger,
+            Func<string, CancellationToken, Task> delete)
         {
             _session = session;
             _options = options;
             _logger = logger;
+            _delete = delete;
             _usageSubscription = session.On<AssistantUsageEvent>(AddUsage);
             _reasoningSubscription = session.On<AssistantReasoningEvent>(AddReasoning);
         }
@@ -311,7 +341,12 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
         {
             _usageSubscription.Dispose();
             _reasoningSubscription.Dispose();
+            var sessionId = _session.SessionId;
             await _session.DisposeAsync();
+
+            // Dispose only releases the session in memory; its state stays on disk until it is deleted (SDK docs of
+            // CopilotSession.DisposeAsync and CopilotClient.DeleteSessionAsync). A benchmark opens thousands of them.
+            await SessionCleanup.DeleteQuietlyAsync(_delete, sessionId, _logger);
         }
 
         private void AddUsage(AssistantUsageEvent e)

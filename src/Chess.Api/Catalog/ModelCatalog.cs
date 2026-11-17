@@ -48,6 +48,11 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
             // Not cached: the next request asks the gateway again.
             return NotReady(gateway.Status.State);
         }
+        catch (InvalidOperationException ex)
+        {
+            // The Copilot SDK documents this for a client that is not connected; it is a gateway that cannot answer, not a 500.
+            return new ModelListing([Random], $"LLM gateway is not connected ({ex.Message}); only the random player is available");
+        }
     }
 
     private static bool IsAuto(ModelDto model) => IsAutoModel(model.Id);

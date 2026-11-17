@@ -282,3 +282,27 @@ terms. The app runs on localhost only.
 not live data. Super Chat cannot refund, so failures become credit. The YouTube Data API quota bounds the poll rate. A
 request game that hits its budget is adjudicated. Before going live, the owner checks the YouTube Super Chat policy and
 the tax treatment of the income.
+
+## ADR-017 — A gateway error aborts the game; dispatch backs off
+
+**Status:** Accepted (2026-11-17).
+
+**Context.** `LlmChessPlayer` turns a gateway exception into a rejected attempt, so three failures in a row forfeited the side
+and the game was rated as a win for the opponent. The broadcast runner had its own rule for this (a move with no reply aborts
+the game); tournaments, benchmarks and the Play page had none. A Copilot outage of five minutes therefore turned a 360-game
+benchmark into rated wins, because the scheduler tops a run up to its concurrency every second.
+
+**Decision.**
+
+1. A forfeit in which every attempt is a gateway error (attempt kind `error`) is not a forfeit. The game runner aborts the
+   game, records its attempts and closes it as `aborted`, which the rating leaves out. This applies to every game. Timeouts,
+   illegal replies and unparseable replies stay forfeits (RATING.md §2); the formula does not change. The rule is applied in
+   `GameRun`, above the player: `LlmChessPlayer` still records every failure as an attempt.
+2. A game that ends in a technical failure (rule 1, a conversation that could not be opened, a crash) starts a cooldown
+   (`TechnicalFailureCooldown`, `Arena:TechnicalCooldown`, default 15 s, doubling per failure in a row up to
+   `Arena:MaxTechnicalCooldown`, default 2 min). While it holds, `TournamentService` hands no new game to the runner. A game
+   played to a real end clears it. The broadcast runner keeps its own back-off.
+
+**Consequences.** An outage costs the games that were running, not the whole run, and none of them is rated. An aborted
+tournament game is not replayed: the run finishes with fewer rated games than it planned, and the progress counts it as
+finished. A model that never answers (a bad id) slows the run down by the cooldown, not stops it.

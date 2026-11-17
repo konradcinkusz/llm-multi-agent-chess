@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Chess.Analysis;
+using Chess.Api.Broadcast;
 using Chess.Api.Persistence;
 using Chess.Api.Persistence.Entities;
 using Chess.Api.Players;
-using Chess.Engine;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,7 +17,10 @@ namespace Chess.Api.Games;
 /// that many games run at once and no more. A game that fails, or is aborted, is recorded as <c>aborted</c>, and its
 /// worker goes on with the next game. A game cut off by the host stopping is left started; the start-up sweep closes it.
 /// Once the schema is ready, the games saved as queued but never started are queued again, oldest first, because the
-/// queue itself is lost with the process.
+/// queue itself is lost with the process. Only a game nobody else owns is queued again: a tournament or benchmark game is
+/// dispatched by its tournament (with its concurrency), and a broadcast slot or request game is played by the broadcast runner.
+/// A game that ends in a technical failure (the gateway never answered) is aborted, not rated, and starts the
+/// <see cref="TechnicalFailureCooldown"/>.
 /// </summary>
 public sealed class GameRunner(
     IDbContextFactory<ArenaDbContext> factory,
@@ -27,7 +30,8 @@ public sealed class GameRunner(
     IOptions<GameRunnerOptions> options,
     TimeProvider clock,
     DatabaseReadiness readiness,
-    ILogger<GameRunner> logger) : BackgroundService, IGameRunner
+    ILogger<GameRunner> logger,
+    TechnicalFailureCooldown? cooldown = null) : BackgroundService, IGameRunner
 {
     private const int QueueCapacity = 1024;
 
@@ -114,8 +118,13 @@ public sealed class GameRunner(
     private async Task<List<Guid>> QueuedGameIdsAsync(CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        // A game that a tournament, a broadcast slot or a request refers to is not ours to start (03 §9, §15; the tournament
+        // scheduler re-dispatches its own games, the broadcast runner plays the others paced).
         return await db.Games
-            .Where(g => g.StartedAt == null && g.FinishedAt == null)
+            .Where(g => g.StartedAt == null && g.FinishedAt == null
+                && g.TournamentId == null
+                && !db.BroadcastSlots.Any(slot => slot.GameId == g.Id)
+                && !db.GameRequests.Any(request => request.GameId == g.Id))
             .OrderBy(g => g.CreatedAt)
             .Select(g => g.Id)
             .ToListAsync(ct);
@@ -200,7 +209,7 @@ public sealed class GameRunner(
                 return null;
             }
 
-            var run = new GameRun(db, game, hooks?.Players ?? players, analyzer, events, options.Value, clock, PacerOf(hooks, gameId));
+            var run = new GameRun(db, game, hooks?.Players ?? players, analyzer, events, options.Value, clock, PacerOf(hooks, gameId), logger);
             var end = await PlayOrEndAsync(run, game, slot, stoppingToken, cancellation.Token);
             if (end is null)
             {
@@ -208,6 +217,12 @@ public sealed class GameRunner(
             }
 
             await FinishAsync(run, end, gameId, slot, stoppingToken);
+            if (end.Termination != GameTermination.Aborted.Termination)
+            {
+                // A real end proves the gateway answered, so the cooldown is over.
+                cooldown?.RecordSuccess();
+            }
+
             return end;
         }
         catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
@@ -242,35 +257,26 @@ public sealed class GameRunner(
         catch (GameBudgetExhaustedException)
         {
             logger.LogInformation("Game {GameId} reached its budget and is adjudicated", gameId);
-            return await BudgetEndAsync(game, stoppingToken);
+            return await run.BudgetEndAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (slot.AbortRequested)
         {
             logger.LogInformation("Game {GameId} was aborted", gameId);
             return GameTermination.Aborted;
         }
-        catch (Exception ex)
+        catch (TechnicalGameFailureException ex)
         {
-            logger.LogError(ex, "Game {GameId} failed and is closed as aborted", gameId);
+            logger.LogWarning("Game {GameId} is aborted, not rated, after a technical failure: {Reason}", gameId, ex.Message);
+            cooldown?.RecordFailure();
             return GameTermination.Aborted;
         }
-    }
-
-    /// <summary>
-    /// The end of a game that reached its budget (03 §15.2): a position that already ends the game keeps its end; otherwise the
-    /// game is adjudicated at the board, as at <c>MaxPlies</c>, with the <c>budget</c> termination.
-    /// </summary>
-    private async Task<GameEnd> BudgetEndAsync(GameEntity game, CancellationToken ct)
-    {
-        var board = new ChessBoard();
-        board.LoadFen(game.CurrentFen);
-        if (GameTermination.FromStatus(board) is { } ending)
+        catch (Exception ex)
         {
-            return ending;
+            // Anything else that stops a game (the gateway could not open a conversation, a crash) is a technical failure too.
+            logger.LogError(ex, "Game {GameId} failed and is closed as aborted", gameId);
+            cooldown?.RecordFailure();
+            return GameTermination.Aborted;
         }
-
-        int? whiteCentipawns = analyzer.IsAvailable ? await analyzer.EvaluateAsync(board.ToFen(), ct) : null;
-        return GameTermination.Adjudicate(board, whiteCentipawns, GameTermination.BudgetReached);
     }
 
     private async Task FinishAsync(GameRun run, GameEnd end, Guid gameId, GameSlot slot, CancellationToken stoppingToken)

@@ -10,6 +10,7 @@ public static class GameRunnerExtensions
     {
         builder.Services.AddOptions<GameRunnerOptions>().BindConfiguration("Arena");
         builder.Services.AddSingleton<IGameEventStream, InMemoryGameEventStream>();
+        builder.Services.AddSingleton<TechnicalFailureCooldown>();
         builder.Services.AddSingleton<GameRunner>();
         builder.Services.AddSingleton<IGameRunner>(sp => sp.GetRequiredService<GameRunner>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<GameRunner>());

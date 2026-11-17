@@ -72,6 +72,21 @@ public class ModelCatalogTests
     }
 
     [Fact]
+    public async Task ADisconnectedRuntimeThatThrowsInvalidOperationFallsBackToRandomInsteadOfFailing()
+    {
+        // The Copilot SDK documents InvalidOperationException from ListModelsAsync for a client that is not connected.
+        var gateway = new StubGateway(Ready, listFailure: new InvalidOperationException("Client not connected"));
+        var catalog = Catalog(gateway, TimeSpan.FromSeconds(60));
+
+        var first = await catalog.GetModelsAsync(default);
+        await catalog.GetModelsAsync(default);
+
+        Assert.Equal(["random"], first.Models.Select(m => m.Id));
+        Assert.Contains("Client not connected", first.Warning);
+        Assert.Equal(2, gateway.ListCalls);
+    }
+
+    [Fact]
     public async Task LlmUnavailableWhileListingFallsBackToRandomAndIsNotCached()
     {
         var gateway = new StubGateway(Ready, listFailure: new LlmUnavailableException("runtime stopped"));
