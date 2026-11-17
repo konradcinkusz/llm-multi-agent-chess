@@ -25,7 +25,7 @@ public sealed class BroadcastRunnerController(
 
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public Task<BroadcastCommandResult> StartAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, async (db, schedule) =>
+    public Task<BroadcastCommandResult> StartAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, afterSave: () => signals.SetPaused(false), apply: async (db, schedule) =>
     {
         if (schedule.Status is not (ScheduleStatus.Draft or ScheduleStatus.Scheduled))
         {
@@ -41,11 +41,10 @@ public sealed class BroadcastRunnerController(
 
         schedule.Status = ScheduleStatus.Running;
         schedule.StartedAt ??= clock.GetUtcNow();
-        signals.SetPaused(false);
         return BroadcastCommandResult.Accepted;
     });
 
-    public Task<BroadcastCommandResult> PauseAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, (_, schedule) =>
+    public Task<BroadcastCommandResult> PauseAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, afterSave: () => signals.SetPaused(true), apply: (_, schedule) =>
     {
         if (schedule.Status != ScheduleStatus.Running)
         {
@@ -53,11 +52,10 @@ public sealed class BroadcastRunnerController(
         }
 
         schedule.Status = ScheduleStatus.Paused;
-        signals.SetPaused(true);
         return Task.FromResult(BroadcastCommandResult.Accepted);
     });
 
-    public Task<BroadcastCommandResult> ResumeAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, (_, schedule) =>
+    public Task<BroadcastCommandResult> ResumeAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, afterSave: () => signals.SetPaused(false), apply: (_, schedule) =>
     {
         if (schedule.Status != ScheduleStatus.Paused)
         {
@@ -65,11 +63,16 @@ public sealed class BroadcastRunnerController(
         }
 
         schedule.Status = ScheduleStatus.Running;
-        signals.SetPaused(false);
         return Task.FromResult(BroadcastCommandResult.Accepted);
     });
 
-    public Task<BroadcastCommandResult> StopAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, (_, schedule) =>
+    public Task<BroadcastCommandResult> StopAsync(Guid scheduleId, CancellationToken ct) => ChangeAsync(scheduleId, ct, afterSave: () =>
+    {
+        signals.Notice = null;
+        signals.SetPaused(false);
+        // The game in play is aborted; the runner records its slot as skipped.
+        signals.AbortCurrentGame();
+    }, apply: (_, schedule) =>
     {
         if (schedule.Status is not (ScheduleStatus.Scheduled or ScheduleStatus.Running or ScheduleStatus.Paused))
         {
@@ -78,10 +81,6 @@ public sealed class BroadcastRunnerController(
 
         schedule.Status = ScheduleStatus.Cancelled;
         schedule.FinishedAt = clock.GetUtcNow();
-        signals.Notice = null;
-        signals.SetPaused(false);
-        // The game in play is aborted; the runner records its slot as skipped.
-        signals.AbortCurrentGame();
         return Task.FromResult(BroadcastCommandResult.Accepted);
     });
 
@@ -115,10 +114,15 @@ public sealed class BroadcastRunnerController(
             active.EndsAt);
     }
 
-    /// <summary>Runs one command under the gate: loads the schedule, applies the change, and saves it when it was accepted.</summary>
+    /// <summary>
+    /// Runs one command under the gate: loads the schedule, applies the change, and saves it when it was accepted. The signals
+    /// the runner reacts to (the pause flag, a stop's abort) are raised by <paramref name="afterSave"/> only once the save has
+    /// succeeded, so a failed save leaves the runner as it was.
+    /// </summary>
     private async Task<BroadcastCommandResult> ChangeAsync(
         Guid scheduleId,
         CancellationToken ct,
+        Action afterSave,
         Func<ArenaDbContext, BroadcastScheduleEntity, Task<BroadcastCommandResult>> apply)
     {
         await _gate.WaitAsync(ct);
@@ -135,6 +139,7 @@ public sealed class BroadcastRunnerController(
             if (result == BroadcastCommandResult.Accepted)
             {
                 await db.SaveChangesAsync(ct);
+                afterSave();
                 signals.Publish();
             }
 

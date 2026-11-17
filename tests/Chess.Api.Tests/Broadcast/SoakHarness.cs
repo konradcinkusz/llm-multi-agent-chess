@@ -90,9 +90,12 @@ internal sealed class SoakHarness : IAsyncDisposable
     /// <summary>The seed of the induced failures and of the planner's order: the same day every run.</summary>
     public const int Seed = 7;
 
-    /// <summary>The gateway outage of the day: two simulated hours, from noon.</summary>
-    public static readonly DateTimeOffset OutageFrom = RunnerHarness.Start.AddHours(1);
-    public static readonly DateTimeOffset OutageUntil = RunnerHarness.Start.AddHours(3);
+    /// <summary>
+    /// The gateway outage of the day: five simulated minutes. The runner plays the next game after the gap and never waits for a
+    /// planned time (03 §9.1), so a game of the fake players (200 plies at 4 s) takes about 14 minutes and the day about 5.5 hours.
+    /// </summary>
+    public static readonly DateTimeOffset OutageFrom = RunnerHarness.Start.AddMinutes(98);
+    public static readonly DateTimeOffset OutageUntil = RunnerHarness.Start.AddMinutes(103);
 
     /// <summary>The models of the day: the random player, three fake models, one of which fails in a share of its games.</summary>
     public static readonly string[] Models = [ModelCatalog.RandomModelId, "fake-a", InducedFailurePlayers.FlakyModel, "fake-c"];

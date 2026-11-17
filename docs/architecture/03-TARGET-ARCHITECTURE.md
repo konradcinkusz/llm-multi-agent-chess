@@ -409,6 +409,11 @@ the dependency budget and is not the product.)
   4000), `GameGapSeconds` (title-card pause between games, default 20), `MoveTimeoutSeconds`
   as before. Pacing is a property of broadcast games only (stored on the schedule) — ordinary games
   keep running at full speed.
+- **Timing.** Planned start and end are estimates, not appointments (the planner's lengths give the first one). The runner
+  never waits for a clock time: the first game plays when the schedule starts, each next game one `GameGapSeconds` after the
+  previous slot left `Running` (finished, skipped, or interrupted by a restart). Whenever a slot leaves `Running` the runner
+  re-times the pending slots from that moment (next start = end + gap, the rest back to back with their planned lengths) and sets
+  the schedule's `EndsAt` to the end of the last slot. A stop of the schedule ends a gap.
 - **One game on screen at a time.** The broadcast runner plays slots strictly sequentially
   (concurrency 1), independent of `Arena:MaxConcurrentGames`.
 - The **planner** is a pure function: given models, target duration, pacing and an estimated
@@ -418,8 +423,10 @@ the dependency budget and is not the product.)
   stopping with a final partial gap rather than starting a game that cannot finish before `endsAt`.
   Its output includes the **premium-request estimate** for the whole day (per model).
 - Status: `Draft → Scheduled → Running ⇄ Paused → Finished | Cancelled`. A schedule that is
-  `Running` when the API restarts **resumes** at its next unfinished slot (the interrupted game is
-  marked `interrupted` and excluded from the rating, as in §7; the slot is marked `skipped`).
+  `Running` when the API restarts **resumes** at its next unfinished slot, played at once (the interrupted game is
+  marked `interrupted` and excluded from the rating, as in §7; the slot is marked `skipped`; the pending slots are re-timed
+  from the restart). A slot left `Running` by an error inside the runner is settled the same way at the next step.
+  `Scheduled` is a stored value no code sets today (a started day goes straight to `Running`).
 - Failure policy: if a game cannot be played because Copilot is unavailable or rate-limited, the
   runner **backs off** (30 s, 1 min, 2 min … capped at 10 min), shows an "technical break" card, and
   retries the same slot; after 3 failed attempts the slot is `skipped` and the schedule moves on. The
