@@ -18,6 +18,25 @@
     max-height: none;
 }
 
+/* A paged list shows a page of rows from the top; it never needs the bottom-anchored scroll origin. */
+.move-table-scroll.move-table-paged {
+    flex-direction: column;
+    max-height: none;
+}
+
+.move-pages {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.move-pages-range {
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 899px) {
     .move-table-scroll.move-table-fixed {
         height: 360px;
