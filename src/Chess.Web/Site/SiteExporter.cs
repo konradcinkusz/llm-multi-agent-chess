@@ -27,7 +27,8 @@ public sealed class SiteExporter(
     public async Task<SiteExportResult> ExportAsync(string outputDirectory, CancellationToken ct)
     {
         var root = Path.GetFullPath(outputDirectory);
-        if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any())
+        if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root)
+                .Any(entry => Path.GetFileName(entry) != Publishing.SiteFolders.ExportMarker))
         {
             // A folder with old files would publish pages the export no longer makes (for example a deleted game).
             throw new InvalidOperationException($"The export folder {root} is not empty. Export into an empty folder.");

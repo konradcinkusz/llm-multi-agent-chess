@@ -52,17 +52,82 @@ public class SiteExportCoordinatorTests : IDisposable
     }
 
     [Fact]
-    public async Task An_export_empties_the_export_folder_first()
+    public async Task An_export_empties_the_export_folder_it_made_first()
     {
         var folder = Path.Combine(_git.Root, "export");
-        Directory.CreateDirectory(folder);
-        File.WriteAllText(Path.Combine(folder, "stale.html"), "old");
         var coordinator = Build(new SiteFakeExporter(), new SiteFakePublisher(), Start, folder);
+        await coordinator.ExportAsync(default);
+        File.WriteAllText(Path.Combine(folder, "stale.html"), "old");
 
         await coordinator.ExportAsync(default);
 
         Assert.False(File.Exists(Path.Combine(folder, "stale.html")));
         Assert.True(File.Exists(Path.Combine(folder, "index.html")));
+        Assert.True(File.Exists(Path.Combine(folder, SiteFolders.ExportMarker)));
+    }
+
+    [Fact]
+    public async Task A_folder_with_content_the_export_did_not_write_is_refused_and_left_as_it_was()
+    {
+        var folder = Path.Combine(_git.Root, "export");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "notes.txt"), "mine");
+        var coordinator = Build(new SiteFakeExporter(), new SiteFakePublisher(), Start, folder);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.ExportAsync(default));
+        var published = await coordinator.PublishAsync(default);
+
+        Assert.Contains("did not write", failure.Message);
+        Assert.False(published.Published);
+        Assert.Equal("mine", File.ReadAllText(Path.Combine(folder, "notes.txt")));
+        Assert.False(File.Exists(Path.Combine(folder, "index.html")));
+    }
+
+    [Fact]
+    public async Task An_empty_export_folder_is_used()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_git.Root, "export")).FullName;
+        var coordinator = Build(new SiteFakeExporter(), new SiteFakePublisher(), Start, folder);
+
+        await coordinator.ExportAsync(default);
+
+        Assert.True(File.Exists(Path.Combine(folder, "index.html")));
+    }
+
+    [Fact]
+    public async Task The_export_folder_is_never_the_repository_a_folder_in_it_or_a_folder_above_it()
+    {
+        _git.CreateBareRemote();
+        _git.CreateSourceRepository();
+        var inside = Path.Combine(_git.Source, "site-export");
+        var work = Path.Combine(_git.Root, "work");
+
+        foreach (var folder in new[] { _git.Source, inside, _git.Root })
+        {
+            var coordinator = Build(new SiteFakeExporter(), new SiteFakePublisher(), Start, folder, contentRoot: Path.Combine(_git.Source, "src"), workDir: work);
+
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.ExportAsync(default));
+
+            Assert.Contains("folder of its own", failure.Message);
+        }
+
+        Assert.Equal("owner's work", File.ReadAllText(Path.Combine(_git.Source, "README.md")).Trim());
+        Assert.False(Directory.Exists(inside));
+    }
+
+    [Fact]
+    public async Task The_export_folder_and_the_work_folder_are_never_nested()
+    {
+        var folder = Path.Combine(_git.Root, "export");
+
+        foreach (var work in new[] { folder, Path.Combine(folder, "work"), _git.Root })
+        {
+            var coordinator = Build(new SiteFakeExporter(), new SiteFakePublisher(), Start, folder, workDir: work);
+
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.ExportAsync(default));
+
+            Assert.Contains("two separate folders", failure.Message);
+        }
     }
 
     [Fact]
@@ -80,7 +145,8 @@ public class SiteExportCoordinatorTests : IDisposable
         Assert.False(coordinator.Busy);
     }
 
-    private SiteExportCoordinator Build(SiteFakeExporter exporter, SiteFakePublisher publisher, DateTimeOffset now, string? folder = null)
+    private SiteExportCoordinator Build(SiteFakeExporter exporter, SiteFakePublisher publisher, DateTimeOffset now, string? folder = null,
+        string? contentRoot = null, string? workDir = null)
     {
         var clock = new SiteFakeClock(now);
         exporter.TakenAt = exporter.TakenAt == default ? now : exporter.TakenAt;
@@ -88,8 +154,11 @@ public class SiteExportCoordinatorTests : IDisposable
         var options = SiteTestOptions.Create(o =>
         {
             o.ExportDirectory = folder ?? Path.Combine(_git.Root, "export");
+            o.WorkDir = workDir ?? _git.WorkDir;
             o.Remote = _git.Remote;
         });
-        return new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(_git.Root), clock, exporter);
+        // The app runs from a folder of its own, as it does from src/Chess.Web, so the export folder is not inside it.
+        var app = Directory.CreateDirectory(contentRoot ?? Path.Combine(_git.Root, "app")).FullName;
+        return new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(app), clock, exporter);
     }
 }

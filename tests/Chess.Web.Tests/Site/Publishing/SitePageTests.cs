@@ -6,8 +6,12 @@ using Xunit;
 
 namespace Chess.Web.Tests.Site.Publishing;
 
-public class SitePageTests
+public class SitePageTests : IDisposable
 {
+    private readonly SiteTestGit _git = new();
+
+    public void Dispose() => _git.Dispose();
+
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 14, 3, 0, TimeSpan.Zero);
 
     [Fact]
@@ -87,15 +91,16 @@ public class SitePageTests
         Assert.Equal("The export failed: disk full", cut.Find("#site-publish-detail").TextContent);
     }
 
-    private static IRenderedComponent<SitePage> Render(BunitContext ctx, SiteFakeExporter exporter, SiteFakePublisher publisher)
+    private IRenderedComponent<SitePage> Render(BunitContext ctx, SiteFakeExporter exporter, SiteFakePublisher publisher)
     {
         var options = SiteTestOptions.Create(o =>
         {
             o.Remote = "https://github.com/owner/repo.git";
-            o.ExportDirectory = Path.Combine(Path.GetTempPath(), "arena-site-page-test");
+            o.ExportDirectory = Path.Combine(_git.Root, "export");
+            o.WorkDir = _git.WorkDir;
         });
-        var coordinator = new SiteExportCoordinator(publisher, options,
-            new SiteFakeHostEnvironment(Path.GetTempPath()), new SiteFakeClock(Now), exporter);
+        var app = Directory.CreateDirectory(Path.Combine(_git.Root, "app")).FullName;
+        var coordinator = new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(app), new SiteFakeClock(Now), exporter);
         ctx.Services.AddSingleton(options);
         ctx.Services.AddSingleton(coordinator);
         return ctx.Render<SitePage>();

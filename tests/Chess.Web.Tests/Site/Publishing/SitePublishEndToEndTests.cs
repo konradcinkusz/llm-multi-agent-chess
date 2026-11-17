@@ -31,6 +31,7 @@ public class SitePublishEndToEndTests : IDisposable
         var files = SiteTestGit.Run(_git.Remote, "ls-tree", "-r", "--name-only", "gh-pages");
         Assert.Contains("index.html", files);
         Assert.Contains(".nojekyll", files);
+        Assert.DoesNotContain(SiteFolders.ExportMarker, files);
         Assert.Contains("<html", SiteTestGit.Run(_git.Remote, "show", "gh-pages:index.html"));
         Assert.Equal(result.Commit, SiteTestGit.Run(_git.Remote, "rev-parse", "gh-pages"));
     }

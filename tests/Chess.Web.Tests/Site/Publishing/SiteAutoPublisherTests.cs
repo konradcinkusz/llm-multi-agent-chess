@@ -5,8 +5,13 @@ using Xunit;
 namespace Chess.Web.Tests.Site.Publishing;
 
 /// <summary>Auto-publish runs only when a game finished since the last publish (fake clock, no git, no network).</summary>
-public class SiteAutoPublisherTests
+public class SiteAutoPublisherTests : IDisposable
 {
+    // Each test exports into a folder of its own, never the default one in the system temp directory.
+    private readonly SiteTestGit _git = new();
+
+    public void Dispose() => _git.Dispose();
+
     private static readonly DateTimeOffset Start = new(2026, 10, 25, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -85,15 +90,21 @@ public class SiteAutoPublisherTests
         Assert.Equal(2, exporter.Calls);
     }
 
-    private static (SiteAutoPublisher Auto, SiteFakeExporter Exporter, SiteFakePublisher Publisher, SiteFakeActivity Activity, SiteFakeClock Clock)
+    private (SiteAutoPublisher Auto, SiteFakeExporter Exporter, SiteFakePublisher Publisher, SiteFakeActivity Activity, SiteFakeClock Clock)
         Build(int minutes, bool published = true)
     {
         var clock = new SiteFakeClock(Start);
         var exporter = new SiteFakeExporter { Clock = clock };
         var publisher = new SiteFakePublisher(published) { At = Start };
         var activity = new SiteFakeActivity();
-        var options = SiteTestOptions.Create(o => o.AutoPublishMinutes = minutes);
-        var coordinator = new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(Path.GetTempPath()), clock, exporter);
+        var options = SiteTestOptions.Create(o =>
+        {
+            o.AutoPublishMinutes = minutes;
+            o.ExportDirectory = Path.Combine(_git.Root, "export");
+            o.WorkDir = _git.WorkDir;
+        });
+        var app = Directory.CreateDirectory(Path.Combine(_git.Root, "app")).FullName;
+        var coordinator = new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(app), clock, exporter);
         var auto = new SiteAutoPublisher(options, coordinator, activity, clock, NullLogger<SiteAutoPublisher>.Instance);
         return (auto, exporter, publisher, activity, clock);
     }

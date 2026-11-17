@@ -80,13 +80,35 @@ public sealed class SiteExportCoordinator(
         }
     }
 
+    /// <summary>
+    /// Empties the export folder and exports into it. The folder is deleted only when it is one this export made (it holds
+    /// the marker) or is empty, and never when it is the repository the app runs from, inside it or above it, or nested with
+    /// the publisher's work folder: a mistyped <c>Arena:Site:ExportDirectory</c> must not delete anything the app did not write.
+    /// </summary>
     private async Task<SiteExportResult> ExportCoreAsync(CancellationToken ct)
     {
-        if (Directory.Exists(ExportDirectory))
+        var folder = ExportDirectory;
+        var roots = await SiteFolders.AppRootsAsync(options.Value.GitExecutable, environment.ContentRootPath, ct);
+        if (SiteFolders.ExportProblem(folder, options.Value.ResolvedWorkDir, roots) is { } problem)
         {
-            Directory.Delete(ExportDirectory, recursive: true);
+            throw new InvalidOperationException(problem);
         }
-        Directory.CreateDirectory(ExportDirectory);
-        return await _exporter.ExportAsync(ExportDirectory, ct);
+
+        if (Directory.Exists(folder))
+        {
+            if (File.Exists(Path.Combine(folder, SiteFolders.ExportMarker)))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+            else if (Directory.EnumerateFileSystemEntries(folder).Any())
+            {
+                throw new InvalidOperationException(
+                    $"Arena:Site:ExportDirectory ({folder}) has content that the site export did not write, so it was not emptied. Choose an empty folder or remove it yourself.");
+            }
+        }
+
+        Directory.CreateDirectory(folder);
+        await File.WriteAllTextAsync(Path.Combine(folder, SiteFolders.ExportMarker), "site export folder\n", ct);
+        return await _exporter.ExportAsync(folder, ct);
     }
 }
