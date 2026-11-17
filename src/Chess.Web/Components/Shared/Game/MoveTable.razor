@@ -4,7 +4,7 @@
     <ol class="move-table" data-testid="move-list" aria-label="Moves">
         @foreach (var row in NewestFirst ? Rows.Reverse() : Rows)
         {
-            <li class="move-row">
+            <li @key="row.Number" class="move-row">
                 <span class="move-number" aria-hidden="true">@row.Number.</span>
                 @foreach (var cell in new[] { row.White, row.Black })
                 {
@@ -16,7 +16,7 @@
                     else if (cell.Move is null)
                     {
                         <span class="move-cell move-pending" data-testid="move-pending" data-color="@cell.Color"
-                              aria-label="@cell.Color is thinking">…</span>
+                              role="img" aria-label="@cell.Color is thinking">…</span>
                     }
                     else
                     {

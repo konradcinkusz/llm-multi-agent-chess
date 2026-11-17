@@ -23,7 +23,7 @@
         @foreach (var entry in Visible)
         {
             var selected = SelectedPly == entry.Ply;
-            <li class="engine-entry @(selected ? "engine-entry-selected" : null)" data-testid="engine-entry"
+            <li @key="(entry.Ply, entry.Attempt)" class="engine-entry @(selected ? "engine-entry-selected" : null)" data-testid="engine-entry"
                 data-ply="@entry.Ply" data-color="@entry.Color" data-attempt="@entry.Attempt"
                 data-legal="@(entry.Legal ? "true" : "false")">
                 <details>
@@ -43,7 +43,7 @@
 
                     <div class="engine-body">
                         <h3 class="engine-heading">Prompt sent</h3>
-                        <pre class="engine-text" data-testid="entry-prompt">@entry.Prompt</pre>
+                        <pre class="engine-text" data-testid="entry-prompt" tabindex="0" role="region" aria-label="Prompt sent">@entry.Prompt</pre>
 
                         <h3 class="engine-heading">Reply</h3>
                         @if (entry.RawReply is null)
@@ -52,7 +52,7 @@
                         }
                         else
                         {
-                            <pre class="engine-text" data-testid="entry-reply">@entry.RawReply</pre>
+                            <pre class="engine-text" data-testid="entry-reply" tabindex="0" role="region" aria-label="Reply">@entry.RawReply</pre>
                         }
 
                         <h3 class="engine-heading">Reasoning</h3>
@@ -62,7 +62,7 @@
                         }
                         else
                         {
-                            <pre class="engine-text" data-testid="entry-reasoning">@entry.Reasoning</pre>
+                            <pre class="engine-text" data-testid="entry-reasoning" tabindex="0" role="region" aria-label="Reasoning">@entry.Reasoning</pre>
                         }
                     </div>
                 </details>

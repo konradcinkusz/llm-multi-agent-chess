@@ -111,6 +111,19 @@ public class ArenaApiClientTests
         Assert.Equal("/api/attempts?model=m1&page=3", handler.Requests[0].Target);
     }
 
+    [Theory]
+    [InlineData(true, "/api/attempts?legal=true&page=1")]
+    [InlineData(false, "/api/attempts?legal=false&page=1")]
+    public async Task AttemptsSendTheReplyFilterToTheApi(bool legal, string expected)
+    {
+        var handler = new FakeHandler(_ => Canned.Json("""{"items":[],"page":1,"pageSize":50,"total":0}"""));
+        var api = new ArenaApiClient(Canned.Client(handler));
+
+        await api.GetAttemptsAsync(null, null, 1, legal: legal);
+
+        Assert.Equal(expected, handler.Requests[0].Target);
+    }
+
     [Fact]
     public async Task AServerErrorIsNotSwallowed()
     {

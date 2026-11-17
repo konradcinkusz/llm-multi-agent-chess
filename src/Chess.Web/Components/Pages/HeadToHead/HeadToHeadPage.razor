@@ -4,6 +4,7 @@
 @using Chess.Web.Api
 @using Chess.Web.Components.Pages.Shared
 @inject ArenaApiClient Api
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>Head-to-head · LLM Chess Arena</PageTitle>
@@ -13,7 +14,7 @@
     <p class="page-lede">Compare two models: how strong each is against the other, and what their direct games say.</p>
 </div>
 
-@if (models is null && modelsError is null)
+@if (players is null && modelsError is null)
 {
     <p class="muted">Loading models…</p>
 }
@@ -27,19 +28,19 @@ else
         <div class="field-row">
             <label class="field">
                 Model A
-                <select id="model-a" @bind="a" @bind:after="CompareAsync">
-                    @foreach (var model in models!)
+                <select id="model-a" @bind="a" @bind:after="PairChanged">
+                    @foreach (var player in PickerOptions(a))
                     {
-                        <option value="@model.Id">@Describe(model)</option>
+                        <option value="@player.Id">@player.Label</option>
                     }
                 </select>
             </label>
             <label class="field">
                 Model B
-                <select id="model-b" @bind="b" @bind:after="CompareAsync">
-                    @foreach (var model in models!)
+                <select id="model-b" @bind="b" @bind:after="PairChanged">
+                    @foreach (var player in PickerOptions(b))
                     {
-                        <option value="@model.Id">@Describe(model)</option>
+                        <option value="@player.Id">@player.Label</option>
                     }
                 </select>
             </label>
@@ -117,7 +118,7 @@ else
                                 <tbody>
                                     @foreach (var game in directGames)
                                     {
-                                        <tr>
+                                        <tr @key="game.Id">
                                             <td>@game.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC</td>
                                             <td>@game.White.ModelId</td>
                                             <td>@game.Black.ModelId</td>
@@ -141,33 +142,66 @@ else
     // Enough to cover the direct games of a pair in one request for a normal arena; more pages are fetched when there are more.
     private const int GamesPageSize = 100;
 
-    private IReadOnlyList<ModelDto>? models;
+    private IReadOnlyList<PlayerOption>? players;
     private string? modelsError;
     private string? a;
     private string? b;
+    private (string?, string?)? compared;
     private PairwiseCoefficient? pair;
     private bool bothEstablished;
     private string? pairError;
     private IReadOnlyList<GameSummaryDto>? directGames;
     private CancellationTokenSource? cts;
 
+    /// <summary>The pair lives in the address (<c>?a=&amp;b=</c>), so a link and Back show the same comparison.</summary>
+    [SupplyParameterFromQuery(Name = "a")]
+    public string? AQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "b")]
+    public string? BQuery { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            models = await Api.GetModelsAsync();
+            // The players of the ratings, as the API ranks them (model, effort and style): the pair is asked for by player id.
+            players = await PlayerOptions.LoadAsync(Api, includeCatalogue: false, CancellationToken.None);
         }
         catch (Exception ex)
         {
             // The page reports the failure; it must not take the app down with it.
             modelsError = ex.Message;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (players is null)
+        {
             return;
         }
 
-        a = models.FirstOrDefault()?.Id;
-        b = models.Skip(1).FirstOrDefault()?.Id;
-        await CompareAsync();
+        // Without a pair in the address the two best players are compared.
+        a = string.IsNullOrEmpty(AQuery) ? players.FirstOrDefault()?.Id : AQuery;
+        b = string.IsNullOrEmpty(BQuery) ? players.Skip(1).FirstOrDefault()?.Id : BQuery;
+        if (compared != (a, b))
+        {
+            compared = (a, b);
+            await CompareAsync();
+        }
     }
+
+    /// <summary>The players to pick from, and the one the address names when no list knows it, so the picker can show it.</summary>
+    private IReadOnlyList<PlayerOption> PickerOptions(string? current) =>
+        string.IsNullOrEmpty(current) || players!.Any(player => player.Id == current)
+            ? players!
+            : [.. players!, new PlayerOption(current, current)];
+
+    /// <summary>Writes the picked pair into the address (replacing the entry), which loads the comparison.</summary>
+    private void PairChanged() =>
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters(new Dictionary<string, object?> { ["a"] = a, ["b"] = b }),
+            replace: true);
 
     /// <summary>Loads the coefficient for the two picked models. A newer pick cancels the one still running.</summary>
     private async Task CompareAsync()
@@ -251,8 +285,6 @@ else
 
         return DirectGames.Between(games, first, second);
     }
-
-    private static string Describe(ModelDto model) => model.Enabled ? model.DisplayName : $"{model.DisplayName} (disabled)";
 
     private static string Format(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 

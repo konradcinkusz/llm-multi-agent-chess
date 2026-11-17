@@ -36,6 +36,27 @@ public class HeadToHeadPageTests
          "whiteAdvantage":12,"games":60,"moveQualityAvailable":false}
         """;
 
+    private const string RatingsWithRandom =
+        """
+        {"models":[
+          {"model":"gpt","rating":120,"ciLow":100,"ciHigh":140,"games":30,"score":0.7,"legality":0.99,"moveQuality":null,"quality":0.99,"arenaScore":66,"provisional":false},
+          {"model":"claude","rating":90,"ciLow":70,"ciHigh":110,"games":30,"score":0.3,"legality":0.95,"moveQuality":null,"quality":0.95,"arenaScore":34,"provisional":false},
+          {"model":"random","rating":10,"ciLow":0,"ciHigh":20,"games":30,"score":0.1,"legality":1,"moveQuality":null,"quality":1,"arenaScore":10,"provisional":false}],
+         "whiteAdvantage":12,"games":90,"moveQualityAvailable":false}
+        """;
+
+    private const string RatingsWithStyledPlayers =
+        """
+        {"models":[
+          {"model":"gpt@high","rating":120,"ciLow":100,"ciHigh":140,"games":234,"score":0.7,"legality":0.99,"moveQuality":null,"quality":0.99,"arenaScore":66,"provisional":false},
+          {"model":"gpt~think","rating":100,"ciLow":80,"ciHigh":120,"games":120,"score":0.5,"legality":0.99,"moveQuality":null,"quality":0.99,"arenaScore":50,"provisional":false},
+          {"model":"claude","rating":90,"ciLow":70,"ciHigh":110,"games":30,"score":0.3,"legality":0.95,"moveQuality":null,"quality":0.95,"arenaScore":34,"provisional":false}],
+         "whiteAdvantage":12,"games":384,"moveQualityAvailable":false}
+        """;
+
+    private const string StyledPair =
+        """{"a":"gpt@high","b":"gpt~think","expectedScore":0.55,"qualityShare":0.5,"rqc":0.56,"rqcLow":0.5,"rqcHigh":0.62,"eloEquivalent":20,"headToHeadGames":0,"headToHeadScore":null}""";
+
     private const string RatingsWithProvisionalClaude =
         """
         {"models":[
@@ -74,7 +95,12 @@ public class HeadToHeadPageTests
         Assert.Contains("+82.4 Elo for gpt against claude", cut.Markup);
         Assert.Contains("2 direct games; gpt scored 0.75 per game.", cut.Markup);
         Assert.DoesNotContain("Not yet significant", cut.Markup);
-        Assert.Equal(new[] { "/api/models", "/api/ratings/pairwise?a=gpt&b=claude", "/api/ratings", "/api/games?page=1&pageSize=100&model=gpt" },
+        // The pickers are filled from the ratings first (players, not catalogue models), then the pair is read.
+        Assert.Equal(new[]
+            {
+                "/api/ratings", "/api/models", "/api/prompt-styles",
+                "/api/ratings/pairwise?a=gpt&b=claude", "/api/ratings", "/api/games?page=1&pageSize=100&model=gpt",
+            },
             handler.Requests.Select(r => r.Target).ToArray());
 
         var rows = cut.FindAll("table.h2h-games tbody tr");
@@ -161,7 +187,7 @@ public class HeadToHeadPageTests
             ["/api/models"] = Ok(Models),
             ["/api/ratings/pairwise?a=gpt&b=claude"] = Ok(GptVsClaude),
             ["/api/ratings/pairwise?a=gpt&b=random"] = Ok(GptVsRandom),
-            ["/api/ratings"] = Ok(Ratings),
+            ["/api/ratings"] = Ok(RatingsWithRandom),
             ["/api/games?page=1&pageSize=100&model=gpt"] = Ok(Games()),
         });
         using var ctx = new BunitContext();
@@ -244,7 +270,60 @@ public class HeadToHeadPageTests
         var cut = ctx.Render<HeadToHeadPage>();
 
         cut.WaitForAssertion(() => Assert.Contains("At least two models are needed to compare.", cut.Markup));
-        Assert.DoesNotContain(handler.Requests, r => r.Target.StartsWith("/api/ratings", StringComparison.Ordinal));
+        // The ratings are asked for the pickers; no pair is read.
+        Assert.DoesNotContain(handler.Requests, r => r.Target.StartsWith("/api/ratings/pairwise", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ThePickersListRatedPlayersAndTheDefaultPairIsTheTopTwo()
+    {
+        var handler = Api(new Dictionary<string, Reply>
+        {
+            ["/api/models"] = Ok(Models),
+            ["/api/ratings"] = Ok(RatingsWithStyledPlayers),
+            ["/api/prompt-styles"] = Ok("""[{"id":"classic","displayName":"Classic","description":"d","perMoveConversation":false,"version":"1"},{"id":"think","displayName":"Think","description":"d","perMoveConversation":false,"version":"1"}]"""),
+            ["/api/ratings/pairwise?a=gpt%40high&b=gpt~think"] = Ok(StyledPair),
+            ["/api/games?page=1&pageSize=100&model=gpt%40high"] = Ok(Games()),
+        });
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<HeadToHeadPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains("0.56 for gpt@high", cut.Find(".h2h-hero").TextContent));
+        var options = cut.FindAll("#model-a option").Select(o => (o.GetAttribute("value"), o.TextContent)).ToArray();
+        Assert.Equal([("gpt@high", "GPT @ high"), ("gpt~think", "GPT · Think"), ("claude", "Claude")], options);
+        Assert.Equal("gpt@high", cut.Find("#model-a").GetAttribute("value"));
+        Assert.Equal("gpt~think", cut.Find("#model-b").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void AnAddressWithAPairOpensOnItAndPickingWritesTheNewPairIntoTheAddress()
+    {
+        var handler = Api(new Dictionary<string, Reply>
+        {
+            ["/api/models"] = Ok(Models),
+            ["/api/ratings"] = Ok(RatingsWithRandom),
+            ["/api/ratings/pairwise?a=claude&b=random"] = Ok(GptVsRandom.Replace("\"a\":\"gpt\"", "\"a\":\"claude\"")),
+            ["/api/ratings/pairwise?a=claude&b=gpt"] = Ok(GptVsClaude.Replace("\"a\":\"gpt\",\"b\":\"claude\"", "\"a\":\"claude\",\"b\":\"gpt\"")),
+            ["/api/games?page=1&pageSize=100&model=claude"] = Ok(Games()),
+        });
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+        var navigation = ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("/head-to-head?a=claude&b=random");
+
+        var cut = ctx.Render<HeadToHeadPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains(handler.Requests, r => r.Target == "/api/ratings/pairwise?a=claude&b=random"));
+        Assert.Equal("claude", cut.Find("#model-a").GetAttribute("value"));
+        Assert.Equal("random", cut.Find("#model-b").GetAttribute("value"));
+
+        cut.Find("#model-b").Change("gpt");
+
+        cut.WaitForAssertion(() => Assert.Contains(handler.Requests, r => r.Target == "/api/ratings/pairwise?a=claude&b=gpt"));
+        Assert.Contains("a=claude", navigation.Uri, StringComparison.Ordinal);
+        Assert.Contains("b=gpt", navigation.Uri, StringComparison.Ordinal);
     }
 
     // Each request gets a fresh response: the client disposes the one it read.
