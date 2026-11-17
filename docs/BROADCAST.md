@@ -35,6 +35,14 @@ running; detach with `Ctrl-b d` in tmux and reattach with `tmux attach`.
 4. Under the list, **Estimated cost of the broadcast** shows the total premium requests, AI credits and USD of the games added, and each model's share, before anything is sent.
 5. Press **Start**. The app saves the games as a schedule that begins now and starts it in one click. The games play in list order. Each game starts after the previous one ends plus the game gap, and the next start time shown on the page is recalculated from the games already played. Start is disabled while another broadcast is playing or paused.
 
+**Timing model (one rule).** The planned start and end of each game are estimates, not appointments. The runner never waits for
+a clock time: it plays the first game when you press **Start**, and every next game one **game gap** after the previous game left
+*running* (finished, skipped after three failed attempts, or cut off by a restart). Whenever a game leaves *running*, the app
+re-times the games still to play from that moment (the next one at the end plus the gap, the rest back to back with their planned
+lengths) and moves the schedule's end to the end of its last game. The "Up next" times and the end on `/broadcast` therefore
+follow what really happened: a game that fails and is skipped does not push the next game out to its original time. The
+planner's lengths (80 plies at 44 s) only decide the first estimate.
+
 The schedule window is the span of the games, so a long list is limited to 168 hours.
 Only one day plays at a time. A second start while one is playing or paused is refused.
 
@@ -145,7 +153,7 @@ The app does not stream. Set up the stream in OBS and YouTube:
 **A restart of the app** (a crash, an update, a reboot): a day that was running resumes at its next unfinished slot.
 
 - The slot in play is skipped with the note "interrupted by a restart". Its game is closed as interrupted and is **not rated**.
-- Slots whose start time passed during the downtime are played at once, one after another with the game gap, so the channel catches up.
+- The games still to play are re-timed from the restart, and the next one starts at once; after it the game gap applies as usual.
 - A day that was paused stays paused until you press **Resume**.
 
 **A Copilot outage or rate limit** (the model gives no reply):
@@ -159,7 +167,14 @@ The app does not stream. Set up the stream in OBS and YouTube:
 
 - **Pause** lets the game in play finish its current move, then holds. **Resume** continues the same game.
 - **Stop** aborts the game in play. Its slot is skipped with the note "stopped by the operator", and the day is cancelled. A
-  cancelled day cannot be resumed; plan a new one.
+  cancelled day cannot be resumed; plan a new one. A stop also ends the pause between games, so a new day started after it
+  plays its first game at once and does not wait out the old gap. A command that cannot be saved (the database is down) changes
+  nothing: the pause flag and the game in play stay as they were.
+
+**An error inside the runner** (for example the database refuses a write after a game started): a game that is marked *running*
+with nothing playing it is settled at the next step, so `/api/broadcast/now` does not keep showing a dead game. A game that
+finished counts as finished; an aborted one is tried again (up to three attempts); one left unfinished is closed as
+interrupted and its slot is skipped with the note "interrupted by an error".
 
 ## 6. Read the Results page during the stream
 
@@ -197,6 +212,8 @@ The owner's rules, prices and keys are in [docs/REQUESTS.md](REQUESTS.md). This 
 - Otherwise a request's game uses the running schedule's pace, like a slot.
 - **Pause** holds requests as well as slots. A paused day plays no request until **Resume**.
 - A request that is playing is never interrupted by a request that arrives after it. The queue is first in, first out.
+- After a request game the runner holds the game gap, re-times the games still to play from it like after a slot, and a stop of
+  the day ends that hold.
 - A request game is an ordinary rated game. Only the games the broadcast runner plays are paced; nothing else changes.
 
 **Idle replays.** While the broadcast is **running**, no game is on the schedule's slot and **nothing is queued or playing**, the
