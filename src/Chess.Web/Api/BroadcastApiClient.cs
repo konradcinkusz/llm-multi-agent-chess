@@ -18,6 +18,23 @@ public sealed class BroadcastApiClient(HttpClient http)
     public async Task<ScheduleDetailDto> PlanAsync(PlanRequest request, CancellationToken ct = default) =>
         await ReadAsync<ScheduleDetailDto>(await http.PostAsJsonAsync("/api/broadcast/plan", request, JsonOptions, ct), ct);
 
+    /// <summary>
+    /// Saves the games as a schedule and, when <see cref="CreateScheduleRequest.Start"/> is set, starts it, in one call. A
+    /// refusal leaves nothing saved, so a failed start never leaves a draft behind.
+    /// </summary>
+    public async Task<ScheduleDetailDto> CreateScheduleAsync(CreateScheduleRequest request, CancellationToken ct = default) =>
+        await ReadAsync<ScheduleDetailDto>(await http.PostAsJsonAsync("/api/broadcast/schedules", request, JsonOptions, ct), ct);
+
+    /// <summary>Deletes a draft schedule. The API refuses (409) one that has started.</summary>
+    public async Task DeleteScheduleAsync(Guid id, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"/api/broadcast/schedules/{id:D}", ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new BroadcastApiException((int)response.StatusCode, await ProblemTextAsync(response, ct));
+        }
+    }
+
     public async Task<IReadOnlyList<ScheduleDto>> GetSchedulesAsync(CancellationToken ct = default) =>
         await ReadAsync<IReadOnlyList<ScheduleDto>>(await http.GetAsync("/api/broadcast/schedules", ct), ct);
 

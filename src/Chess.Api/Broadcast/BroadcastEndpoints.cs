@@ -510,8 +510,11 @@ public static class BroadcastEndpoints
         return errors.Count > 0 ? errors : null;
     }
 
-    /// <summary>Checks that the edited slots are playable: known players, a proper window, in play order, no overlap.</summary>
-    private static Dictionary<string, string[]>? SlotErrors(IReadOnlyList<SlotEdit> edits, BroadcastScheduleEntity schedule)
+    /// <summary>
+    /// Checks that the edited slots are playable: known players, a proper window, in play order, no overlap. Public so that
+    /// the Web tests' stand-in API validates slots with the same rules the routes do.
+    /// </summary>
+    public static Dictionary<string, string[]>? SlotErrors(IReadOnlyList<SlotEdit> edits, BroadcastScheduleEntity schedule)
     {
         var errors = new List<string>();
         DateTimeOffset? previousEnd = null;
