@@ -12,7 +12,8 @@ namespace Chess.Api.Tournaments;
 /// Creates, reads and cancels round robins (03 §5), and hands their games to <see cref="IGameRunner"/> so that no
 /// tournament has more than its <c>MaxConcurrency</c> games in the runner at once. The games are created up front;
 /// <see cref="DispatchAsync"/> starts them as room frees up. It is a singleton because it remembers which games it has
-/// handed over, and it is called by <see cref="TournamentScheduler"/>.
+/// handed over, and it is called by <see cref="TournamentScheduler"/>. While the <see cref="TechnicalFailureCooldown"/> holds
+/// (a game was just aborted because the gateway never answered) it hands over no new game.
 /// </summary>
 public sealed class TournamentService(
     IDbContextFactory<ArenaDbContext> factory,
@@ -20,7 +21,8 @@ public sealed class TournamentService(
     IGameEventStream events,
     ModelCatalog catalog,
     CostInputs costs,
-    TimeProvider clock)
+    TimeProvider clock,
+    TechnicalFailureCooldown? cooldown = null)
 {
     /// <summary>
     /// Premium requests a model is expected to make in one game: its moves on one side (40, 03 §9.1), the same convention
@@ -40,9 +42,10 @@ public sealed class TournamentService(
         var pairings = RoundRobin.Pairings(models, request.GamesPerPair);
         var tournament = NewTournament(request.Name, models, request.GamesPerPair, request.MaxConcurrency,
             TournamentKind.RoundRobin, candidate: null);
-        await StartAsync(tournament, pairings, ct);
 
+        // The estimate comes first: a failure after the games were saved would leave a run behind that a retry duplicates.
         var estimate = await EstimateAsync(models, pairings, ct);
+        await StartAsync(tournament, pairings, ct);
         return new TournamentCreatedDto(ToDto(tournament, (pairings.Count, 0)), estimate);
     }
 
@@ -201,6 +204,11 @@ public sealed class TournamentService(
 
             var queued = QueuedFor(tournament.Id);
             queued.IntersectWith(unfinished);
+            if (cooldown?.IsHolding == true)
+            {
+                continue;
+            }
+
             var room = tournament.MaxConcurrency - queued.Count;
             var next = unfinished.Where(gameId => !queued.Contains(gameId)).Take(Math.Max(0, room)).ToList();
             foreach (var gameId in next)
