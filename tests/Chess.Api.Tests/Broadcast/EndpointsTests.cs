@@ -49,6 +49,26 @@ public class EndpointsTests
     }
 
     [Fact]
+    public async Task Plan_keeps_the_precision_the_database_stores_so_the_answer_and_a_re_read_agree()
+    {
+        using var h = new BroadcastHarness();
+        // PostgreSQL's timestamptz keeps microseconds; a 100 ns digit would make the answer differ from what is stored.
+        var request = Plan("fake-a", "fake-b") with { StartsAt = Start.AddTicks(7), Pacing = new PacingProfile(4500, 0) };
+
+        var response = await h.Client.PostAsJsonAsync("/api/broadcast/plan", request);
+
+        var detail = await ReadAsync<ScheduleDetailDto>(response);
+        Assert.Equal(Start, detail.Schedule.StartsAt);
+        Assert.Equal(Start.AddHours(24), detail.Schedule.EndsAt);
+        Assert.All(detail.Slots, slot =>
+        {
+            Assert.Equal(0, slot.PlannedStart.Ticks % 10);
+            Assert.Equal(0, slot.PlannedEnd.Ticks % 10);
+        });
+        Assert.Equal(detail.Schedule.EndsAt, detail.Slots[^1].PlannedEnd);
+    }
+
+    [Fact]
     public async Task Plan_estimate_is_the_planner_estimate_per_model_and_null_when_the_multiplier_is_unknown()
     {
         using var h = new BroadcastHarness();

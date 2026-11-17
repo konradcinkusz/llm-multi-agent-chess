@@ -307,7 +307,7 @@ dotnet test Chess.sln
 | `Chess.Web.Tests` | 684 | 0 |
 | `Chess.E2E` | 5 | 0 |
 
-The three skipped tests are the Stockfish integration tests; they run only when `STOCKFISH_PATH` names a Stockfish binary.
+The three skipped tests are the Stockfish integration tests; they run only when `STOCKFISH_PATH` names a Stockfish binary. The PostgreSQL tests (`Chess.Api.Tests.Postgres`, 12 tests) are skipped too unless `ARENA_TEST_POSTGRES` is set; with it they run (see below).
 
 The unit tests and the browser journeys run separately:
 
@@ -329,9 +329,24 @@ dotnet test tests/Chess.Api.Tests --filter "FullyQualifiedName~Chess.Api.Tests.E
 
 Tests need no network and no Copilot login. They use the `FakeLlmGateway`, the in-memory store and fixtures.
 
+The in-memory provider cannot show a query that Npgsql cannot translate, or a model that drifted from its migrations. The PostgreSQL tests (`tests/Chess.Api.Tests/Postgres`) run the real app on the fake gateway against a PostgreSQL server: the host applies every migration, a game, a tournament and a benchmark are played to their ends, every read endpoint answers 200, and the broadcast planner and the request queue run their PostgreSQL paths. Each test creates its own database on the server and drops it. They run only when `ARENA_TEST_POSTGRES` holds a connection string whose role may create databases:
+
+```bash
+ARENA_TEST_POSTGRES='Host=localhost;Port=5432;Username=postgres;Password=<password>;Database=postgres' \
+  dotnet test tests/Chess.Api.Tests --filter "FullyQualifiedName~Chess.Api.Tests.Postgres"
+```
+
+The model and the migrations must agree. After a change to an entity or to `ArenaDbContext`, run this; it fails when a migration is missing (`dotnet tool restore` installs `dotnet-ef` once):
+
+```bash
+dotnet tool restore
+dotnet ef migrations has-pending-model-changes --project src/Chess.Api
+```
+
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main`:
 
 - **build and test**: `dotnet build Chess.sln -warnaserror`, then the unit tests (the `Chess.E2E` filter above), with the results uploaded. It needs no browser.
+- **PostgreSQL tests and model drift**: a `postgres:17` service container, the model check above, and the PostgreSQL tests with `ARENA_TEST_POSTGRES` set.
 - **end-to-end journeys**: builds `tests/Chess.E2E`, installs Chromium with its system dependencies, and runs the five journeys.
 - **secret scan**: gitleaks over the full history.
 - **kernel size guard**: `Chess.ServiceDefaults` stays at or below 400 lines of C#.

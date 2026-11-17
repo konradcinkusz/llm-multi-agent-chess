@@ -168,3 +168,53 @@ jobs:
           name: e2e-results
           path: TestResults/**/*.trx
           if-no-files-found: warn
+
+  postgres:
+    name: PostgreSQL tests and model drift (postgres:17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # A real server, because the InMemory provider cannot show an untranslatable query or a model that drifted from its
+    # migrations (CLAUDE.md, lesson on #78). The throw-away password belongs to this service container only.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: arena-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      ARENA_TEST_POSTGRES: Host=localhost;Port=5432;Username=postgres;Password=arena-ci-only;Database=postgres
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+
+      # The entity model and the migrations must agree: a changed entity needs its migration in the same pull request.
+      - name: Model matches the migrations (dotnet ef)
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes --project src/Chess.Api
+
+      - name: Build the API tests (warnings as errors)
+        run: dotnet build tests/Chess.Api.Tests -warnaserror
+
+      # Each test creates its own database on the service and drops it, so the tests do not share state.
+      - name: Run the PostgreSQL tests
+        run: dotnet test tests/Chess.Api.Tests --no-build --filter "FullyQualifiedName~Chess.Api.Tests.Postgres" --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgres-results
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
