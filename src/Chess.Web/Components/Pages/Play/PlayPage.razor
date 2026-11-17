@@ -7,6 +7,7 @@
 @inject ArenaApiClient Api
 @inject GameEventsClient Events
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
 
 <PageTitle>Live game · LLM Chess Arena</PageTitle>
 
@@ -106,7 +107,7 @@ else
             }
         </section>
 
-        <section class="card stack play-board" aria-label="Board">
+        <section id="board" class="card stack play-board" aria-label="Board">
             <PlayerBar Color="Black" Name="@ModelName(SideModel(Black))" ToMove="@ToMove(Black)"
                        Attempt="@AttemptOf(Black)" Seconds="@SecondsOf(Black)"
                        CapturedHere="@Captured.CapturedByBlack" Lead="@LeadOf(Black)"
@@ -410,6 +411,10 @@ else
 
             _follow = new CancellationTokenSource();
             _ = FollowAsync(summary.Id, _follow.Token);
+
+            // The game is in the address, so a reload or a shared link opens it (?game=). The fragment brings the board into
+            // view: on a phone it sits below the form, and the router scrolls to the element a fragment names without a script.
+            Navigation.NavigateTo($"/?game={summary.Id:D}#board", replace: true);
         }
         catch (Exception ex)
         {
