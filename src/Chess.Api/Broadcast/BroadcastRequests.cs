@@ -42,13 +42,13 @@ public sealed class BroadcastRequests(
     /// </summary>
     public async Task<RequestGame?> StartAsync(QueuedRequest request, CancellationToken ct)
     {
-        if (!AllCustom(request))
+        var listing = await catalog.GetModelsAsync(ct);
+        if (!AllCustom(request, listing))
         {
             await FailAndCreditAsync(request.Id, NotCustomReason, ct);
             return null;
         }
 
-        var listing = await catalog.GetModelsAsync(ct);
         var whitePricing = PricingOf(listing.Models, request.White);
         var blackPricing = PricingOf(listing.Models, request.Black);
 
@@ -79,16 +79,33 @@ public sealed class BroadcastRequests(
         return new RequestGame(game.Id, budget);
     }
 
-    /// <summary>True when both sides are custom models. Random and Copilot models are not, so they are refused (03 §15.2).</summary>
-    private bool AllCustom(QueuedRequest request)
+    /// <summary>
+    /// True when both sides are custom models. Random and Copilot models are not, so they are refused (03 §15.2). A side counts
+    /// only when it is configured under <c>Arena:CustomModels</c> and the catalog lists it as <see cref="ModelDto.Custom"/>: the
+    /// gateway drops a custom model whose id a Copilot model already uses, and that id then plays on the Copilot subscription,
+    /// so a configured id alone does not prove it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The catalog is not ready, so no model can be told apart yet; the request is requeued.</exception>
+    private bool AllCustom(QueuedRequest request, ModelListing listing)
     {
         if (!requests.Value.RequireApiKeyModels)
         {
             return true;
         }
 
-        var custom = arena.Value.CustomModels.Select(m => m.Id).ToHashSet(StringComparer.Ordinal);
-        return custom.Contains(ModelVariant.BaseOf(request.White)) && custom.Contains(ModelVariant.BaseOf(request.Black));
+        if (listing.Warning is not null)
+        {
+            throw new InvalidOperationException($"The model catalog is not ready: {listing.Warning}");
+        }
+
+        var configured = arena.Value.CustomModels.Select(m => m.Id).ToHashSet(StringComparer.Ordinal);
+        return IsCustom(listing, configured, request.White) && IsCustom(listing, configured, request.Black);
+    }
+
+    private static bool IsCustom(ModelListing listing, ISet<string> configured, string playerId)
+    {
+        var model = ModelVariant.BaseOf(playerId);
+        return configured.Contains(model) && listing.Models.Any(m => m.Id == model && m.Custom);
     }
 
     private static ModelPricingDto? PricingOf(IReadOnlyList<ModelDto> models, string playerId) =>

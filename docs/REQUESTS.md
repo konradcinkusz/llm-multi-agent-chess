@@ -51,7 +51,11 @@ Rules the code enforces:
 - A model priced in **neither** `UsdPerMillionInput` / `UsdPerMillionOutput` **nor** `CreditsPerMillionInput` /
   `CreditsPerMillionOutput` cannot be quoted, so it is left out of the menu.
 - With `Arena:Requests:RequireApiKeyModels` on (the default), every menu model must be one of these entries. Startup fails
-  otherwise, and the request never runs on the Copilot subscription.
+  otherwise, and the request never runs on the Copilot subscription. The same holds when a menu model's `Id` is also the id of a
+  Copilot model: the Copilot gateway drops the custom entry and the id would play on the subscription, so startup fails with a
+  message that names the id (the check runs once the Copilot runtime has listed its models; with no Copilot login there is
+  nothing to compare, and the request is refused at play time instead). A model is quoted and played for a viewer only when the
+  model listing marks it `custom`, so a clashing id is never quoted and a request that names one is refused and credited.
 
 ### The menu, tiers and rates: the API's configuration
 
@@ -331,7 +335,7 @@ written; its result and the `played` state are added below once it ends.
   Mock mode (`Arena:Requests:Mode` is `Off` or `YouTube`), and the form then goes away.
 - **`/admin/requests` has no navigation link.** Open it by its address, `http://localhost:5070/admin/requests`.
 - **There is no requeue endpoint.** `POST /api/requests/{id}/cancel` exists, and it works only on a queued request. A request that fails
-  is requeued once by the app. A request left playing by a restart is requeued or closed at startup.
+  is requeued once by the app. A request left playing by a restart is requeued or closed at startup, before the broadcast runner takes any request: it is closed as played only when its game finished with a result, and a finished game with no result (aborted) is requeued once, then credited.
 - **A payer's balance is not shown anywhere.** There is no balance endpoint and no balance on the admin page. A balance is the sum of
   the payer's rows in the `payer_ledger` table. The rejection reason names it when a command is refused for lack of credit.
 - **Exchange rates are configuration, not live data.** They are the table in section 4, and they go stale until you update them.
