@@ -207,9 +207,9 @@ machine, P5 unaffected). The 1 AI unit = 1 AI credit assumption and the price un
 smoke run; both are isolated in one place each so a correction is one line. The multiplier-based estimates in the
 tournament form and the broadcast planner are replaced by AI-credit estimates (G5).
 
-## ADR-013 — The public results site is a static export on the `gh-pages` branch
+## ADR-013 — The public results site is a static export, deployed to GitHub Pages from Actions
 
-**Status:** Accepted (2026-10-25).
+**Status:** Accepted (2026-10-25). Amended (2026-11-17): GitHub Pages is deployed from the `publish-site` GitHub Actions workflow, not from a branch.
 
 **Context.** The owner wants a public page with every result and chart. Deploying the web app read-only (Fly.io, a hosted
 Postgres, a read-only mode, a SELECT-only role, caching of the on-read rating) was analysed and costs about 40 USD a month
@@ -217,9 +217,17 @@ plus a new attack surface; the live game stream would not reach it anyway, becau
 **Decision.** The local app exports a static snapshot (03 §11) and force-pushes it as one orphan commit to `gh-pages`;
 GitHub Pages serves the branch. ADR-002 holds: nothing runs anywhere but the owner's machine. The live view stays on
 YouTube; the site lags by at most the auto-publish interval.
-**Consequences.** No server, no database online, no cost. Everything the site shows is public by design. Pages' source
-moves from GitHub Actions to the `gh-pages` branch (one owner setting). The site is plain HTML and SVG, so it has no search
-or filtering; the JSON files are there for anyone who wants to analyse the data.
+**Amendment (2026-11-17).** The public URL is served from the GitHub Actions workflow `publish-site.yml` (Settings, Pages,
+Source = GitHub Actions), which builds the site from the results archive (`results/`, RESULTS-ARCHIVE.md) and deploys it; the
+build job holds `contents: read` only and the deploy job alone holds `pages: write` and `id-token: write`. The in-app publisher
+(`/admin/site`, `GitSitePublisher`) stays as an advanced option: it force-pushes an export of the owner's own database, with
+prompts and replies, to a branch, and it is not what serves the public URL. It never writes the remote's default branch, `main`,
+`master` or a branch whose tip it did not author. Games that ended undecided (result `*`) are not on the site. The owner decides
+whether the in-app publisher is kept.
+
+**Consequences.** No server, no database online, no cost. Everything the site shows is public by design. The site is plain HTML
+and SVG, so it has no search or filtering; the JSON files are there for anyone who wants to analyse the data. The first version
+of this decision had Pages serve the `gh-pages` branch; the amendment replaces that.
 
 ## ADR-014 — Benchmark runs, player variants and custom models
 

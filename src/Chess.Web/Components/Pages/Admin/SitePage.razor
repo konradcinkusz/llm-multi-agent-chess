@@ -10,14 +10,15 @@
 <div class="admin-page">
     <div class="page-header">
         <h1>Public results site</h1>
-        <p class="page-lede">A static copy of the results, games and tournaments, published to the <code>@Options.Value.Branch</code> branch</p>
+        <p class="page-lede">A static copy of the results, games and tournaments of this database. An advanced option: the public site is deployed by the publish-site workflow</p>
     </div>
 
     <section class="card stack" aria-labelledby="site-actions">
         <h2 id="site-actions">Publish</h2>
         <p class="muted">
-            Publishing replaces the whole site with a fresh export. Everything on it is public, including prompts, replies,
-            reasoning and costs. Nothing else (no configuration, no secrets, no aborted games) is sent.
+            Publishing replaces the <code>@Options.Value.Branch</code> branch with a fresh export. Everything on it is public,
+            including prompts, replies, reasoning and costs. Nothing else (no configuration, no secrets, no aborted games) is
+            sent. This does not serve the public address: GitHub Pages is deployed from the publish-site workflow.
         </p>
         <div class="cluster">
             <button type="button" class="btn" @onclick="ExportAsync" disabled="@_busy">Export</button>
@@ -89,8 +90,9 @@
         }
         <p class="muted">Auto-publish: @SiteFormat.AutoPublish(Options.Value.AutoPublishMinutes)</p>
         <p class="muted">
-            One-time owner step: on GitHub, Settings → Pages → Source: <em>Deploy from a branch</em>, branch
-            <code>@Options.Value.Branch</code>, folder <code>/ (root)</code>.
+            One-time owner step for the public address: on GitHub, Settings → Pages → Source: <em>GitHub Actions</em>. The
+            <code>publish-site</code> workflow then builds the site from the results archive and deploys it. The branch above is
+            only for hosting this export somewhere that serves a branch.
         </p>
     </section>
 </div>

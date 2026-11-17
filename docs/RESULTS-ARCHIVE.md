@@ -52,10 +52,17 @@ by a pull request that deletes it.
 
 ## The site
 
-`publish-site.yml` runs on every push to `main` that touches `results/`: it starts the API on the fake profile with
-`Arena:Results:Archive:ImportFolder=results`, exports the site with `Arena:Site:ExportOnceTo`, and deploys it to GitHub
-Pages. Set Settings, Pages, Source to GitHub Actions once. The generated site is not committed. The owner's own publish to
-`gh-pages` (README, Public results site) still works, and shows the owner's database only.
+`publish-site.yml` runs on a push to `main` that touches `results/`, the code that makes the site or the workflow, and by hand.
+It tests the site and archive code, starts the API on the fake profile with `Arena:Results:Archive:ImportFolder=results`,
+waits for the import to finish (the games are in the database and their rating snapshots are written, so the rating history is
+there), exports the site with `Arena:Site:ExportOnceTo`, checks it (no script, under the 1 GB limit of a Pages site) and
+deploys it to GitHub Pages. Set Settings, Pages, Source to GitHub Actions once. The generated site is not committed.
+
+The import status at `GET /api/results/archive/status` is `{"state":"done","added":N,"snapshotBatches":M}` when it has finished:
+`added` games were new, and `snapshotBatches` rating snapshot batches were written for them (one per rated game).
+
+The owner's own publish to a branch (README, Public results site, "Publishing from the app") is an advanced option. It exports
+the owner's database, not the archive, and it does not serve the public URL.
 
 ## Growth
 
