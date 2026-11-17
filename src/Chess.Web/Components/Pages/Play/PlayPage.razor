@@ -346,7 +346,7 @@ else
         }
         catch (Exception ex)
         {
-            _modelsError = ex.Message;
+            _modelsError = ApiFailure.Describe(ex);
         }
 
         try
@@ -355,7 +355,7 @@ else
         }
         catch (Exception ex)
         {
-            statusError = ex.Message;
+            statusError = ApiFailure.Describe(ex);
         }
 
         _gatewayMessage = GatewayMessage(status, statusError);
@@ -413,7 +413,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not start the game: {ex.Message}";
+            _error = $"Could not start the game: {ApiFailure.Describe(ex)}";
         }
         finally
         {
@@ -438,7 +438,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not open the game: {ex.Message}";
+            _error = $"Could not open the game: {ApiFailure.Describe(ex)}";
         }
     }
 
@@ -456,7 +456,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not abort the game: {ex.Message}";
+            _error = $"Could not abort the game: {ApiFailure.Describe(ex)}";
         }
     }
 
@@ -479,7 +479,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not load the PGN: {ex.Message}";
+            _error = $"Could not load the PGN: {ApiFailure.Describe(ex)}";
         }
     }
 
@@ -591,9 +591,9 @@ else
                     }
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
             {
-                await InvokeAsync(() => ShowError($"The live stream failed: {ex.Message}"));
+                await InvokeAsync(() => ShowError($"The live stream failed: {ApiFailure.Describe(ex)}"));
             }
 
             // The stream closed before the game finished, or could not be opened: load the game as it is, then reconnect.
@@ -619,7 +619,7 @@ else
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            await InvokeAsync(() => ShowError($"Could not load the game: {ex.Message}"));
+            await InvokeAsync(() => ShowError($"Could not load the game: {ApiFailure.Describe(ex)}"));
             return;
         }
 
@@ -671,7 +671,7 @@ else
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            await InvokeAsync(() => ShowError($"Could not load the engine log: {ex.Message}"));
+            await InvokeAsync(() => ShowError($"Could not load the engine log: {ApiFailure.Describe(ex)}"));
         }
     }
 
@@ -694,7 +694,7 @@ else
         {
             await InvokeAsync(() =>
             {
-                _usageError = $"Could not load the usage of this game: {ex.Message}";
+                _usageError = $"Could not load the usage of this game: {ApiFailure.Describe(ex)}";
                 StateHasChanged();
             });
         }

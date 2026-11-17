@@ -160,7 +160,7 @@ else
         catch (Exception ex)
         {
             // The page reports the failure; it must not take the app down with it.
-            modelsError = ex.Message;
+            modelsError = ApiFailure.Describe(ex);
             return;
         }
 
@@ -213,7 +213,7 @@ else
         }
         catch (Exception ex)
         {
-            pairError = $"Could not load the comparison: {ex.Message}";
+            pairError = $"Could not load the comparison: {ApiFailure.Describe(ex)}";
             return;
         }
 

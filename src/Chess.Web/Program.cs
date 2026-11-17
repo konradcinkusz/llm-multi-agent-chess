@@ -15,8 +15,13 @@ builder.Services.AddSitePublishing(builder.Configuration, builder.Environment);
 // Chess.Api is resolved by service discovery (AppHost resource "api"). ServiceDefaults adds the standard resilience
 // handler to every client, so no client adds another: each handler multiplies the attempts. The handler's timeouts
 // end when the response headers arrive, so the SSE stream is read after them and is not cut (a 35 s stream completes).
-// GameEventsClient's infinite Timeout is what would bound that read, so it stays infinite.
-builder.Services.AddHttpClient<ArenaApiClient>(client => client.BaseAddress = new Uri("http://api"))
+// HttpClient.Timeout is infinite on both clients: the 100 s default would fire before the handler's 150 s total, so the
+// handler alone decides how long a call may take. GameEventsClient's infinite Timeout also keeps the SSE read open.
+builder.Services.AddHttpClient<ArenaApiClient>(client =>
+    {
+        client.BaseAddress = new Uri("http://api");
+        client.Timeout = Timeout.InfiniteTimeSpan;
+    })
     .AddServiceDiscovery();
 builder.Services.AddHttpClient<GameEventsClient>(client =>
     {
@@ -28,6 +33,8 @@ builder.Services.AddHttpClient<GameEventsClient>(client =>
 var app = builder.Build();
 app.UseOriginGuard();
 app.MapDefaultEndpoints();
+// An unknown address answers 404 and the not-found page (a real page in the layout) is rendered for it, status kept.
+app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
 
 <div class="app-shell">
     <header class="app-header">
@@ -9,6 +10,32 @@
     <StatusStrip />
 
     <main class="app-main">
-        @Body
+        @* A page that throws stops here, not the circuit: the rest of the arena keeps working (07 §5). *@
+        <ErrorBoundary @ref="_boundary">
+            <ChildContent>@Body</ChildContent>
+            <ErrorContent>
+                <div class="callout callout-danger" role="alert" data-testid="page-error">
+                    <p><strong>Something went wrong on this page.</strong></p>
+                    <p>The rest of the arena is unaffected. Reload the page to try again.</p>
+                    <p><button type="button" class="btn btn-sm" data-testid="page-error-reload" @onclick="Reload">Reload the page</button></p>
+                </div>
+            </ErrorContent>
+        </ErrorBoundary>
     </main>
 </div>
+
+@* The framework shows this when an unhandled error ends the circuit; reloading starts a new one. *@
+<div id="blazor-error-ui" data-nosnippet>
+    The arena stopped responding on this page.
+    <a href="" class="reload">Reload</a>
+    <span class="dismiss" role="button" aria-label="Dismiss">✕</span>
+</div>
+
+@code {
+    private ErrorBoundary? _boundary;
+
+    // The layout gets a new Body when the user navigates: the next page starts clean, not on the last page's error.
+    protected override void OnParametersSet() => _boundary?.Recover();
+
+    private void Reload() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+}

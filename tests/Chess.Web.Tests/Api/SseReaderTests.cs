@@ -96,6 +96,79 @@ public class SseReaderTests
         Assert.Equal("GameFinished", Assert.Single(messages).Type);
     }
 
+    [Fact]
+    public async Task AStreamThatGoesSilentEndsAfterTheIdleTimeoutSoThePageReconnects()
+    {
+        using var reader = new StallingReader(lines: ["event: MovePlayed", "data: {\"ply\":1}", ""]);
+        var messages = new List<GameEventMessage>();
+
+        await foreach (var message in SseReader.ReadAsync(reader, idleTimeout: TimeSpan.FromMilliseconds(150)))
+        {
+            messages.Add(message);
+        }
+
+        Assert.Equal("MovePlayed", Assert.Single(messages).Type);
+    }
+
+    [Fact]
+    public async Task HeartbeatsCountAsActivityAndKeepTheStreamOpen()
+    {
+        // Pings every 60 ms for 600 ms, far past the 200 ms idle limit, then an event: the stream was never idle.
+        var lines = Enumerable.Repeat(new[] { ": ping", "" }, 10).SelectMany(x => x)
+            .Concat(["event: GameFinished", "data: {\"result\":\"1-0\"}", ""]).ToArray();
+        using var reader = new StallingReader(lines, delayBetweenLines: TimeSpan.FromMilliseconds(30));
+        var messages = new List<GameEventMessage>();
+
+        await foreach (var message in SseReader.ReadAsync(reader, idleTimeout: TimeSpan.FromMilliseconds(200)))
+        {
+            messages.Add(message);
+        }
+
+        Assert.Equal("GameFinished", Assert.Single(messages).Type);
+    }
+
+    [Fact]
+    public async Task CancellationByThePageStillThrows()
+    {
+        using var reader = new StallingReader(lines: []);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in SseReader.ReadAsync(reader, cts.Token, TimeSpan.FromSeconds(30)))
+            {
+            }
+        });
+    }
+
+    [Fact]
+    public void TheDefaultIdleTimeoutIsThreeHeartbeats()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(45), SseReader.DefaultIdleTimeout);
+    }
+
+    /// <summary>Hands out <paramref name="lines"/> and then waits for ever, like a socket that stopped answering.</summary>
+    private sealed class StallingReader(string[] lines, TimeSpan? delayBetweenLines = null) : TextReader
+    {
+        private int _next;
+
+        public override async ValueTask<string?> ReadLineAsync(CancellationToken ct)
+        {
+            if (_next < lines.Length)
+            {
+                if (delayBetweenLines is { } delay)
+                {
+                    await Task.Delay(delay, ct);
+                }
+
+                return lines[_next++];
+            }
+
+            await Task.Delay(Timeout.Infinite, ct);
+            return null;
+        }
+    }
+
     private static async Task<List<GameEventMessage>> ReadAll(string text)
     {
         var messages = new List<GameEventMessage>();

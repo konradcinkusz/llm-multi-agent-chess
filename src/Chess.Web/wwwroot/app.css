@@ -744,3 +744,37 @@ body {
         display: inline;
     }
 }
+
+/* The framework's unhandled-error bar (shown by blazor.web.js when the circuit ends) in the style contract's tokens. */
+#blazor-error-ui {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1000;
+    display: none;
+    box-sizing: border-box;
+    padding: var(--space-3) var(--gutter);
+    border-top: 1px solid var(--danger);
+    background: var(--danger-soft);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+}
+
+#blazor-error-ui .reload {
+    margin-left: var(--space-2);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+#blazor-error-ui .dismiss {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--gutter);
+    cursor: pointer;
+}
+
+/* The /broadcast stage is an OBS source: the framework's reconnect dialog must never cover the picture. The page shows
+   its own "Reconnecting to the arena" line. The dialog is appended to the body, outside the stage, hence :has(). */
+body:has(.broadcast-layout) #components-reconnect-modal {
+    display: none !important;
+}

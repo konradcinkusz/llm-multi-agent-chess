@@ -9,6 +9,12 @@ public static class TournamentFormRules
     /// <summary>The highest concurrency the form offers: the API's <c>Arena:MaxConcurrentGames</c> defaults to it.</summary>
     public const int MaxConcurrencyLimit = 2;
 
+    /// <summary>
+    /// What the form starts on. One is the only value every API accepts: <c>Arena:MaxConcurrentGames</c> can be 1, and the
+    /// API refuses a higher concurrency with a 400. The user raises it up to <see cref="MaxConcurrencyLimit"/>.
+    /// </summary>
+    public const int DefaultConcurrency = 1;
+
     /// <returns>The problems with the form, in the order they appear on it; empty when the form can be sent.</returns>
     public static IReadOnlyList<string> Problems(string name, IReadOnlyList<string> models, int gamesPerPair, int maxConcurrency)
     {

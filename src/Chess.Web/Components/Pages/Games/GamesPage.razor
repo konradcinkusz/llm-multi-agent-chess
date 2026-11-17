@@ -44,6 +44,11 @@
     <p class="callout callout-danger" role="alert" data-testid="games-error">Could not load the games: @_listError</p>
 }
 
+@if (_loading && _page is not null)
+{
+    <p class="muted" role="status" data-testid="games-loading">Loading games…</p>
+}
+
 @if (_page is null)
 {
     @if (_listError is null)
@@ -94,9 +99,9 @@ else
     </div>
 
     <nav class="cluster games-pager" aria-label="Pages of games">
-        <button id="games-prev" class="btn btn-sm" data-testid="games-prev" type="button" disabled="@(_pageNumber <= 1)" @onclick="PreviousPageAsync">Previous</button>
+        <button id="games-prev" class="btn btn-sm" data-testid="games-prev" type="button" disabled="@(_loading || _pageNumber <= 1)" @onclick="PreviousPageAsync">Previous</button>
         <span data-testid="games-page">Page @_pageNumber of @pageCount · @_page.Total @(_page.Total == 1 ? "game" : "games")</span>
-        <button id="games-next" class="btn btn-sm" data-testid="games-next" type="button" disabled="@(_pageNumber >= pageCount)" @onclick="NextPageAsync">Next</button>
+        <button id="games-next" class="btn btn-sm" data-testid="games-next" type="button" disabled="@(_loading || _pageNumber >= pageCount)" @onclick="NextPageAsync">Next</button>
     </nav>
 }
 
@@ -108,6 +113,7 @@ else
     private PageDto<GameSummaryDto>? _page;
     private Dictionary<Guid, double?> _costs = [];
     private string? _listError;
+    private bool _loading;
     private string _model = "";
     private string _status = "";
     private int _pageNumber = 1;
@@ -120,9 +126,9 @@ else
         {
             _models = await Api.GetModelsAsync(_cts.Token);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _modelsError = ex.Message;
+            _modelsError = ApiFailure.Describe(ex);
         }
 
         await LoadAsync();
@@ -141,24 +147,36 @@ else
 
     private async Task GoToPageAsync(int page)
     {
+        var shown = _pageNumber;
         _pageNumber = page;
-        await LoadAsync();
+        if (!await LoadAsync())
+        {
+            // The page that is still on screen is the one the pager names.
+            _pageNumber = shown;
+        }
     }
 
-    private async Task LoadAsync()
+    /// <returns>False when the list could not be loaded; the page then still shows the last list.</returns>
+    private async Task<bool> LoadAsync()
     {
+        // The user sees at once that a request is out: with the API slow, a click otherwise shows nothing for a minute.
+        _loading = true;
         try
         {
             _page = await Api.GetGamesAsync(_pageNumber, GameArchive.PageSize, Filter(_model), Filter(_status), _cts.Token);
             _listError = null;
+            _costs = await LoadCostsAsync(_page.Items);
+            return true;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _listError = ex.Message;
-            return;
+            _listError = ApiFailure.Describe(ex);
+            return false;
         }
-
-        _costs = await LoadCostsAsync(_page.Items);
+        finally
+        {
+            _loading = false;
+        }
     }
 
     /// <summary>Each game's estimated USD from its usage (03 §10.2). A game whose usage cannot be read shows a dash.</summary>
@@ -174,7 +192,7 @@ else
         {
             return (await Api.GetGameUsageAsync(id, _cts.Token)).TotalEstimatedUsd;
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
             return null;
         }

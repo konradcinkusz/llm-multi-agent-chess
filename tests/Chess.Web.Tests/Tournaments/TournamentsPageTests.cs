@@ -156,7 +156,8 @@ public class TournamentsPageTests
         Assert.Equal("Autumn", body.RootElement.GetProperty("name").GetString());
         Assert.Equal(["gpt", "claude"], body.RootElement.GetProperty("models").EnumerateArray().Select(m => m.GetString()!).ToArray());
         Assert.Equal(2, body.RootElement.GetProperty("gamesPerPair").GetInt32());
-        Assert.Equal(2, body.RootElement.GetProperty("maxConcurrency").GetInt32());
+        // The form starts on 1, the one value every API accepts (Arena:MaxConcurrentGames can be 1); it was 2.
+        Assert.Equal(1, body.RootElement.GetProperty("maxConcurrency").GetInt32());
 
         var banner = cut.Find(".tournament-created").TextContent;
         Assert.Contains("Autumn", banner);

@@ -140,7 +140,7 @@ else
         {
             _models = await Api.GetModelsAsync(_cts.Token);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
             // The names are a nicety: without the models the log and the summary show the model ids.
         }
@@ -178,9 +178,9 @@ else
             _error = "No game has this id.";
             return;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _error = $"Could not load the game: {ex.Message}";
+            _error = $"Could not load the game: {ApiFailure.Describe(ex)}";
             return;
         }
 
@@ -216,9 +216,9 @@ else
 
             _attempts = entries;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _attemptsError = ex.Message;
+            _attemptsError = ApiFailure.Describe(ex);
         }
     }
 
@@ -228,9 +228,9 @@ else
         {
             _pgnHref = PgnDownload.Href(await Api.GetGamePgnAsync(id, _cts.Token));
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _pgnError = ex.Message;
+            _pgnError = ApiFailure.Describe(ex);
         }
     }
 
@@ -240,9 +240,9 @@ else
         {
             _usage = await Api.GetGameUsageAsync(id, _cts.Token);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _usageMessage = $"Could not load the usage of this game: {ex.Message}";
+            _usageMessage = $"Could not load the usage of this game: {ApiFailure.Describe(ex)}";
         }
     }
 

@@ -1,27 +1,40 @@
 @using Chess.Web.Api
+@implements IDisposable
 @inject ArenaApiClient Api
 
 <div class="status-strip" role="status">
-    @if (status is not null)
+    @if (_status is not null)
     {
-        <span class="status-item" data-service="copilot" title="@status.CopilotDetail"><span class="dot dot-@CopilotTone(status.Copilot)" aria-hidden="true"></span>Copilot: <strong>@status.Copilot</strong> <span class="status-detail">(@status.CopilotDetail)</span></span>
-        <span class="status-item" data-service="database"><span class="dot dot-@ServiceTone(status.Database)" aria-hidden="true"></span>Database: <strong>@status.Database</strong></span>
-        <span class="status-item" data-service="stockfish" title="@StockfishTitle(status.Stockfish)"><span class="dot dot-@ServiceTone(status.Stockfish)" aria-hidden="true"></span>Stockfish: <strong>@status.Stockfish</strong></span>
+        <span class="status-item" data-service="copilot" title="@_status.CopilotDetail"><span class="dot dot-@CopilotTone(_status.Copilot)" aria-hidden="true"></span>Copilot: <strong>@_status.Copilot</strong> <span class="status-detail">(@_status.CopilotDetail)</span></span>
+        <span class="status-item" data-service="database"><span class="dot dot-@ServiceTone(_status.Database)" aria-hidden="true"></span>Database: <strong>@_status.Database</strong></span>
+        <span class="status-item" data-service="stockfish" title="@StockfishTitle(_status.Stockfish)"><span class="dot dot-@ServiceTone(_status.Stockfish)" aria-hidden="true"></span>Stockfish: <strong>@_status.Stockfish</strong></span>
     }
-    else if (unavailable)
+    else if (_unavailable)
     {
-        <span class="status-error">API unavailable: @detail</span>
+        <span class="status-error" data-testid="status-unavailable">@_detail</span>
     }
-    else
+    else if (HttpContext is null)
     {
         <span>Checking services…</span>
     }
 </div>
 
 @code {
-    private StatusDto? status;
-    private bool unavailable;
-    private string? detail;
+    /// <summary>How often the strip asks again. It is the only way an outage, or the recovery from one, shows up.</summary>
+    public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(10);
+
+    /// <summary>Overridden by tests only.</summary>
+    [Parameter]
+    public TimeSpan Interval { get; set; } = RefreshInterval;
+
+    /// <summary>Set only while the server renders the page to HTML (the not-found page). In the circuit it is null.</summary>
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private readonly CancellationTokenSource _cts = new();
+    private StatusDto? _status;
+    private bool _unavailable;
+    private string? _detail;
 
     // The Copilot state is the gateway's own (03 §8); the dot colour follows 07 §5.
     internal static string CopilotTone(string state) => state switch
@@ -45,17 +58,75 @@
 
     internal static string? StockfishTitle(string status) => status == "absent" ? "move quality disabled" : null;
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>The words for an API that cannot be asked: plain, never the library's own text.</summary>
+    internal static string OutageText(Exception ex) =>
+        ex is HttpRequestException { StatusCode: not null }
+            ? "The arena API answered with an error. Checking again shortly."
+            : "The arena API is not answering. Checking again shortly.";
+
+    // After the first render, not in OnInitializedAsync: the strip then shows "Checking services…" at once, and a page that
+    // the server renders to HTML (the not-found page) never waits for the API.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await RefreshAsync();
+        StateHasChanged();
+        _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        var ct = _cts.Token;
+        using var timer = new PeriodicTimer(Interval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                // The timer runs outside any UI event: re-render explicitly (CLAUDE.md, lessons learned).
+                await InvokeAsync(async () =>
+                {
+                    await RefreshAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The layout was disposed: the strip stops asking.
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private async Task RefreshAsync()
     {
         try
         {
-            status = await Api.GetStatusAsync();
+            _status = await Api.GetStatusAsync(_cts.Token);
+            _unavailable = false;
+            _detail = null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            // The strip reports on the API; it must never take the page down with it.
-            unavailable = true;
-            detail = ex.Message;
+            // The strip reports on the API; it must never take the page down with it. The last known status is dropped:
+            // a green dot on an API that is not answering would be a lie.
+            _status = null;
+            _unavailable = true;
+            _detail = OutageText(ex);
         }
+        catch (OperationCanceledException)
+        {
+            // Disposed while asking.
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
     }
 }

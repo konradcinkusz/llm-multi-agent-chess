@@ -9,12 +9,30 @@
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="@Assets["Chess.Web.styles.css"]" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="PageRenderMode" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 
 </html>
+
+@code {
+    /// <summary>
+    /// Interactive, and not prerendered: a prerender awaits the API, so with the API frozen a page load stayed blank for
+    /// minutes. Without it the shell arrives at once and each page shows its own loading state.
+    /// </summary>
+    private static readonly IComponentRenderMode Interactive = new InteractiveServerRenderMode(prerender: false);
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    /// <summary>
+    /// The not-found page is the one exception: it is rendered on the server and sent as HTML, so an unknown address
+    /// answers 404 with the layout and its text even when no circuit can start. Nothing on it needs one.
+    /// </summary>
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext?.Request.Path.StartsWithSegments(NotFoundPage.Path) == true ? null : Interactive;
+}

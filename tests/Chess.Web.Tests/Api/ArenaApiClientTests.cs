@@ -119,4 +119,43 @@ public class ArenaApiClientTests
 
         await Assert.ThrowsAsync<HttpRequestException>(() => api.GetStatusAsync());
     }
+
+    [Fact]
+    public async Task ARefusedCallCarriesTheProblemDetailAndTheStatusCode()
+    {
+        var handler = new FakeHandler(_ => Canned.Json(
+            """{"title":"Bad Request","status":400,"detail":"MaxConcurrency must be at most 1."}""", HttpStatusCode.BadRequest));
+        var api = new ArenaApiClient(Canned.Client(handler));
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            api.CreateTournamentAsync(new CreateTournamentRequest("Cup", ["a", "b"], 2, 2)));
+
+        Assert.Equal("MaxConcurrency must be at most 1.", ex.Message);
+        Assert.Equal(HttpStatusCode.BadRequest, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task ValidationMessagesAreJoinedInsteadOfTheBareStatus()
+    {
+        var handler = new FakeHandler(_ => Canned.Json(
+            """{"title":"One or more validation errors occurred.","status":400,"errors":{"models":["Choose at least two models."],"name":["Name is required."]}}""",
+            HttpStatusCode.BadRequest));
+        var api = new ArenaApiClient(Canned.Client(handler));
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => api.CancelBenchmarkAsync(Guid.NewGuid()));
+
+        Assert.Equal("Choose at least two models. Name is required.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ARefusalWithoutAProblemDocumentNamesTheStatusCode()
+    {
+        var handler = new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.BadGateway));
+        var api = new ArenaApiClient(Canned.Client(handler));
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => api.GetGamePgnAsync(Guid.NewGuid()));
+
+        Assert.Equal("HTTP 502", ex.Message);
+        Assert.Equal(HttpStatusCode.BadGateway, ex.StatusCode);
+    }
 }
