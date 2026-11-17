@@ -19,6 +19,8 @@ internal sealed class LiveBroadcastServer
     private Pipe? _pipe;
     private int _streamRequests;
     private int _ratingsRequests;
+    private int _nowTimeouts;
+    private int _nowHangs;
 
     public LiveBroadcastServer()
     {
@@ -28,6 +30,23 @@ internal sealed class LiveBroadcastServer
     public FakeHandler Handler { get; }
 
     public HttpStatusCode NowStatus { get; set; } = HttpStatusCode.OK;
+
+    /// <summary>
+    /// How many of the next reads of /api/broadcast/now throw the TaskCanceledException an HttpClient timeout raises while
+    /// nobody has cancelled anything. Counts down to zero, then the reads answer again.
+    /// </summary>
+    public int NowTimeouts
+    {
+        get => Volatile.Read(ref _nowTimeouts);
+        set => Volatile.Write(ref _nowTimeouts, value);
+    }
+
+    /// <summary>How many of the next reads of /api/broadcast/now never finish their body (a database retry, a machine that slept).</summary>
+    public int NowHangs
+    {
+        get => Volatile.Read(ref _nowHangs);
+        set => Volatile.Write(ref _nowHangs, value);
+    }
 
     public string Now { get; set; } = LiveFixtures.Now("idle", "null", "[]", "null");
 
@@ -72,11 +91,39 @@ internal sealed class LiveBroadcastServer
     /// <summary>Closes the stream, as the server does after GameFinished or when the connection drops.</summary>
     public void EndStream() => _pipe?.Writer.Complete();
 
+    /// <summary>Takes one from a counter that is above zero. True when it did.</summary>
+    private static bool Take(ref int counter)
+    {
+        while (true)
+        {
+            var seen = Volatile.Read(ref counter);
+            if (seen <= 0)
+            {
+                return false;
+            }
+
+            if (Interlocked.CompareExchange(ref counter, seen - 1, seen) == seen)
+            {
+                return true;
+            }
+        }
+    }
+
     private HttpResponseMessage Respond(RecordedRequest request)
     {
         var route = $"{request.Method} {request.Target}";
         if (route == "GET /api/broadcast/now")
         {
+            if (Take(ref _nowTimeouts))
+            {
+                throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.");
+            }
+
+            if (Take(ref _nowHangs))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new Pipe().Reader.AsStream()) };
+            }
+
             return NowStatus == HttpStatusCode.OK ? Canned.Json(Now) : Canned.Json("{}", NowStatus);
         }
 

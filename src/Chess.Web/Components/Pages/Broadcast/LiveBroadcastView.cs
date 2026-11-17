@@ -4,14 +4,11 @@ using Chess.Web.Api;
 namespace Chess.Web.Components.Pages.Broadcast;
 
 /// <summary>
-/// What the OBS page shows, as plain functions of the data it has: the header, the leaderboard cut, the move tail, the
-/// start times and the model colours. No state and no I/O, so the rules can be tested without rendering.
+/// What the OBS page shows, as plain functions of the data it has: the move tail, the start times, the countdown and the
+/// model colours. No state and no I/O, so the rules can be tested without rendering.
 /// </summary>
 public static class LiveBroadcastView
 {
-    public const int DefaultTop = 8;
-    public const int MaxTop = 20;
-
     /// <summary>How many full moves the move tail shows.</summary>
     public const int MoveTailRows = 6;
 
@@ -21,33 +18,22 @@ public static class LiveBroadcastView
     /// <summary>The categorical colours of 03 §6.1 for a light background (<c>?theme=light</c>).</summary>
     public static readonly string[] LightSeries = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 
-    /// <summary>The <c>?top=</c> value: the default when absent or not positive, capped at <see cref="MaxTop"/>.</summary>
-    public static int ClampTop(int? top) => top is > 0 ? Math.Min(top.Value, MaxTop) : DefaultTop;
-
     /// <summary>
-    /// The leaderboard order of the Results page: established models first, then arena score, then rating, then model id,
-    /// so ties never reshuffle.
+    /// The countdown of the intermission card: "mm:ss" under an hour, "h:mm:ss" from an hour on, and "a moment" once the
+    /// start time has come but the runner has not started the game yet.
     /// </summary>
-    public static IReadOnlyList<ModelRating> Leaderboard(IEnumerable<ModelRating> models, int top) =>
-        models
-            .OrderBy(model => model.Provisional)
-            .ThenByDescending(model => model.ArenaScore)
-            .ThenByDescending(model => model.Rating)
-            .ThenBy(model => model.Model, StringComparer.Ordinal)
-            .Take(top)
-            .ToList();
-
-    /// <summary>"LLM Chess 24h — Game 17 of 48" while a game is on; the bare channel name otherwise.</summary>
-    public static string Title(int? slotIndex, int? totalGames)
+    public static string CountdownText(TimeSpan left)
     {
-        const string channel = "LLM Chess 24h";
-        if (slotIndex is null)
+        if (left <= TimeSpan.Zero)
         {
-            return channel;
+            return "a moment";
         }
 
-        var game = slotIndex.Value + 1;
-        return totalGames is null ? $"{channel} — Game {game}" : $"{channel} — Game {game} of {totalGames}";
+        // Whole seconds, rounded up, so the card never reads 00:00 before the start.
+        left = TimeSpan.FromSeconds(Math.Ceiling(left.TotalSeconds));
+        return left.TotalHours >= 1
+            ? ((int)left.TotalHours).ToString(CultureInfo.InvariantCulture) + left.ToString(@"\:mm\:ss", CultureInfo.InvariantCulture)
+            : left.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
     }
 
     /// <summary>Local start time of a slot, as "19:30".</summary>

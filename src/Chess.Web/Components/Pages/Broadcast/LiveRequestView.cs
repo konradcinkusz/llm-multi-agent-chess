@@ -4,20 +4,12 @@ using Chess.Web.Api;
 namespace Chess.Web.Components.Pages.Broadcast;
 
 /// <summary>
-/// What the OBS page shows of the viewer requests (03 §15.6), as plain functions of the queue and the menu. A request
-/// carries only its parsed configuration and the payer's display name, so nothing here can show the viewer's free text.
+/// What the OBS page shows of the viewer requests (03 §15.6), as plain functions of the queue: whether one waits, and who
+/// asked for the game on air. A request carries only its parsed configuration and the payer's display name, so nothing here
+/// can show the viewer's free text. <see cref="WaitLabel"/> and <see cref="Price"/> are used by the admin requests page.
 /// </summary>
 public static class LiveRequestView
 {
-    /// <summary>How many queued requests the page lists.</summary>
-    public const int MaxQueued = 3;
-
-    /// <summary>How many recent rejections the page lists.</summary>
-    public const int MaxRejections = 2;
-
-    /// <summary>The rejection line of 03 §15.6. It names the payer and the menu, and never says why or what was typed.</summary>
-    public const string RejectionText = "credit kept, see the menu";
-
     /// <summary>True while a request is running or waiting, so the stream does not start a replay.</summary>
     public static bool HasWaiting(RequestQueueDto? queue) =>
         queue is not null && (queue.Playing is not null || queue.Queued.Count > 0);
@@ -34,15 +26,6 @@ public static class LiveRequestView
         1 => "about 1 min",
         _ => $"about {minutes} min",
     };
-
-    public static IReadOnlyList<string> RejectionLines(RequestQueueDto? queue) =>
-        queue is null
-            ? []
-            : queue.Recent
-                .Where(request => request.Status == "rejected")
-                .Take(MaxRejections)
-                .Select(request => $"@{request.PayerDisplay}: {RejectionText}")
-                .ToList();
 
     /// <summary>A price in dollars, as "$1.50".</summary>
     public static string Price(double usd) => "$" + usd.ToString("0.00", CultureInfo.InvariantCulture);
