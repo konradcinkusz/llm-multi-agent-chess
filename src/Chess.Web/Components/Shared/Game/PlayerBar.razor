@@ -35,7 +35,8 @@
         }
 
         <div class="player-captured muted" data-testid="player-captured">
-            <span aria-label="Captured by @Color">@CapturedHere</span>
+            @* aria-label is not allowed on a bare span: role img gives the glyphs a name. *@
+            <span role="img" aria-label="Captured by @Color: @(CapturedHere.Length == 0 ? "nothing yet" : CapturedHere)">@CapturedHere</span>
             @if (Lead > 0)
             {
                 <span class="num" data-testid="player-lead">+@Lead</span>

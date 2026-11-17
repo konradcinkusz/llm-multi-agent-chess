@@ -263,6 +263,44 @@ public class ResultsPageTests
     }
 
     [Fact]
+    public void TheOrderAndTheScopeAreWrittenIntoTheAddressAndReadBackFromIt()
+    {
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.52, 0.68), tournaments: $$"""[{"id":"{{TournamentId}}","name":"Cup","models":["alpha","beta"],"gamesPerPair":2,"status":"finished","gamesTotal":2,"gamesFinished":2,"createdAt":"2026-10-24T10:00:00Z","finishedAt":null}]""");
+        var cut = Render(ctx, handler);
+        var navigation = ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        cut.WaitForAssertion(() => Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent));
+
+        cut.Find("#results-order").Change("conservative");
+        cut.WaitForAssertion(() => Assert.Contains("(lower bound of the arena score)", cut.Find(".headline").TextContent));
+        Assert.Contains("order=conservative", navigation.Uri, StringComparison.Ordinal);
+
+        cut.Find("#results-scope").Change(TournamentId);
+        cut.WaitForAssertion(() => Assert.Contains($"tournamentId={TournamentId}", string.Join(' ', handler.Requests.Select(r => r.Target))));
+        Assert.Contains($"tournament={TournamentId}", navigation.Uri, StringComparison.Ordinal);
+        Assert.Contains("order=conservative", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAddressWithAnOrderAndAScopeOpensOnThem()
+    {
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.52, 0.68), tournaments: $$"""[{"id":"{{TournamentId}}","name":"Cup","models":["alpha","beta"],"gamesPerPair":2,"status":"finished","gamesTotal":2,"gamesFinished":2,"createdAt":"2026-10-24T10:00:00Z","finishedAt":null}]""");
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+        ctx.Services.AddSingleton<IHttpClientFactory>(new FixedClientFactory(Canned.Client(handler)));
+        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>()
+            .NavigateTo($"/results?tournament={TournamentId}&order=conservative");
+
+        var cut = ctx.Render<ResultsPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains("(lower bound of the arena score)", cut.Find(".headline").TextContent));
+        Assert.Contains(handler.Requests, r => r.Target.StartsWith("/api/ratings?", StringComparison.Ordinal)
+            && r.Target.Contains("order=conservative", StringComparison.Ordinal) && r.Target.Contains(TournamentId, StringComparison.Ordinal));
+        Assert.Equal("conservative", cut.Find("#results-order").GetAttribute("value") ?? cut.Find("#results-order option[selected]").GetAttribute("value"));
+        Assert.Equal("Cup", cut.Find("#results-scope option[selected]").TextContent);
+    }
+
+    [Fact]
     public void TheScoreOrderIsNamedInTheHeadlineByDefault()
     {
         using var ctx = new BunitContext();

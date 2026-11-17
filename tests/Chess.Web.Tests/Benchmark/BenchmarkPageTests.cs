@@ -73,6 +73,26 @@ public class BenchmarkPageTests
     }
 
     [Fact]
+    public void AFormNobodyHasTouchedShowsNoProblemsButStaysDisabled()
+    {
+        using var ctx = new BunitContext();
+        Mount(ctx, Defaults());
+        var cut = ctx.Render<BenchmarkPage>();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("#start-benchmark")));
+
+        Assert.Empty(cut.FindAll(".benchmark-problem"));
+        Assert.DoesNotContain("Give the benchmark a name", cut.Markup);
+        Assert.Single(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-benchmark").HasAttribute("disabled"));
+
+        cut.Find("#games-per-opponent").Change("4");
+
+        cut.WaitForAssertion(() => Assert.Contains("Give the benchmark a name.", cut.Markup));
+        Assert.Empty(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-benchmark").HasAttribute("disabled"));
+    }
+
+    [Fact]
     public void ChoosingOpponentsListsThemAndStartNeedsOne()
     {
         using var ctx = new BunitContext();
@@ -156,6 +176,27 @@ public class BenchmarkPageTests
 
         cut.WaitForAssertion(() => Assert.Contains("8 games", cut.Find("[data-testid='benchmark-estimate']").TextContent));
         Assert.Empty(cut.FindAll("[data-testid='benchmark-large']"));
+    }
+
+    [Fact]
+    public void TheRandomOpponentIsFreeAndAModelWithoutAMultiplierIsBilledByTokenNotUnknown()
+    {
+        using var ctx = new BunitContext();
+        Mount(ctx, Defaults());
+        var cut = ctx.Render<BenchmarkPage>();
+
+        cut.Find("#candidate").Change("gpt");
+
+        // The opponents are fake-a, fake-b, the custom model (no multiplier) and Random: the last is free, not "unknown".
+        cut.WaitForAssertion(() => Assert.Contains("billed by token, counted in AI credits", cut.Find("[data-testid='benchmark-estimate']").TextContent));
+        var estimate = cut.Find("[data-testid='benchmark-estimate']");
+        Assert.Contains("plus 1 player billed by token, counted in AI credits", estimate.TextContent);
+        Assert.DoesNotContain("unknown multiplier", estimate.TextContent);
+        var rows = cut.FindAll("[data-testid='benchmark-estimate'] tbody tr");
+        var random = rows.Single(row => row.Children[0].TextContent.StartsWith("random", StringComparison.Ordinal));
+        Assert.Equal(["free", "free", "free"], random.Children.Skip(2).Take(3).Select(cell => cell.TextContent).ToArray());
+        var custom = rows.Single(row => row.Children[0].TextContent.StartsWith("local", StringComparison.Ordinal));
+        Assert.Equal("by token", custom.Children[2].TextContent);
     }
 
     [Fact]

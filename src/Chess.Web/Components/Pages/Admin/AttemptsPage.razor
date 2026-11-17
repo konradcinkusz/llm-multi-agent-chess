@@ -1,7 +1,10 @@
 @page "/admin/attempts"
 @using System.Text.Json
 @using Chess.Web.Api
+@using Chess.Web.Components.Pages.Games
+@using Chess.Web.Components.Pages.Shared
 @inject ArenaApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>Attempts · LLM Chess Arena</PageTitle>
 
@@ -23,9 +26,9 @@
                 <label for="attempts-model">Model</label>
                 <select id="attempts-model" @bind="_modelInput">
                     <option value="">All models</option>
-                    @foreach (var model in _models)
+                    @foreach (var player in Players)
                     {
-                        <option value="@model.Id">@model.DisplayName</option>
+                        <option value="@player.Id">@player.Label</option>
                     }
                 </select>
             </div>
@@ -65,16 +68,12 @@
         {
             <p class="empty-state empty-msg">No attempts match these filters. Attempts are recorded when a player makes a move.</p>
         }
-        else if (Visible.Count == 0)
-        {
-            <p class="empty-state empty-msg">No attempts on this page match the reply filter.</p>
-        }
         else
         {
             <ol class="attempt-list stack">
-                @foreach (var attempt in Visible)
+                @foreach (var attempt in _result.Items)
                 {
-                    <li class="attempt @(attempt.Legal ? "" : "failed-attempt")">
+                    <li @key="(attempt.GameId, attempt.Ply, attempt.Number)" class="attempt @(attempt.Legal ? "" : "failed-attempt")">
                         <details>
                             <summary class="attempt-header">
                                 <span class="badge badge-accent ply-badge">Ply @attempt.Ply</span>
@@ -91,7 +90,7 @@
 
                             <div class="attempt-meta">
                                 <a href="/games/@attempt.GameId">Game @Short(attempt.GameId)</a>
-                                <span class="date-sm">@attempt.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                <span class="date-sm">@GameFormat.When(attempt.CreatedAt)</span>
                             </div>
 
                             <div class="attempt-section">
@@ -121,10 +120,6 @@
                 }
             </ol>
 
-            @if (_applied.Legal != "all")
-            {
-                <p class="note muted">The reply filter applies to the attempts on this page only.</p>
-            }
         }
 
         <nav class="pagination" aria-label="Attempts pages">
@@ -136,11 +131,10 @@
 </div>
 
 @code {
-    // The API filters by game and model; the reply (legal/illegal) filter is applied to the rows of the page it
-    // returns, because ArenaApiClient.GetAttemptsAsync does not send the legal parameter.
+    // The API filters by game, model and reply (legal or rejected), so every page of the log is already filtered.
     private sealed record Filters(Guid? GameId, string? Model, string Legal);
 
-    private IReadOnlyList<ModelDto> _models = [];
+    private IReadOnlyList<PlayerOption> _players = [];
     private Filters _applied = new(null, null, "all");
     private PageDto<AttemptDto>? _result;
     private string? _error;
@@ -148,84 +142,139 @@
     private bool _loading = true;
     private int _page = 1;
     private int _loadId;
+    private (Guid?, string?, string, int)? _loaded;
 
     // Form state, applied only when the user presses Apply.
     private string _gameIdInput = "";
     private string _modelInput = "";
     private string _legalInput = "all";
 
-    private IReadOnlyList<AttemptDto> Visible => _result is null ? [] : _applied.Legal switch
-    {
-        "legal" => _result.Items.Where(a => a.Legal).ToList(),
-        "illegal" => _result.Items.Where(a => !a.Legal).ToList(),
-        _ => _result.Items,
-    };
+    /// <summary>The filters and the page live in the address, so a link, a reload and Back show the same log.</summary>
+    [SupplyParameterFromQuery(Name = "game")]
+    public string? GameQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "model")]
+    public string? ModelQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reply")]
+    public string? ReplyQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? PageQuery { get; set; }
 
     private int PageCount => _result is { PageSize: > 0 } r ? Math.Max(1, (r.Total + r.PageSize - 1) / r.PageSize) : 1;
 
+    /// <summary>The players to pick from, and the one the address names when no list knows it, so the picker can show it.</summary>
+    private IReadOnlyList<PlayerOption> Players =>
+        _modelInput.Length == 0 || _players.Any(player => player.Id == _modelInput)
+            ? _players
+            : [.. _players, new PlayerOption(_modelInput, _modelInput)];
+
     protected override async Task OnInitializedAsync()
     {
-        // The model list only feeds the filter; the log still loads when the models endpoint is unavailable.
+        // The player list only feeds the filter; the log still loads when the ratings and models are unavailable.
         try
         {
-            _models = await Api.GetModelsAsync();
+            _players = await PlayerOptions.LoadAsync(Api, includeCatalogue: true, CancellationToken.None);
         }
         catch (Exception)
         {
-            _models = [];
+            _players = [];
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _gameIdInput = GameQuery ?? "";
+        _modelInput = ModelQuery ?? "";
+        _legalInput = ReplyQuery is "legal" or "illegal" ? ReplyQuery : "all";
+        var page = Math.Max(1, PageQuery ?? 1);
+
+        if (!TryParseGame(_gameIdInput, out var gameId))
+        {
+            _gameError = GameIdProblem;
+            _loading = false;
+            return;
         }
 
-        await LoadAsync();
+        _gameError = null;
+        var wanted = (gameId, _modelInput.Length == 0 ? null : _modelInput, _legalInput, page);
+        if (_loaded != wanted)
+        {
+            _loaded = wanted;
+            _applied = new Filters(wanted.gameId, wanted.Item2, wanted.Item3);
+            _page = page;
+            await LoadAsync();
+        }
+    }
+
+    private const string GameIdProblem = "Game ID must be a GUID, as shown in the games list.";
+
+    private static bool TryParseGame(string text, out Guid? gameId)
+    {
+        gameId = null;
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+        {
+            return true;
+        }
+
+        if (!Guid.TryParse(trimmed, out var parsed))
+        {
+            return false;
+        }
+
+        gameId = parsed;
+        return true;
     }
 
     private async Task ApplyFilters()
     {
-        var text = _gameIdInput.Trim();
-        Guid? gameId = null;
-        if (text.Length > 0)
+        if (!TryParseGame(_gameIdInput, out var gameId))
         {
-            if (!Guid.TryParse(text, out var parsed))
-            {
-                _gameError = "Game ID must be a GUID, as shown in the games list.";
-                return;
-            }
-
-            gameId = parsed;
+            _gameError = GameIdProblem;
+            return;
         }
 
         _gameError = null;
-        _applied = new Filters(gameId, _modelInput.Length == 0 ? null : _modelInput, _legalInput);
-        _page = 1;
-        await LoadAsync();
+        await ShowAsync(gameId, _modelInput, _legalInput, 1);
     }
 
-    private async Task ClearFilters()
+    private Task ClearFilters()
     {
         _gameIdInput = "";
         _modelInput = "";
         _legalInput = "all";
         _gameError = null;
-        _applied = new Filters(null, null, "all");
-        _page = 1;
-        await LoadAsync();
+        return ShowAsync(null, "", "all", 1);
     }
 
-    private async Task PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-            await LoadAsync();
-        }
-    }
+    private Task PrevPage() => _page > 1 ? ShowAsync(_applied.GameId, _applied.Model ?? "", _applied.Legal, _page - 1) : Task.CompletedTask;
 
-    private async Task NextPage()
+    private Task NextPage() => _page < PageCount ? ShowAsync(_applied.GameId, _applied.Model ?? "", _applied.Legal, _page + 1) : Task.CompletedTask;
+
+    /// <summary>
+    /// Writes the filters into the address (replacing the entry), which loads them. The same filters again reload the log,
+    /// so Apply also refreshes it.
+    /// </summary>
+    private async Task ShowAsync(Guid? gameId, string model, string legal, int page)
     {
-        if (_page < PageCount)
+        var wanted = (gameId, model.Length == 0 ? null : model, legal, page);
+        if (_loaded == wanted)
         {
-            _page++;
             await LoadAsync();
+            return;
         }
+
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+            {
+                ["game"] = gameId?.ToString("D"),
+                ["model"] = model.Length == 0 ? null : model,
+                ["reply"] = legal == "all" ? null : legal,
+                ["page"] = page > 1 ? page : null,
+            }),
+            replace: true);
     }
 
     private async Task LoadAsync()
@@ -236,7 +285,8 @@
         _error = null;
         try
         {
-            var result = await Api.GetAttemptsAsync(_applied.GameId, _applied.Model, _page);
+            bool? legal = _applied.Legal switch { "legal" => true, "illegal" => false, _ => null };
+            var result = await Api.GetAttemptsAsync(_applied.GameId, _applied.Model, _page, legal: legal);
             if (loadId != _loadId)
             {
                 return;

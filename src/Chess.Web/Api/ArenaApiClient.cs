@@ -76,9 +76,11 @@ public sealed class ArenaApiClient(HttpClient http)
     public Task<GameUsageDto> GetGameUsageAsync(Guid id, CancellationToken ct = default) =>
         GetJsonAsync<GameUsageDto>($"/api/games/{id}/usage", ct);
 
-    public Task<PageDto<AttemptDto>> GetAttemptsAsync(Guid? gameId, string? model, int page, CancellationToken ct = default) =>
+    /// <param name="legal">Only the legal (true) or only the rejected (false) attempts; null for both. The API filters, so it holds for every page.</param>
+    public Task<PageDto<AttemptDto>> GetAttemptsAsync(Guid? gameId, string? model, int page, CancellationToken ct = default,
+        bool? legal = null) =>
         GetJsonAsync<PageDto<AttemptDto>>(
-            WithQuery("/api/attempts", ("gameId", gameId), ("model", model), ("page", page)), ct);
+            WithQuery("/api/attempts", ("gameId", gameId), ("model", model), ("legal", legal is { } l ? (l ? "true" : "false") : null), ("page", page)), ct);
 
     /// <summary>03 §12.2: the candidate's gauntlet. The estimate in the response is the API's, for the record of the run.</summary>
     public async Task<BenchmarkCreatedDto> CreateBenchmarkAsync(CreateBenchmarkRequest request, CancellationToken ct = default) =>

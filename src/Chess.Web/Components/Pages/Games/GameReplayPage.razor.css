@@ -68,6 +68,11 @@
     z-index: 1;
 }
 
+.replay-scrub input {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
 .replay-ply {
     color: var(--text-2);
     font-size: var(--text-sm);

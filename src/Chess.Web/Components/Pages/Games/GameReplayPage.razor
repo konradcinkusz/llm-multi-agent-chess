@@ -62,6 +62,16 @@ else
                 </div>
                 <span class="replay-ply" data-testid="replay-ply" aria-live="polite">Ply @_ply of @lastPly</span>
             </div>
+            @if (lastPly > 0)
+            {
+                @* A slider steps through the game with the arrow keys, Home and End without scrolling the page, which the
+                   board cannot promise: a page cannot tell Blazor which keys to keep from the browser. *@
+                <label class="replay-scrub">
+                    <span class="visually-hidden">Ply</span>
+                    <input type="range" min="0" max="@lastPly" step="1" value="@_ply" data-testid="replay-scrub"
+                           aria-valuetext="Ply @_ply of @lastPly" @oninput="Scrub" />
+                </label>
+            }
             <p class="muted">Click the board, then use the arrow keys, Home and End to step through the moves.</p>
 
             @if (_pgnHref is { } href)
@@ -85,7 +95,7 @@ else
 
             <section class="card stack" aria-labelledby="replay-moves-heading">
                 <h2 id="replay-moves-heading" class="card-title">Moves</h2>
-                <MoveTable Moves="@game.Moves" SelectedPly="@SelectedPly" OnSelect="@SelectMove" />
+                <MoveTable Moves="@game.Moves" SelectedPly="@SelectedPly" OnSelect="@SelectMove" PageRows="@MovePageRows" />
             </section>
         </aside>
     </div>
@@ -256,6 +266,17 @@ else
         if (ply is { } chosen)
         {
             GoTo(chosen);
+        }
+    }
+
+    /// <summary>Rows (move numbers) of the move list on a page: the list pages a long game and follows the move on the board.</summary>
+    private const int MovePageRows = 15;
+
+    private void Scrub(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var ply))
+        {
+            GoTo(ply);
         }
     }
 

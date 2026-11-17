@@ -14,13 +14,3 @@
 .usage-table .badge {
     white-space: nowrap;
 }
-
-/* A caption that only screen readers announce (the app has no shared utility for it). */
-.visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-}

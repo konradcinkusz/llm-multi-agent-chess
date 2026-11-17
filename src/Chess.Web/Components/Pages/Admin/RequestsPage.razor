@@ -60,7 +60,7 @@
             else
             {
                 <p class="muted">Estimated wait: @LiveRequestView.WaitLabel(_queue.EstimatedWaitMinutes)</p>
-                <div class="table-wrap">
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Queued requests">
                     <table>
                         <thead>
                             <tr>
@@ -104,7 +104,7 @@
             }
             else
             {
-                <div class="table-wrap">
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Recent requests">
                     <table>
                         <thead>
                             <tr>

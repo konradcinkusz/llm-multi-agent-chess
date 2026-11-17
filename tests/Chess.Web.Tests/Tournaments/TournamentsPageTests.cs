@@ -85,7 +85,29 @@ public class TournamentsPageTests
     }
 
     [Fact]
-    public void AnUnknownMultiplierIsShownAsUnknownAndNamedInTheTotal()
+    public void AnUnknownMultiplierIsShownAsBilledByTokenAndNamedInTheTotal()
+    {
+        // The catalogue lists no premium multiplier for Claude here, so it is billed by token.
+        var models = Fixtures.Models.Replace("\"premiumMultiplier\":1.5", "\"premiumMultiplier\":null");
+        var handler = Serve.Routes(new Dictionary<string, Reply>
+        {
+            ["GET /api/models"] = Serve.Ok(models),
+            ["GET /api/tournaments"] = Serve.Ok(Fixtures.Tournaments()),
+        });
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, handler);
+        var cut = ctx.Render<TournamentsPage>();
+        cut.WaitForAssertion(() => Assert.Contains("No tournaments yet", cut.Markup));
+
+        cut.Find("#model-gpt").Change(true);
+        cut.Find("#model-claude").Change(true);
+
+        cut.WaitForAssertion(() => Assert.Contains("plus 1 model billed by token, counted in AI credits", cut.Markup));
+        Assert.Equal("by token", cut.FindAll(".tournament-estimate tbody tr")[1].Children[2].TextContent);
+    }
+
+    [Fact]
+    public void TheRandomPlayerIsFreeInEveryColumnAndIsNeverCountedAsBilledByToken()
     {
         var handler = Serve.Routes(new Dictionary<string, Reply>
         {
@@ -100,8 +122,40 @@ public class TournamentsPageTests
         cut.Find("#model-gpt").Change(true);
         cut.Find("#model-random").Change(true);
 
-        cut.WaitForAssertion(() => Assert.Contains("plus 1 model billed by token, counted in AI credits", cut.Markup));
-        Assert.Equal("by token", cut.FindAll(".tournament-estimate tbody tr")[1].Children[2].TextContent);
+        // The fixture lists no multiplier and no price for Random; the table still says free, not "price unknown".
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".tournament-estimate tbody tr").Count));
+        var random = cut.FindAll(".tournament-estimate tbody tr")[1].Children.Select(cell => cell.TextContent).ToArray();
+        Assert.Equal(["Random", "free", "free", "free", "free"], random.Take(5).ToArray());
+        Assert.DoesNotContain("billed by token", cut.Find(".tournament-estimate").TextContent);
+    }
+
+    [Fact]
+    public void AFormNobodyHasTouchedShowsNoProblemsButStaysDisabled()
+    {
+        var handler = Serve.Routes(new Dictionary<string, Reply>
+        {
+            ["GET /api/models"] = Serve.Ok(Fixtures.Models),
+            ["GET /api/tournaments"] = Serve.Ok(Fixtures.Tournaments()),
+        });
+        using var ctx = new BunitContext();
+        Wire.Api(ctx, handler);
+
+        var cut = ctx.Render<TournamentsPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains("No tournaments yet", cut.Markup));
+        Assert.Empty(cut.FindAll(".tournament-problem"));
+        Assert.DoesNotContain("Give the tournament a name", cut.Markup);
+        Assert.DoesNotContain("Choose at least two models", cut.Markup);
+        Assert.Single(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-tournament").HasAttribute("disabled"));
+
+        cut.Find("#model-gpt").Change(true);
+
+        // The first interaction brings the problems in; the hint goes.
+        cut.WaitForAssertion(() => Assert.Contains("Give the tournament a name.", cut.Markup));
+        Assert.Contains("Choose at least two models.", cut.Markup);
+        Assert.Empty(cut.FindAll("[data-testid=form-hint]"));
+        Assert.True(cut.Find("#start-tournament").HasAttribute("disabled"));
     }
 
     [Fact]

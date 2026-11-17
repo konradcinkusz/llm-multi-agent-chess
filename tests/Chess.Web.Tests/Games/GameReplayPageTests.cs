@@ -46,6 +46,67 @@ public class GameReplayPageTests
     private static void Press(IRenderedComponent<GameReplayPage> cut, string key) =>
         cut.Find("[data-testid='replay-board']").KeyDown(new KeyboardEventArgs { Key = key });
 
+    /// <summary>A finished game of 156 plies: White shuffles e4 and Black e5 positions, enough to page the move list.</summary>
+    private static FakeHandler LongGame()
+    {
+        var moves = Enumerable.Range(1, 156)
+            .Select(ply => Fixtures.Move(ply, ply % 2 == 1 ? "white" : "black", $"m{ply}", ply % 2 == 1 ? Fixtures.AfterE4 : Fixtures.AfterE4E5))
+            .ToArray();
+        return Routes.Answer(new Dictionary<string, Func<HttpResponseMessage>>
+        {
+            ["GET /api/models"] = Reply.Json(Fixtures.Models),
+            [$"GET /api/games/{Fixtures.FinishedId}"] = Reply.Json(Fixtures.Json(Fixtures.Detail(
+                Fixtures.Summary(Fixtures.FinishedId, "gpt", "claude", plies: 156), Fixtures.StartFen, Fixtures.AfterE4E5, moves))),
+            [$"GET /api/games/{Fixtures.FinishedId}/pgn"] = Reply.Pgn(Fixtures.Pgn),
+            [$"GET /api/games/{Fixtures.FinishedId}/usage"] = Reply.Json(Fixtures.Json(Fixtures.Usage(Fixtures.FinishedId, 1.5))),
+            [$"GET /api/attempts?gameId={Fixtures.FinishedId}&page=1"] = Reply.Json(Fixtures.Json(Fixtures.Page([], 0))),
+        });
+    }
+
+    [Fact]
+    public void TheMoveListFollowsThePlyOnTheBoardThroughALongGame()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, LongGame(), Fixtures.FinishedId);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid='replay-board']")));
+
+        // At the start the list shows the start of the game, not its end.
+        Assert.Equal("Moves 1–15 of 78", cut.Find("[data-testid=moves-range]").TextContent);
+        Assert.Equal("1", cut.FindAll("[data-testid=move-cell]")[0].GetAttribute("data-ply"));
+
+        Click(cut, "replay-last");
+        Assert.Equal("Moves 76–78 of 78", cut.Find("[data-testid=moves-range]").TextContent);
+        Assert.Equal("156", cut.Find("[data-testid=move-cell][aria-pressed=true]").GetAttribute("data-ply"));
+
+        Click(cut, "replay-first");
+        Press(cut, "ArrowRight");
+        Press(cut, "ArrowRight");
+        Press(cut, "ArrowRight");
+
+        // Ply 3 of 156: the selected move is in the list on screen.
+        Assert.Equal("Ply 3 of 156", cut.Find("[data-testid='replay-ply']").TextContent);
+        Assert.Equal("3", cut.Find("[data-testid=move-cell][aria-pressed=true]").GetAttribute("data-ply"));
+        Assert.Equal("Moves 1–15 of 78", cut.Find("[data-testid=moves-range]").TextContent);
+    }
+
+    [Fact]
+    public void TheSliderStepsToAnyPly()
+    {
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, LongGame(), Fixtures.FinishedId);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid='replay-board']")));
+        var slider = cut.Find("[data-testid=replay-scrub]");
+        Assert.Equal("0", slider.GetAttribute("min"));
+        Assert.Equal("156", slider.GetAttribute("max"));
+
+        slider.Input("100");
+
+        Assert.Equal("Ply 100 of 156", cut.Find("[data-testid='replay-ply']").TextContent);
+        Assert.Equal("100", cut.Find("[data-testid=move-cell][aria-pressed=true]").GetAttribute("data-ply"));
+        Assert.Equal("Moves 46–60 of 78", cut.Find("[data-testid=moves-range]").TextContent);
+        Assert.Equal("100", cut.Find("[data-testid=replay-scrub]").GetAttribute("value"));
+    }
+
     [Fact]
     public void TheStepButtonsFormOneGroupAndTheBoardAndMovesSitInCards()
     {

@@ -64,7 +64,7 @@ public static class ResultsModel
     public const int LossesSlot = 7;
     public const int ForfeitsSlot = 4;
 
-    public static string Number(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
+    public static string Number(double value, string format) => NumberText.Fixed(value, format);
 
     /// <summary>
     /// The cell of the matrix for the leader against the runner-up: the same numbers <c>/api/ratings/pairwise</c> answers, so

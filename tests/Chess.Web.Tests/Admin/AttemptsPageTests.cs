@@ -4,6 +4,7 @@ using Bunit;
 using Chess.Web.Api;
 using Chess.Web.Components.Pages.Admin;
 using Chess.Web.Tests.Support;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -97,9 +98,13 @@ public class AttemptsPageTests
     }
 
     [Fact]
-    public async Task ReplyFilterShowsOnlyLegalOrIllegalAttemptsOfThePage()
+    public async Task ReplyFilterIsSentToTheApiSoItCoversEveryPageNotOnlyTheRowsOnScreen()
     {
-        var handler = Api(_ => Page(1, 50, 2, Attempt(1, "PROMPT ONE"), Attempt(2, "PROMPT TWO", legal: false)));
+        // The API answers each filter with its own rows; the page shows exactly what it is given.
+        var handler = Api(target =>
+            target.Contains("legal=false", StringComparison.Ordinal) ? Page(1, 50, 1, Attempt(2, "PROMPT TWO", legal: false))
+            : target.Contains("legal=true", StringComparison.Ordinal) ? Page(1, 50, 1, Attempt(1, "PROMPT ONE"))
+            : Page(1, 50, 2, Attempt(1, "PROMPT ONE"), Attempt(2, "PROMPT TWO", legal: false)));
         using var ctx = new BunitContext();
         var cut = Render(ctx, handler);
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("li.attempt").Count));
@@ -113,12 +118,93 @@ public class AttemptsPageTests
             Assert.Single(rows);
             Assert.Equal("PROMPT TWO", rows[0].QuerySelector(".prompt-text")!.TextContent);
         });
-        Assert.Contains("applies to the attempts on this page only", cut.Find(".note").TextContent);
+        Assert.Equal("/api/attempts?legal=false&page=1", handler.Requests[^1].Target);
+        Assert.Empty(cut.FindAll(".note"));
 
         cut.Find("#attempts-legal").Change("legal");
         await cut.Find("form").SubmitAsync();
 
         cut.WaitForAssertion(() => Assert.Equal("PROMPT ONE", cut.Find("li.attempt .prompt-text").TextContent));
+        Assert.Equal("/api/attempts?legal=true&page=1", handler.Requests[^1].Target);
+    }
+
+    [Fact]
+    public void FiltersAndPageOfTheAddressAreAppliedOnOpening()
+    {
+        var handler = Api(_ => Page(3, 50, 120, Attempt(1, "PROMPT ONE")));
+        using var ctx = new BunitContext();
+        var gameId = Game.ToString("D");
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo($"/admin/attempts?game={gameId}&model=m2&reply=illegal&page=3");
+
+        var cut = ctx.Render<AttemptsPage>();
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("li.attempt")));
+        Assert.Equal($"/api/attempts?gameId={gameId}&model=m2&legal=false&page=3", handler.Requests[^1].Target);
+        Assert.Equal("m2", cut.Find("#attempts-model").GetAttribute("value"));
+        Assert.Equal("illegal", cut.Find("#attempts-legal").GetAttribute("value"));
+        Assert.Equal(gameId, cut.Find("#attempts-game").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task ApplyingWritesTheFiltersIntoTheAddressAndClearRemovesThem()
+    {
+        var handler = Api(_ => Page(1, 50, 0));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+        var navigation = ctx.Services.GetRequiredService<NavigationManager>();
+        var cut = ctx.Render<AttemptsPage>();
+        cut.WaitForAssertion(() => Assert.Contains("/api/attempts?page=1", handler.Requests.Select(r => r.Target)));
+
+        cut.Find("#attempts-model").Change("m1");
+        cut.Find("#attempts-legal").Change("legal");
+        await cut.Find("form").SubmitAsync();
+
+        cut.WaitForAssertion(() => Assert.Equal("/api/attempts?model=m1&legal=true&page=1", handler.Requests[^1].Target));
+        Assert.Contains("model=m1", navigation.Uri, StringComparison.Ordinal);
+        Assert.Contains("reply=legal", navigation.Uri, StringComparison.Ordinal);
+
+        await cut.Find("form button[type='button']").ClickAsync(new());
+
+        cut.WaitForAssertion(() => Assert.Equal("/api/attempts?page=1", handler.Requests[^1].Target));
+        Assert.DoesNotContain("model=", navigation.Uri, StringComparison.Ordinal);
+        Assert.DoesNotContain("reply=", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheTimeOfAnAttemptIsShownInLabelledUtcWhateverTheCulture()
+    {
+        var handler = Api(_ => Page(1, 50, 1, Attempt(1, "PROMPT ONE")));
+        using var ctx = new BunitContext();
+
+        var cut = Render(ctx, handler);
+
+        cut.WaitForAssertion(() => Assert.Equal("2026-10-24 10:00 UTC", cut.Find("li.attempt .date-sm").TextContent));
+    }
+
+    [Fact]
+    public void TheModelPickerListsRatedPlayersWithTheirEffortAndStyle()
+    {
+        var handler = new FakeHandler(r => r.Target switch
+        {
+            "/api/ratings" => Canned.Json("""
+                {"models":[
+                  {"model":"m1@high","rating":1,"ciLow":0,"ciHigh":2,"games":9,"score":0.5,"legality":1,"moveQuality":null,"quality":1,"arenaScore":50,"provisional":false},
+                  {"model":"m1~think","rating":1,"ciLow":0,"ciHigh":2,"games":9,"score":0.5,"legality":1,"moveQuality":null,"quality":1,"arenaScore":50,"provisional":false}],
+                 "whiteAdvantage":0,"games":18,"moveQualityAvailable":false}
+                """),
+            "/api/models" => Canned.Json("""[{"id":"m1","displayName":"Model One","premiumMultiplier":null,"enabled":true}]"""),
+            "/api/prompt-styles" => Canned.Json("""[{"id":"classic","displayName":"Classic","description":"d","perMoveConversation":false,"version":"1"},{"id":"think","displayName":"Think","description":"d","perMoveConversation":false,"version":"1"}]"""),
+            _ => Page(1, 50, 0),
+        });
+        using var ctx = new BunitContext();
+
+        var cut = Render(ctx, handler);
+
+        // The rated players come first, then the catalogue model that has no rating under its plain id.
+        cut.WaitForAssertion(() => Assert.Equal(1 + 3, cut.FindAll("#attempts-model option").Count));
+        Assert.Equal(["m1@high", "m1~think", "m1"], cut.FindAll("#attempts-model option").Skip(1).Select(o => o.GetAttribute("value")!).ToArray());
+        Assert.Equal(["Model One @ high", "Model One · Think", "Model One"], cut.FindAll("#attempts-model option").Skip(1).Select(o => o.TextContent).ToArray());
     }
 
     [Fact]

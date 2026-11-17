@@ -1,3 +1,6 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
 <nav class="nav" aria-label="Main">
     <NavLink href="/results">Results</NavLink>
     <NavLink href="/" Match="NavLinkMatch.All">Live game</NavLink>
@@ -7,6 +10,27 @@
     <NavLink href="/broadcast" Match="NavLinkMatch.All">Live broadcast</NavLink>
     <NavLink href="/broadcast/plan">Broadcast plan</NavLink>
     <NavLink href="/games">Games</NavLink>
-    <NavLink href="/admin/attempts">Attempts</NavLink>
-    <NavLink href="/admin/site">Site</NavLink>
+    @* The two admin pages sit under a disclosure that needs no script. The key changes with every navigation, so the
+       menu is closed again on the page it led to. *@
+    <details class="nav-more" @key="_menuKey" data-testid="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-panel">
+            <NavLink href="/admin/attempts">Attempts</NavLink>
+            <NavLink href="/admin/site">Site</NavLink>
+        </div>
+    </details>
 </nav>
+
+@code {
+    private int _menuKey;
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _menuKey++;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

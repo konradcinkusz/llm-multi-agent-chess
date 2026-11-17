@@ -28,12 +28,12 @@
             <div class="field-row">
                 <label class="field">
                     Name
-                    <input id="tournament-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" />
+                    <input id="tournament-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" @bind:after="Touch" />
                 </label>
 
                 <label class="field">
                     Games per pair
-                    <select id="games-per-pair" @bind="_gamesPerPair">
+                    <select id="games-per-pair" @bind="_gamesPerPair" @bind:after="Touch">
                         @foreach (var games in GamesPerPairChoices)
                         {
                             <option value="@games">@games</option>
@@ -43,7 +43,7 @@
 
                 <label class="field">
                     Max concurrency
-                    <select id="max-concurrency" @bind="_maxConcurrency">
+                    <select id="max-concurrency" @bind="_maxConcurrency" @bind:after="Touch">
                         @for (var limit = 1; limit <= TournamentFormRules.MaxConcurrencyLimit; limit++)
                         {
                             <option value="@limit">@limit</option>
@@ -103,7 +103,7 @@
                         so the premium figure is an upper bound, not a bill. AI credits and USD use the API's rate and the
                         tokens of past moves, as the saved tournament will.
                     </p>
-                    <div class="table-wrap">
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Estimated cost per model">
                         <table class="table-compact">
                             <thead>
                                 <tr><th>Model</th><th>Price</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
@@ -114,10 +114,10 @@
                                     var cost = CostOf(estimate.ModelId, gamesPerModel);
                                     <tr>
                                         <td>@PromptStyleChoices.Label(estimate.ModelId, _models, _styles)</td>
-                                        <td>@TournamentFormat.Price(Find(estimate.ModelId)?.Pricing)</td>
-                                        <td class="num">@TournamentFormat.Requests(estimate.Requests)</td>
-                                        <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
-                                        <td class="num">@TournamentFormat.Usd(cost?.Usd)</td>
+                                        <td>@TournamentFormat.Price(estimate.ModelId, Find(estimate.ModelId)?.Pricing)</td>
+                                        <td class="num">@TournamentFormat.Requests(estimate.ModelId, estimate.Requests)</td>
+                                        <td class="num">@TournamentFormat.Credits(estimate.ModelId, cost?.AiCredits)</td>
+                                        <td class="num">@TournamentFormat.Usd(estimate.ModelId, cost?.Usd)</td>
                                         <td>@TournamentFormat.Basis(cost?.Basis, cost?.SampleMoves)</td>
                                     </tr>
                                 }
@@ -138,9 +138,18 @@
                 </div>
             }
 
-            @foreach (var problem in Problems)
+            @* What is missing is said after the first interaction, not before the user has touched anything. Start stays
+               disabled until the form is valid either way. *@
+            @if (!_touched)
             {
-                <p class="tournament-problem error-text">@problem</p>
+                <p class="field-hint tournament-hint" data-testid="form-hint">Start is available once the form is complete.</p>
+            }
+            else
+            {
+                @foreach (var problem in Problems)
+                {
+                    <p class="tournament-problem error-text">@problem</p>
+                }
             }
 
             <div class="cluster">
@@ -166,8 +175,12 @@
                         @foreach (var estimate in created.EstimatedPremiumRequests)
                         {
                             <li>
-                                @estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)
-                                @if (estimate.EstimatedAiCredits is { } credits)
+                                @estimate.ModelId: @TournamentFormat.Requests(estimate.ModelId, estimate.EstimatedPremiumRequests)
+                                @if (TournamentFormat.IsFree(estimate.ModelId))
+                                {
+                                    @* The random player is free in every column: one word says so. *@
+                                }
+                                else if (estimate.EstimatedAiCredits is { } credits)
                                 {
                                     <span>· @TournamentFormat.Credits(credits) · @TournamentFormat.Usd(estimate.EstimatedUsd) (@TournamentFormat.Basis(estimate.TokenBasis, estimate.SampleMoves))</span>
                                 }
@@ -205,7 +218,7 @@
     }
     else
     {
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="All tournaments">
             <table class="tournament-table">
                 <thead>
                     <tr>
@@ -269,6 +282,11 @@
     private bool _submitting;
     private string? _createError;
     private TournamentCreatedDto? _created;
+
+    /// <summary>False until the user has changed something: the problems of the form are not shown on a form nobody has touched.</summary>
+    private bool _touched;
+
+    private void Touch() => _touched = true;
 
     /// <summary>The selected models, in the order the form lists them.</summary>
     private IReadOnlyList<string> SelectedModels =>
@@ -357,6 +375,7 @@
 
     private void Toggle(string modelId, object? selected)
     {
+        _touched = true;
         if (selected is true)
         {
             _selected.Add(modelId);
@@ -369,6 +388,7 @@
 
     private void ToggleStyle(string styleId, object? selected)
     {
+        _touched = true;
         if (selected is true)
         {
             _selectedStyles.Add(styleId);
@@ -424,6 +444,7 @@
             var request = new CreateTournamentRequest(_name.Trim(), Participants, _gamesPerPair, _maxConcurrency);
             _created = await Api.CreateTournamentAsync(request, _cts.Token);
             _name = "";
+            _touched = false;
             _selected.Clear();
             await LoadTournamentsAsync(_cts.Token);
         }

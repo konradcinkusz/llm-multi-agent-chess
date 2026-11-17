@@ -4,6 +4,7 @@
 @implements IDisposable
 @inject ArenaApiClient Api
 @inject IHttpClientFactory HttpClients
+@inject NavigationManager Navigation
 
 <PageTitle>Results · LLM Chess Arena</PageTitle>
 
@@ -163,7 +164,7 @@ else
                 White advantage: @ResultsModel.Number(_board!.WhiteAdvantage, "0") rating points over @_board.Games rated games.
                 @RankingOrder.TableNote(_order)
             </p>
-            <div class="table-wrap table-compact">
+            <div class="table-wrap table-compact" tabindex="0" role="region" aria-label="Leaderboard table">
                 <table class="results-table">
                     <thead>
                         <tr>
@@ -224,18 +225,42 @@ else
     private string? _style;
     private CancellationTokenSource? _cts;
 
-    protected override Task OnInitializedAsync()
+    /// <summary>
+    /// The scope, the order and the style filter live in the address (<c>?tournament=&amp;order=&amp;style=</c>), so a link, a
+    /// reload and Back show the same page.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "tournament")]
+    public Guid? TournamentQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "order")]
+    public string? OrderQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "style")]
+    public string? StyleQuery { get; set; }
+
+    private (Guid?, string)? _loadedScope;
+
+    protected override async Task OnParametersSetAsync()
     {
-        _ratings = new TournamentRatingsClient(HttpClients.CreateClient(TournamentRatingsClient.ClientName));
-        return LoadAsync(_tournamentId);
+        _ratings ??= new TournamentRatingsClient(HttpClients.CreateClient(TournamentRatingsClient.ClientName));
+        _style = string.IsNullOrEmpty(StyleQuery) ? null : StyleQuery;
+
+        // The style filter hides rows and never loads; a new scope or order does.
+        var order = OrderQuery == RankingOrder.Conservative ? RankingOrder.Conservative : RankingOrder.Score;
+        if (_loadedScope != (TournamentQuery, order))
+        {
+            _loadedScope = (TournamentQuery, order);
+            _tournamentId = TournamentQuery;
+            _order = order;
+            _showFolded = false;
+            await LoadAsync(_tournamentId);
+        }
     }
 
-    private Task OnScopeChanged(ChangeEventArgs args)
+    private void OnScopeChanged(ChangeEventArgs args)
     {
         Guid? selected = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
-        _tournamentId = selected;
-        _showFolded = false;
-        return LoadAsync(selected);
+        Show(selected, _order, _style);
     }
 
     /// <summary>The style filter: "All" (an empty value) or one style. It hides rows and never refits (03 §14.5).</summary>
@@ -243,7 +268,22 @@ else
     {
         var value = args.Value?.ToString();
         _style = string.IsNullOrEmpty(value) ? null : value;
+        Show(_tournamentId, _order, _style);
     }
+
+    private void OnOrderChanged(ChangeEventArgs args) =>
+        Show(_tournamentId, args.Value?.ToString() == RankingOrder.Conservative ? RankingOrder.Conservative : RankingOrder.Score, _style);
+
+    /// <summary>Writes the choices into the address (replacing the entry, so Back leaves the page); the defaults are left out.</summary>
+    private void Show(Guid? tournamentId, string order, string? style) =>
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+            {
+                ["tournament"] = tournamentId?.ToString("D"),
+                ["order"] = order == RankingOrder.Score ? null : order,
+                ["style"] = style,
+            }),
+            replace: true);
 
     private IEnumerable<(ModelRating Row, int Rank)> VisibleRows() =>
         _report!.Ranking
@@ -260,12 +300,6 @@ else
         _report!.Heat
             .Where(cell => PromptStyles.Includes(cell.Row, _style) && PromptStyles.Includes(cell.Column, _style))
             .ToList();
-
-    private Task OnOrderChanged(ChangeEventArgs args)
-    {
-        _order = args.Value?.ToString() == RankingOrder.Conservative ? RankingOrder.Conservative : RankingOrder.Score;
-        return LoadAsync(_tournamentId);
-    }
 
     /// <summary>Loads one scope. A newer scope cancels the load still running, so a late answer never overwrites the page.</summary>
     private async Task LoadAsync(Guid? tournamentId)

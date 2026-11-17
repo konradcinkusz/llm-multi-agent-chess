@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Chess.Web.Api;
+using Chess.Web.Components.Pages.Shared;
 
 namespace Chess.Web.Components.Pages.Benchmark;
 
@@ -36,23 +37,24 @@ public static class BenchmarkFormat
 
     /// <summary>A score as a percentage with one decimal: "62.5 %". Invariant, so the page reads the same in every culture.</summary>
     public static string Percent(double score) =>
-        (score * 100).ToString("0.0", CultureInfo.InvariantCulture) + " %";
+        NumberText.Fixed(score * 100, "0.0") + " %";
 
     /// <summary>A whole number, rounded: "1532".</summary>
     public static string Whole(double value) =>
-        Math.Round(value).ToString("0", CultureInfo.InvariantCulture);
+        NumberText.Fixed(Math.Round(value), "0");
 
     /// <summary>A rate as a whole percentage: "97 %".</summary>
     public static string Share(double value) =>
-        (value * 100).ToString("0", CultureInfo.InvariantCulture) + " %";
+        NumberText.Fixed(value * 100, "0") + " %";
 
     /// <summary>A figure with a fixed number of decimals, or "—" when the report has none.</summary>
     public static string Fixed(double? value, string format) =>
-        value is { } number ? number.ToString(format, CultureInfo.InvariantCulture) : "—";
+        value is { } number ? NumberText.Fixed(number, format) : "—";
 
     /// <summary>An Elo value with its sign, "+191" or "−40" (a true minus sign).</summary>
     public static string Signed(double value) =>
-        (value >= 0 ? "+" : "−") + Math.Abs(Math.Round(value)).ToString("0", CultureInfo.InvariantCulture);
+        // A figure that rounds to zero reads "+0", never "−0": that would be a negative result where there is none.
+        (value >= 0 || Math.Round(value) == 0 ? "+" : "−") + Math.Abs(Math.Round(value)).ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The file name of a download: <c>benchmark-&lt;slug&gt;.&lt;ext&gt;</c>, where the slug is the benchmark's name in

@@ -82,7 +82,7 @@ else
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Tournament leaderboard">
                 <table id="tournament-leaderboard">
                     <thead>
                         <tr>
@@ -94,7 +94,7 @@ else
                             <th class="num">Games</th>
                             <th class="num">Legal first try</th>
                             <th class="num">Quality</th>
-                            <th></th>
+                            <th><span class="visually-hidden">Status</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -140,7 +140,7 @@ else
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Tournament games">
                 <table id="tournament-games">
                     <thead>
                         <tr>
@@ -151,7 +151,7 @@ else
                             <th>Result</th>
                             <th>Termination</th>
                             <th class="num">Plies</th>
-                            <th></th>
+                            <th><span class="visually-hidden">Game</span></th>
                         </tr>
                     </thead>
                     <tbody>
