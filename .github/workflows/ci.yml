@@ -8,14 +8,22 @@ on:
 permissions:
   contents: read
 
+# The Copilot SDK build targets download an ~89 MB CLI bundle (and copy it, ~320 MB, into every project that references
+# Chess.Llm). The unit tests and the fake-profile AppHost never start the Copilot client (only Llm:Provider=Copilot does),
+# so CI skips the download. MSBuild reads this environment variable as a property. A local `dotnet build` is unaffected.
+env:
+  CopilotSkipCliDownload: "true"
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a pull request run is superseded by a newer push; a run on main always completes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-test:
     name: build and test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -28,8 +36,15 @@ jobs:
       - name: Build (warnings as errors)
         run: dotnet build Chess.sln -warnaserror
 
+      # Ubuntu's package puts the binary in /usr/games. With STOCKFISH_PATH set the three real-Stockfish tests run
+      # instead of being skipped.
+      - name: Install Stockfish
+        run: sudo apt-get update && sudo apt-get install -y stockfish
+
       # The browser journeys (Chess.E2E) need a Chromium, so they run only in the e2e job, which installs one first.
       - name: Test
+        env:
+          STOCKFISH_PATH: /usr/games/stockfish
         run: dotnet test Chess.sln --no-build --filter "FullyQualifiedName!~Chess.E2E" --logger trx --results-directory TestResults
 
       - name: Upload test results
@@ -43,6 +58,7 @@ jobs:
   secrets:
     name: secret scan (gitleaks, full history)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       GITLEAKS_VERSION: "8.21.2"
       GITLEAKS_SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
@@ -67,6 +83,7 @@ jobs:
   kernel-size:
     name: kernel size guard (ServiceDefaults <= 400 lines)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
@@ -82,6 +99,7 @@ jobs:
   contracts:
     name: Copilot SDK only in Chess.Llm
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
@@ -110,6 +128,7 @@ jobs:
   solution:
     name: every project is in Chess.sln and every web project is in the AppHost
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -143,6 +162,7 @@ jobs:
   e2e:
     name: end-to-end journeys (Playwright, AppHost with the fake gateway)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 

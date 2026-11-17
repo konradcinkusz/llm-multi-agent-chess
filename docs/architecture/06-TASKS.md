@@ -710,10 +710,10 @@ classes). These rows are not on the board above.
 |---|---|---|---|
 | U1 | Design tokens, base styles, shared classes, app shell | — | done (#69) |
 | U2 | Chart polish | — | done (#68) |
-| U3 | Results and head-to-head pages | U1 | in progress |
-| U4 | Live game, games list and replay | U1 | in progress |
-| U5 | Tournaments, broadcast planner, attempts log | U1 | in progress |
-| U6 | Charts fill their card on wide screens | U2 | todo |
+| U3 | Results and head-to-head pages | U1 | done (#73) |
+| U4 | Live game, games list and replay | U1 | done (#77) |
+| U5 | Tournaments, broadcast planner, attempts log | U1 | done (#75) |
+| U6 | Charts fill their card on wide screens | U2 | done (#72) |
 | U7 | Stockfish status reads `available` or `absent` | U1 | done (#74) |
 
 Common to every U task: follow 07-UI-STYLE §1 (no dependencies, tokens only, both themes, phone width, accessibility, test
@@ -1156,7 +1156,7 @@ The supervisor PR froze the following, so V1, V2, V4 and V5 run in parallel agai
 | V3 | Broadcast runner plays requests; the per-game budget guard (`budget` termination); recovery | V2 | done (#112) |
 | V4 | UI: request panels and idle replays on `/broadcast`, `/admin/requests`, the site's menu and price matrix | contract | done (#111) |
 | V5 | YouTube intake: OAuth, live chat polling, Super Chat mapping, currency, AppHost secrets, smoke script | contract | done (#109) |
-| V6 | Docs: `docs/REQUESTS.md` (owner setup), README, BROADCAST.md, recorded mock run | V1–V5 | in review (this PR) |
+| V6 | Docs: `docs/REQUESTS.md` (owner setup), README, BROADCAST.md, recorded mock run | V1–V5 | done (#113) |
 
 ### V1 — Gateway: Anthropic, OpenAI and DeepInfra keys
 

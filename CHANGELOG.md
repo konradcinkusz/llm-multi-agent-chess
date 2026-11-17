@@ -6,6 +6,58 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+Everything merged to `main` since 0.1.0.
+
+### Added
+
+- **Live game transparency.** The gateway reports tokens, reasoning and AI credits from the SDK, and the runner stores and
+  streams every attempt with its usage and a rejection kind. The live page shows player bars, whose turn it is, a move table, the
+  engine log, a game summary and model prices. The replay page shows the same for stored games.
+- **Cost in AI credits.** Copilot bills per token, so the tournament form and the broadcast planner estimate in AI credits with a
+  dollar figure at `Arena:Cost:UsdPerAiCredit`. Wording changed from premium requests to AI credits everywhere.
+- **Reasoning effort and custom models.** A player id can carry an effort (`model@effort`); the gateway lists the efforts a model
+  supports and prices a variant by its base model. `Arena:CustomModels` adds models through the SDK provider configuration, and the
+  AppHost passes them on.
+- **Prompt styles.** `classic` (the earlier prompt, unchanged), `board` and `think`, selected as `~style` on the player id, so each
+  configuration is ranked on its own. Pickers on Play, Tournaments, Benchmark and Broadcast; a style filter and a "Prompt styles
+  compared" section on Results.
+- **Benchmark runs.** Variants (`model@effort`) play a benchmark run with a JSON and Markdown report, a `/benchmark` page,
+  `scripts/benchmark.sh` and `scripts/benchmark.ps1` (they refuse to run under CI), and `docs/BENCHMARK.md`.
+- **Public static site.** The results, head-to-head, games list, tournaments, an about page, one page per game and the JSON
+  data are exported as static pages without script, and can be published to the `gh-pages` branch from an admin page or
+  automatically.
+- **Results archive.** Every rated game can be exported as one JSON file in `results/` (`docs/RESULTS-ARCHIVE.md`); CI builds the
+  public site from those files. `CONTRIBUTING.md` describes how to contribute results.
+- **Results page.** A model map: a bubble chart of two chosen coefficients.
+- **Live page.** A Pace control: the view runs a chosen number of seconds behind the game (default `Arena:Viewer:MinMovePauseSeconds`);
+  the game itself is not slowed.
+- **Viewer-paid games.** Gateway providers for Anthropic, OpenAI and DeepInfra API keys, a request core (menu, price quote,
+  ledger, queue, intake), a YouTube Super Chat intake, and a broadcast runner that plays the queue with a per-game budget guard
+  (`docs/REQUESTS.md`). With `Arena:Requests:RequireApiKeyModels` on, a paid game never runs on the Copilot subscription.
+- **Broadcast planning.** Games are planned one by one with per-game model options, cost estimates and queue rules; the live page
+  has navigation, indicators, a layout that fits one screen in landscape and portrait, and an intermission state between
+  scheduled games.
+
+### Changed
+
+- The leaderboard order is conservative: by the lower bound of the arena score interval (`docs/RATING.md`).
+- The live game page keeps the board in place: the player bars and the status line have fixed heights, and the live move list
+  shows the newest move on top.
+- The broadcast page cleans up its stream connections, and the HTTP clients for ratings and results are more resilient.
+- Dependencies: GitHub.Copilot.SDK 1.0.28, Microsoft.EntityFrameworkCore and InMemory 10.0.14, Microsoft.AspNetCore.Mvc.Testing
+  10.0.14, bunit 2.13.3 and the `dotnet-ef` tool 10.0.14. CI resolves the .NET SDK from `global.json` again.
+
+### Removed
+
+- The viewer-paid request panels on the broadcast pages. The request intake and queue remain.
+
+### Fixed
+
+- `/api/ratings` and `/api/ratings/matrix` answered 500 on PostgreSQL, so the Results page did not load: the query ordered a
+  projected record, which Npgsql cannot translate. It now orders before projecting.
+- Aborting a game that had already finished reported success; it now reports false.
+- The broadcast keeps its intermission while a replay is still looking for a game.
+
 ## [0.1.0] - 2026-10-24
 
 The first release of the .NET arena. It replaces the earlier Python and Streamlit application, which is no longer in the
