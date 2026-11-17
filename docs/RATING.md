@@ -104,6 +104,9 @@ Properties (each one is a unit test):
 - **Elo-equivalent:** `Δ* = 400 · log10(RQC / (1 − RQC))` — the rating gap that would give the
   same expected score, for readers who think in Elo.
 - **Interval:** the 2.5th and 97.5th percentiles of RQC over the bootstrap (§6).
+- **Computation:** `RatingCalculator.Matrix` derives every ordered pair of a report from one bootstrap instead of one per pair;
+  each cell is exactly the number `Pairwise` gives for that pair (a test compares every cell), so the matrix and the pairwise
+  endpoint show the same figures.
 
 Reading guide shown in the UI: 0.50 – 0.55 *indistinguishable*, 0.55 – 0.65 *slightly better*,
 0.65 – 0.80 *clearly better*, > 0.80 *dominant* — and *not significant* whenever the interval

@@ -12,6 +12,16 @@ internal sealed record ScoredGame(
 internal sealed record MoveRow(
     Guid GameId, string FenAfter, int Attempts, long LatencyMs, int? InputTokens, int? OutputTokens, int? CentipawnLoss);
 
+/// <summary>
+/// The moves of one side of one pairing over a set of games, summed by the database. A sum is over the moves that have the
+/// value; its count says how many those are. No column of <c>moves</c> but the sums leaves the database.
+/// </summary>
+internal sealed record MoveTotal(
+    string Color, string WhiteModel, string BlackModel,
+    int Moves, int FirstAttemptLegal, long LatencyMsSum,
+    int InputTokensCount, long InputTokensSum, int OutputTokensCount, long OutputTokensSum,
+    int CentipawnLossCount, long CentipawnLossSum);
+
 /// <summary>One row of <c>move_attempts</c> with the columns the cost of a game needs. Ply 1 is White's first reply.</summary>
 internal sealed record ReplyRow(
     Guid GameId, int Ply, int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? CachedInputTokens, double? AiCredits);
@@ -39,6 +49,30 @@ internal static class ResultsGames
         g => g.Id,
         m => m.GameId,
         (g, m) => new MoveRow(m.GameId, m.FenAfter, m.Attempts, m.LatencyMs, m.InputTokens, m.OutputTokens, m.CentipawnLoss));
+
+    /// <summary>
+    /// The move statistics of <paramref name="games"/>, grouped by the colour that moved and the pairing, so a model's
+    /// moves are the groups where it was that colour. A join, then a group by plain columns, then aggregates: the
+    /// shape PostgreSQL translates (a test translates it with Npgsql).
+    /// </summary>
+    internal static IQueryable<MoveTotal> MoveTotalsOf(ArenaDbContext db, IQueryable<GameEntity> games) => games
+        .Join(
+            db.Moves,
+            g => g.Id,
+            m => m.GameId,
+            (g, m) => new { m.Color, g.WhiteModel, g.BlackModel, m.Attempts, m.LatencyMs, m.InputTokens, m.OutputTokens, m.CentipawnLoss })
+        .GroupBy(x => new { x.Color, x.WhiteModel, x.BlackModel })
+        .Select(group => new MoveTotal(
+            group.Key.Color, group.Key.WhiteModel, group.Key.BlackModel,
+            group.Count(),
+            group.Count(x => x.Attempts == 1),
+            group.Sum(x => x.LatencyMs),
+            group.Count(x => x.InputTokens != null),
+            group.Sum(x => (long?)x.InputTokens) ?? 0,
+            group.Count(x => x.OutputTokens != null),
+            group.Sum(x => (long?)x.OutputTokens) ?? 0,
+            group.Count(x => x.CentipawnLoss != null),
+            group.Sum(x => (long?)x.CentipawnLoss) ?? 0));
 
     public static IQueryable<ReplyRow> RepliesOf(ArenaDbContext db, IQueryable<GameEntity> games) => games.Join(
         db.MoveAttempts,

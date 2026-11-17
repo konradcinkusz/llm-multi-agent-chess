@@ -40,7 +40,7 @@ internal static class ResultsFixtures
     {
         GameId = gameId,
         Ply = ply,
-        Color = "",
+        Color = fenAfter.Split(' ')[1] == "b" ? "white" : "black",   // the side that just moved, as the runner stores it
         San = "e4",
         FenAfter = fenAfter,
         Attempts = attempts,
