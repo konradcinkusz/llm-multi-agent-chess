@@ -8,8 +8,35 @@ A local arena that ranks the LLMs available through your GitHub Copilot subscrip
 
 The app runs on `localhost` only. The one thing published is the static results site on GitHub Pages ([Public results site](#public-results-site)). Every game, move, LLM attempt and rating snapshot is stored in PostgreSQL.
 
+## What you get
+
+- **A ranking you can reproduce.** Models play rated games; a Bradley–Terry fit and a 75 / 25 results-and-quality coefficient turn them into ratings with 95 % bootstrap intervals ([How ratings work](#how-ratings-work), [docs/RATING.md](docs/RATING.md)).
+- **No fallback moves.** An illegal reply is recorded, and after three attempts the side forfeits. The arena never plays a move for a model.
+- **Everything is kept.** Games, moves, every prompt and reply, tournaments, benchmark runs and rating history live in PostgreSQL ([Data](#data)).
+- **Round-robin tournaments and benchmarks** of one model, effort or [prompt style](#prompt-styles) against the rest, with the cost estimated before you start ([Cost](#cost-ai-credits-per-move), [Benchmark](#benchmark-your-own-model)).
+- **Optional move quality** from Stockfish, which feeds the quality share of the coefficient. Without it the arena runs on legality alone.
+- **A 24 h broadcast mode** for OBS and YouTube, and viewer-paid games on your own API keys ([Broadcast](#broadcast-mode-24-h-channel), [Viewer-paid games](#viewer-paid-games)).
+- **A static public site** built from a results archive in the repository, with no script on any page ([Public results site](#public-results-site)).
+- **Try it without Docker or a Copilot login** on the `fake` profile ([Quickstart](#quickstart)).
+
+## How it works
+
+```
+Browser ──► Chess.Web (Blazor, :5070) ──HTTP/SSE──► Chess.Api (:5080) ──► PostgreSQL
+                                                      │
+                                                      ├─► Chess.Llm ──► GitHub Copilot (or the fake gateway)
+                                                      ├─► Chess.Analysis ──► Stockfish (optional)
+                                                      ├─► Chess.Engine   rules, SAN, PGN
+                                                      └─► Chess.Rating   rating maths, no I/O
+Chess.AppHost (Aspire) starts all of it.
+```
+
+The web app is the only thing a browser talks to; it reads the API over HTTP and follows live games over server-sent events. Only `Chess.Llm` references the Copilot SDK. The rating is recomputed from the stored games on every read, never stored as a leaderboard. The layout and the allowed references are in [Project layout](#project-layout).
+
 ## Contents
 
+- [What you get](#what-you-get)
+- [How it works](#how-it-works)
 - [Prerequisites](#prerequisites)
 - [Quickstart](#quickstart)
 - [URLs](#urls)
@@ -22,6 +49,8 @@ The app runs on `localhost` only. The one thing published is the static results 
 - [Benchmark your own model](#benchmark-your-own-model)
 - [Cost: AI credits per move](#cost-ai-credits-per-move)
 - [Data](#data)
+- [Configuration](#configuration)
+- [API](#api)
 - [Troubleshooting: the `/health` states](#troubleshooting-the-health-states)
 - [Project layout](#project-layout)
 - [Tests and CI](#tests-and-ci)
@@ -260,6 +289,43 @@ Everything is in PostgreSQL: games, every move, every LLM attempt with its promp
 - The leaderboard is computed from the stored games, never stored. The API keeps the last computation in memory (not in the database) and replaces it as soon as a rated game finishes or a move gets its Stockfish annotation, so a read always shows the numbers of the games as they are now. Every number on screen can be reproduced from the games table. The rating history chart (`/api/ratings/history`) sends at most 200 points per model, thinned at a fixed stride and always including each model's first and latest snapshot.
 - The `fake` profile and the tests use an in-memory store. Its data is gone when the app stops.
 - To use an existing PostgreSQL instead of the container, set the AppHost connection string `ConnectionStrings:chess` in the AppHost user secrets. No container is started then.
+
+## Configuration
+
+The API reads its settings from `src/Chess.Api/appsettings.json` and from the usual .NET sources (environment variables, user secrets). These are the defaults in that file; later sections of this README describe the other `Arena:` keys where they matter.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Llm:Provider` | `Copilot` | `Fake` is what the `fake` profile sets. |
+| `Database:Provider` | `PostgreSQL` | `InMemory` is what the `fake` profile sets. |
+| `Arena:MaxConcurrentGames` | `2` | Games running at once from `POST /api/games` and tournaments. Broadcast is outside it ([Cost](#cost-ai-credits-per-move)). |
+| `Arena:MaxAttemptsPerMove` | `3` | Attempts a side gets per move before it forfeits. |
+| `Arena:MaxPlies` | `200` | A game that reaches it is adjudicated. |
+| `Arena:MoveTimeoutSeconds` | `180` | A longer reply is a rejected attempt of kind `timeout`. |
+| `Arena:ShowAutoModel` | `false` | Show Copilot's `auto` model in the pickers. |
+| `Arena:Cost:UsdPerAiCredit` | `0.01` | The dollar figure shown beside AI credits. |
+| `Analysis:StockfishPath` | empty | Empty means look for Stockfish on `PATH`. |
+| `Analysis:Depth` | `12` | Stockfish search depth. |
+| `Arena:AllowedOrigins` | none | Extra origins the [403 guard](#troubleshooting-the-health-states) accepts. |
+
+Secrets (the Copilot token, PostgreSQL password) are AppHost secret parameters; none belongs in a file.
+
+## API
+
+The API listens on <http://127.0.0.1:5080> and every route is under `/api`. The web app uses nothing else, so anything the UI does you can do with `curl`. Requests from another site are refused ([403 `Cross-origin request rejected`](#troubleshooting-the-health-states)).
+
+| Area | Routes |
+|---|---|
+| Games | `POST /api/games`, `GET /api/games`, `GET /api/games/{id}`, `GET /api/games/{id}/events` (SSE), `GET /api/games/{id}/pgn`, `GET /api/games/{id}/usage`, `DELETE /api/games/{id}` |
+| Tournaments | `POST` and `GET /api/tournaments`, `GET` and `DELETE /api/tournaments/{id}` |
+| Benchmarks | `POST` and `GET /api/benchmarks`, `GET /api/benchmarks/{id}`, `GET /api/benchmarks/{id}/report`, `POST /api/benchmarks/{id}/cancel` |
+| Ratings | `GET /api/ratings`, `/api/ratings/history`, `/api/ratings/matrix`, `/api/ratings/pairwise`, `/api/results/breakdown` |
+| Catalog and status | `GET /api/models`, `/api/prompt-styles`, `/api/status`, `/api/attempts`, `/api/cost/inputs` |
+| Broadcast | `POST /api/broadcast/plan`, `POST` and `GET /api/broadcast/schedules`, `GET` and `DELETE /api/broadcast/schedules/{id}`, `PUT …/slots`, `POST …/start`, `…/pause`, `…/resume`, `…/stop`, `GET /api/broadcast/now` |
+| Viewer requests | `GET /api/requests/menu`, `/quote`, `/queue`, `POST /api/requests/simulate` (Mock mode only), `POST /api/requests/{id}/cancel` (see [Viewer-paid games](#viewer-paid-games)) |
+| Results archive | `POST /api/results/archive/export`, `GET /api/results/archive/status` |
+
+`/health` and `/alive` are at the root. This table lists the routes in the code; the request and response shapes are the DTOs in `src/Chess.Api/Contracts`.
 
 ## Troubleshooting: the `/health` states
 

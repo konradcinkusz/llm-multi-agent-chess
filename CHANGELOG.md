@@ -10,6 +10,7 @@ Everything merged to `main` since 0.1.0, and the work of the session branch that
 
 ### Added
 
+- **README.** New *What you get*, *How it works*, *Configuration* and *API* sections; MIT license year corrected to 2026.
 - **Live game transparency.** The gateway reports tokens, reasoning and AI credits from the SDK, and the runner stores and
   streams every attempt with its usage and a rejection kind. The live page shows player bars, whose turn it is, a move table, the
   engine log, a game summary and model prices. The replay page shows the same for stored games.
