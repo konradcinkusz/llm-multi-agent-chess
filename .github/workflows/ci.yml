@@ -222,6 +222,7 @@ jobs:
       - name: Model matches the migrations (dotnet ef)
         run: |
           dotnet tool restore
+          dotnet restore src/Chess.Api
           dotnet ef migrations has-pending-model-changes --project src/Chess.Api
 
       - name: Build the API tests (warnings as errors)

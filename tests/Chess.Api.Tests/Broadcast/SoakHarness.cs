@@ -91,11 +91,14 @@ internal sealed class SoakHarness : IAsyncDisposable
     public const int Seed = 7;
 
     /// <summary>
-    /// The gateway outage of the day: five simulated minutes. The runner plays the next game after the gap and never waits for a
-    /// planned time (03 §9.1), so a game of the fake players (200 plies at 4 s) takes about 14 minutes and the day about 5.5 hours.
+    /// The gateway outage of the day: 22 simulated minutes. The runner plays the next game after the gap and never waits for a
+    /// planned time (03 §9.1), so a game of the fake players (200 plies at 4 s) takes about 13 to 14 minutes and the slots start
+    /// about every 13.5 minutes (slot 8 at 90 to 95 minutes, slot 9 at 108 to 109 minutes). The window is wide enough to hold the
+    /// start of at least one slot whatever the length of the games before it; a window of a few minutes held no slot start in
+    /// about one run in five, and the test failed on that.
     /// </summary>
-    public static readonly DateTimeOffset OutageFrom = RunnerHarness.Start.AddMinutes(98);
-    public static readonly DateTimeOffset OutageUntil = RunnerHarness.Start.AddMinutes(103);
+    public static readonly DateTimeOffset OutageFrom = RunnerHarness.Start.AddMinutes(90);
+    public static readonly DateTimeOffset OutageUntil = RunnerHarness.Start.AddMinutes(112);
 
     /// <summary>The models of the day: the random player, three fake models, one of which fails in a share of its games.</summary>
     public static readonly string[] Models = [ModelCatalog.RandomModelId, "fake-a", InducedFailurePlayers.FlakyModel, "fake-c"];
