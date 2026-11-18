@@ -6,8 +6,12 @@ using Xunit;
 
 namespace Chess.Web.Tests.Site.Publishing;
 
-public class SitePageTests
+public class SitePageTests : IDisposable
 {
+    private readonly SiteTestGit _git = new();
+
+    public void Dispose() => _git.Dispose();
+
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 14, 3, 0, TimeSpan.Zero);
 
     [Fact]
@@ -63,6 +67,24 @@ public class SitePageTests
     }
 
     [Fact]
+    public void The_export_size_is_shown_against_the_one_gigabyte_limit_and_a_near_limit_is_warned_about()
+    {
+        using var ctx = new BunitContext();
+        var small = Render(ctx, new SiteFakeExporter { TakenAt = Now }, new SiteFakePublisher());
+        Click(small, "Export");
+        small.WaitForAssertion(() => Assert.Contains("of the 1 GB limit", small.Find("#site-share").TextContent));
+        Assert.Empty(small.FindAll("#site-size-warning"));
+
+        using var big = new BunitContext();
+        var near = Render(big, new SiteFakeExporter { Behaviour = _ => new Chess.Web.Site.SiteExportResult(3, 1, 900L * 1024 * 1024, Now) },
+            new SiteFakePublisher());
+        Click(near, "Export");
+
+        near.WaitForAssertion(() => Assert.Contains("87.9%", near.Find("#site-share").TextContent));
+        Assert.Contains("close to the 1 GB limit", near.Find("#site-size-warning").TextContent);
+    }
+
+    [Fact]
     public void A_failing_export_is_shown_as_an_error_and_does_not_throw()
     {
         using var ctx = new BunitContext();
@@ -87,15 +109,16 @@ public class SitePageTests
         Assert.Equal("The export failed: disk full", cut.Find("#site-publish-detail").TextContent);
     }
 
-    private static IRenderedComponent<SitePage> Render(BunitContext ctx, SiteFakeExporter exporter, SiteFakePublisher publisher)
+    private IRenderedComponent<SitePage> Render(BunitContext ctx, SiteFakeExporter exporter, SiteFakePublisher publisher)
     {
         var options = SiteTestOptions.Create(o =>
         {
             o.Remote = "https://github.com/owner/repo.git";
-            o.ExportDirectory = Path.Combine(Path.GetTempPath(), "arena-site-page-test");
+            o.ExportDirectory = Path.Combine(_git.Root, "export");
+            o.WorkDir = _git.WorkDir;
         });
-        var coordinator = new SiteExportCoordinator(publisher, options,
-            new SiteFakeHostEnvironment(Path.GetTempPath()), new SiteFakeClock(Now), exporter);
+        var app = Directory.CreateDirectory(Path.Combine(_git.Root, "app")).FullName;
+        var coordinator = new SiteExportCoordinator(publisher, options, new SiteFakeHostEnvironment(app), new SiteFakeClock(Now), exporter);
         ctx.Services.AddSingleton(options);
         ctx.Services.AddSingleton(coordinator);
         return ctx.Render<SitePage>();

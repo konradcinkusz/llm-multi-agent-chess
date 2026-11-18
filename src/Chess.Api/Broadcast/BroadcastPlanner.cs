@@ -21,6 +21,12 @@ public sealed class InvalidPlanException(string message) : Exception(message);
 public static class BroadcastPlanner
 {
     /// <summary>
+    /// The most games one schedule may hold. A plan with tiny assumptions (half a ply a game, 1 ms a move) would otherwise
+    /// fill a week with about 10^9 slots and exhaust memory. A broadcast week at the default pace is about 110 games.
+    /// </summary>
+    public const int MaxSlots = 500;
+
+    /// <summary>
     /// Fills the window round-robin. Every unordered pair of models meets once per round, in a seeded order that
     /// never repeats the previous pairing. Colours are then assigned over the whole day so that each model's
     /// White and Black counts differ by at most one. A game only starts when it can finish by <c>EndsAt</c>; the
@@ -34,9 +40,17 @@ public static class BroadcastPlanner
         ArgumentNullException.ThrowIfNull(inputs);
 
         var models = Validate(request);
-        var gameLength = TimeSpan.FromMilliseconds(request.AssumedPlies * (request.AssumedMoveLatencyMs + request.Pacing.MoveDelayMs));
+        var gameLength = GameLength(request.AssumedPlies, request.AssumedMoveLatencyMs, request.Pacing.MoveDelayMs);
         var gap = TimeSpan.FromSeconds(request.Pacing.GameGapSeconds);
-        var endsAt = request.StartsAt.AddHours(request.DurationHours);
+        DateTimeOffset endsAt;
+        try
+        {
+            endsAt = request.StartsAt.AddHours(request.DurationHours);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            throw new InvalidPlanException("StartsAt is too far in the future.");
+        }
 
         var rng = new Random(request.Seed);
         var pool = new List<(int A, int B)>();
@@ -60,6 +74,12 @@ public static class BroadcastPlanner
             if (end > endsAt)
             {
                 break;
+            }
+
+            if (pairings.Count >= MaxSlots)
+            {
+                throw new InvalidPlanException(
+                    $"The plan would hold more than {MaxSlots} games. Shorten the window or assume a longer game.");
             }
 
             pairings.Add(pairing);
@@ -110,22 +130,89 @@ public static class BroadcastPlanner
             throw new InvalidPlanException("Pacing values must not be negative.");
         }
 
-        if (!(request.AssumedPlies > 0))
+        return models;
+    }
+
+    /// <summary>
+    /// How long a game takes at the assumed pace: <paramref name="plies"/> × (latency + move delay). The assumptions must be
+    /// finite and positive, and a game must fit the longest window; anything else is an <see cref="InvalidPlanException"/>.
+    /// </summary>
+    private static TimeSpan GameLength(double plies, double latencyMs, int moveDelayMs)
+    {
+        if (!double.IsFinite(plies) || plies <= 0)
         {
-            throw new InvalidPlanException("AssumedPlies must be positive.");
+            throw new InvalidPlanException("AssumedPlies must be a positive, finite number.");
         }
 
-        if (request.AssumedMoveLatencyMs < 0)
+        if (!double.IsFinite(latencyMs) || latencyMs < 0)
         {
-            throw new InvalidPlanException("AssumedMoveLatencyMs must not be negative.");
+            throw new InvalidPlanException("AssumedMoveLatencyMs must be a finite number and not negative.");
         }
 
-        if (request.AssumedMoveLatencyMs + request.Pacing.MoveDelayMs <= 0)
+        if (latencyMs + moveDelayMs <= 0)
         {
             throw new InvalidPlanException("A game must take a positive amount of time.");
         }
 
-        return models;
+        var milliseconds = plies * (latencyMs + moveDelayMs);
+        if (!double.IsFinite(milliseconds) || milliseconds > BroadcastEndpoints.MaxDurationHours * 3_600_000.0)
+        {
+            throw new InvalidPlanException(
+                $"A game at the assumed pace would take longer than {BroadcastEndpoints.MaxDurationHours} hours.");
+        }
+
+        var length = TimeSpan.FromMilliseconds(milliseconds);
+        if (length <= TimeSpan.Zero)
+        {
+            throw new InvalidPlanException("A game must take a positive amount of time.");
+        }
+
+        return length;
+    }
+
+    /// <summary>
+    /// Lays <paramref name="games"/> games end to end from <paramref name="start"/>, each after the previous one plus the game
+    /// gap, for a schedule whose games the user picked. Throws <see cref="InvalidPlanException"/> for no games, more than
+    /// <see cref="MaxSlots"/>, bad assumptions, negative pacing, or a span past <see cref="BroadcastEndpoints.MaxDurationHours"/>.
+    /// </summary>
+    public static IReadOnlyList<(DateTimeOffset Start, DateTimeOffset End)> Layout(int games, DateTimeOffset start,
+        double assumedPlies, double assumedMoveLatencyMs, PacingProfile pacing)
+    {
+        ArgumentNullException.ThrowIfNull(pacing);
+        if (games < 1)
+        {
+            throw new InvalidPlanException("At least one game is required.");
+        }
+
+        if (games > MaxSlots)
+        {
+            throw new InvalidPlanException($"A schedule holds at most {MaxSlots} games.");
+        }
+
+        if (pacing.MoveDelayMs < 0 || pacing.GameGapSeconds < 0)
+        {
+            throw new InvalidPlanException("Pacing values must not be negative.");
+        }
+
+        var length = GameLength(assumedPlies, assumedMoveLatencyMs, pacing.MoveDelayMs);
+        var gap = TimeSpan.FromSeconds(pacing.GameGapSeconds);
+        var longest = TimeSpan.FromHours(BroadcastEndpoints.MaxDurationHours);
+        var windows = new List<(DateTimeOffset Start, DateTimeOffset End)>(games);
+        var next = start;
+        for (var index = 0; index < games; index++)
+        {
+            var end = next + length;
+            if (end - start > longest)
+            {
+                throw new InvalidPlanException(
+                    $"The games would run past {BroadcastEndpoints.MaxDurationHours} hours. Remove a game or shorten the pacing.");
+            }
+
+            windows.Add((next, end));
+            next = end + gap;
+        }
+
+        return windows;
     }
 
     // Pairs are (i, j) with i < j, so a pairing compares equal regardless of colour.

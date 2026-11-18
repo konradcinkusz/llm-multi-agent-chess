@@ -1,19 +1,31 @@
 @using Chess.Web.Components.Shared
 
-@* The parts every board of a game page shares, written once per page: the checkerboard and one symbol per piece. A board then
-   only places its pieces and highlights (SiteBoard), which keeps a board per ply small (03 §11). *@
-<svg class="site-defs" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+@* The parts every board of a game page shares, written once per page: the checkerboard, the 16 coordinate labels and one
+   group per piece. A board then only places its pieces and highlights (SiteBoard), which keeps a board per ply small (03 §11).
+   A piece is a group, not a symbol: a use of a group needs only x and y, where a use of a symbol also needs width and height. *@
+<svg class="site-defs" width="0" height="0" aria-hidden="true" focusable="false">
     <defs>
         <pattern id="site-checker" width="200" height="200" patternUnits="userSpaceOnUse">
             <rect width="200" height="200" fill="@LightSquare" />
             <rect x="100" width="100" height="100" fill="@DarkSquare" />
             <rect y="100" width="100" height="100" fill="@DarkSquare" />
         </pattern>
+        <g id="@CoordinatesId" class="coord">
+            @for (var row = 0; row < 8; row++)
+            {
+                var rank = 7 - row;
+                @CoordinateText(6, row * 100 + 18, null, (rank + 1).ToString(), rank % 2 == 0 ? LightSquare : DarkSquare)
+            }
+            @for (var file = 0; file < 8; file++)
+            {
+                @CoordinateText(file * 100 + 94, 794, "end", ((char)('a' + file)).ToString(), file % 2 == 0 ? LightSquare : DarkSquare)
+            }
+        </g>
         @foreach (var piece in Pieces)
         {
-            <symbol id="@SiteBoardDefs.PieceId(piece)" viewBox="0 0 100 100">
+            <g id="@SiteBoardDefs.PieceId(piece)">
                 @Glyph(FenBoard.Symbol(piece))
-            </symbol>
+            </g>
         }
     </defs>
 </svg>
@@ -27,8 +39,26 @@
     /// <summary>The FEN letters of the pieces: white upper case, black lower case.</summary>
     private const string Pieces = "KQRBNPkqrbnp";
 
-    /// <summary>The id of a piece's symbol, which a board references with <c>&lt;use href&gt;</c>.</summary>
+    /// <summary>The id of a piece's group, which a board references with <c>&lt;use href&gt;</c>.</summary>
     public static string PieceId(char piece) => "site-piece-" + piece;
+
+    /// <summary>The id of the group of the 16 coordinate labels every board shows.</summary>
+    public const string CoordinatesId = "site-coords";
+
+    private static RenderFragment CoordinateText(int x, int y, string? anchor, string content, string fill) => builder =>
+    {
+        builder.OpenElement(0, "text");
+        builder.AddAttribute(1, "x", x);
+        builder.AddAttribute(2, "y", y);
+        if (anchor is not null)
+        {
+            builder.AddAttribute(3, "text-anchor", anchor);
+        }
+        builder.AddAttribute(4, "font-size", 16);
+        builder.AddAttribute(5, "fill", fill);
+        builder.AddContent(6, content);
+        builder.CloseElement();
+    };
 
     private static RenderFragment Glyph(string symbol) => builder =>
     {

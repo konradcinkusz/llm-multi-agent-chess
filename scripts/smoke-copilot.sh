@@ -107,10 +107,11 @@ done
 
 status="$(curl -fsS "${api_url}/api/status")"
 copilot_state="$(jq -r '.copilot' <<<"${status}")"
-if [[ "${copilot_state}" != "healthy" ]]; then
+# /api/status reports the gateway state (Ready, Fake, NotAuthenticated or Unavailable), not the health verdict.
+if [[ "${copilot_state}" != "Ready" ]]; then
   die "the Copilot gateway is ${copilot_state}: $(jq -r '.copilotDetail' <<<"${status}"). Run 'copilot', log in, then run this script again."
 fi
-echo "Copilot gateway: ready"
+echo "Copilot gateway: Ready"
 
 models="$(curl -fsS "${api_url}/api/models")"
 if ! jq -e --arg m "${model}" 'any(.[]; .id == $m and .enabled == true)' <<<"${models}" >/dev/null; then
@@ -155,10 +156,18 @@ printf 'Model:     %s (Black), %s moves played\n' "${model}" "${model_moves}"
 printf 'Attempts:  %s Copilot requests, %s rejected (illegal, unparseable or empty)\n' "${requests}" "${rejected}"
 printf 'Latency:   %s ms average per request\n' "${latency_ms}"
 
-# Per request: tokens, AI credits and whether the reply carried reasoning. A field the API does not return yet prints n/a.
-# TODO(G2): print the game's usage from GET /api/games/${game_id}/usage once G2 is merged; the endpoint is not on main yet.
+# Per request: tokens, AI credits and whether the reply carried reasoning. A field the API does not return prints n/a.
 printf '\nRequests (ply, number, verdict, tokens in/out, AI credits, reasoning):\n'
 jq -r '.[] | "  ply \(.ply) request \(.number): \(if .legal then "legal" else "rejected" end), tokens \(.inputTokens // "n/a")/\(.outputTokens // "n/a"), credits \(.aiCredits // "n/a"), reasoning \(if (.reasoning // "") == "" then "no" else "yes" end)"' <<<"${model_attempts}"
 
 printf '\n'
 printf 'Log:       %s\n' "${api_log}"
+
+# The game's usage as the app computes it: per side, requests, tokens and AI credits. README.md ("Cost: AI credits per move")
+# says the owner must confirm that 1 AI unit the runtime reports is 1 AI credit; compare the credits above with these.
+usage="$(curl -fsS "${api_url}/api/games/${game_id}/usage")" \
+  || die "GET /api/games/${game_id}/usage failed; see ${api_log}"
+printf '\nUsage (GET /api/games/%s/usage), to confirm 1 AI unit = 1 AI credit against your Copilot usage:\n' "${game_id}"
+jq -r '[.white, .black][] | "  \(.color) \(.modelId): \(.requests) requests, tokens \(.inputTokens)/\(.outputTokens) in/out, AI credits \(.aiCredits // "n/a") (\(.costBasis))"' <<<"${usage}"
+printf '  total: AI credits %s, estimated USD %s at %s USD per credit\n' \
+  "$(jq -r '.totalAiCredits // "n/a"' <<<"${usage}")" "$(jq -r '.totalEstimatedUsd // "n/a"' <<<"${usage}")" "$(jq -r '.usdPerAiCredit' <<<"${usage}")"

@@ -7,6 +7,7 @@
 @inject ArenaApiClient Api
 @inject GameEventsClient Events
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
 
 <PageTitle>Live game · LLM Chess Arena</PageTitle>
 
@@ -106,7 +107,7 @@ else
             }
         </section>
 
-        <section class="card stack play-board" aria-label="Board">
+        <section id="board" class="card stack play-board" aria-label="Board">
             <PlayerBar Color="Black" Name="@ModelName(SideModel(Black))" ToMove="@ToMove(Black)"
                        Attempt="@AttemptOf(Black)" Seconds="@SecondsOf(Black)"
                        CapturedHere="@Captured.CapturedByBlack" Lead="@LeadOf(Black)"
@@ -161,7 +162,7 @@ else
 
                 @if (_pgn is not null)
                 {
-                    <pre class="play-pgn" data-testid="pgn">@_pgn</pre>
+                    <pre class="play-pgn" data-testid="pgn" tabindex="0" role="region" aria-label="PGN">@_pgn</pre>
                 }
             }
         </section>
@@ -346,7 +347,7 @@ else
         }
         catch (Exception ex)
         {
-            _modelsError = ex.Message;
+            _modelsError = ApiFailure.Describe(ex);
         }
 
         try
@@ -355,7 +356,7 @@ else
         }
         catch (Exception ex)
         {
-            statusError = ex.Message;
+            statusError = ApiFailure.Describe(ex);
         }
 
         _gatewayMessage = GatewayMessage(status, statusError);
@@ -410,10 +411,14 @@ else
 
             _follow = new CancellationTokenSource();
             _ = FollowAsync(summary.Id, _follow.Token);
+
+            // The game is in the address, so a reload or a shared link opens it (?game=). The fragment brings the board into
+            // view: on a phone it sits below the form, and the router scrolls to the element a fragment names without a script.
+            Navigation.NavigateTo($"/?game={summary.Id:D}#board", replace: true);
         }
         catch (Exception ex)
         {
-            _error = $"Could not start the game: {ex.Message}";
+            _error = $"Could not start the game: {ApiFailure.Describe(ex)}";
         }
         finally
         {
@@ -438,7 +443,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not open the game: {ex.Message}";
+            _error = $"Could not open the game: {ApiFailure.Describe(ex)}";
         }
     }
 
@@ -456,7 +461,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not abort the game: {ex.Message}";
+            _error = $"Could not abort the game: {ApiFailure.Describe(ex)}";
         }
     }
 
@@ -479,7 +484,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not load the PGN: {ex.Message}";
+            _error = $"Could not load the PGN: {ApiFailure.Describe(ex)}";
         }
     }
 
@@ -591,9 +596,9 @@ else
                     }
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
             {
-                await InvokeAsync(() => ShowError($"The live stream failed: {ex.Message}"));
+                await InvokeAsync(() => ShowError($"The live stream failed: {ApiFailure.Describe(ex)}"));
             }
 
             // The stream closed before the game finished, or could not be opened: load the game as it is, then reconnect.
@@ -619,7 +624,7 @@ else
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            await InvokeAsync(() => ShowError($"Could not load the game: {ex.Message}"));
+            await InvokeAsync(() => ShowError($"Could not load the game: {ApiFailure.Describe(ex)}"));
             return;
         }
 
@@ -671,7 +676,7 @@ else
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            await InvokeAsync(() => ShowError($"Could not load the engine log: {ex.Message}"));
+            await InvokeAsync(() => ShowError($"Could not load the engine log: {ApiFailure.Describe(ex)}"));
         }
     }
 
@@ -694,7 +699,7 @@ else
         {
             await InvokeAsync(() =>
             {
-                _usageError = $"Could not load the usage of this game: {ex.Message}";
+                _usageError = $"Could not load the usage of this game: {ApiFailure.Describe(ex)}";
                 StateHasChanged();
             });
         }

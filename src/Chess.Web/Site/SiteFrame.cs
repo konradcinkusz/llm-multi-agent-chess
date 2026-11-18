@@ -10,9 +10,26 @@ namespace Chess.Web.Site;
 /// <param name="RatedGames">Rated games in the snapshot.</param>
 /// <param name="WatchLiveUrl">The configured "Watch live" address, or null when none is configured.</param>
 /// <param name="SupportLinks">The configured support links; empty when none is configured.</param>
+/// <param name="PublicUrl">The address the site is served at (<c>Arena:Site:PublicUrl</c>), an absolute http(s) address, or null.
+/// Only with it can a page name its canonical address.</param>
 public sealed record SiteFrame(int Depth, DateTimeOffset TakenAt, int RatedGames, string? WatchLiveUrl,
-    IReadOnlyList<SupportLink> SupportLinks)
+    IReadOnlyList<SupportLink> SupportLinks, string? PublicUrl = null)
 {
+    /// <summary>
+    /// The absolute address of the page at <paramref name="sitePath"/> (written from the export root, e.g. <c>games/index.html</c>),
+    /// or null when no public address is configured. A folder page is named by its folder, as a browser reaches it.
+    /// </summary>
+    public string? Canonical(string sitePath)
+    {
+        if (PublicUrl is null)
+        {
+            return null;
+        }
+
+        var path = sitePath == "index.html" ? "" : sitePath.EndsWith("/index.html", StringComparison.Ordinal) ? sitePath[..^"index.html".Length] : sitePath;
+        return PublicUrl.TrimEnd('/') + "/" + path;
+    }
+
     /// <summary>"../" once per folder between the page and the export root.</summary>
     public string Root => string.Concat(Enumerable.Repeat("../", Depth));
 

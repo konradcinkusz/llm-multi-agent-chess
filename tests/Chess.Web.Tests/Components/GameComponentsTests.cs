@@ -124,6 +124,68 @@ public class MoveTableTests
         Assert.NotNull(cut.Find("[data-testid=no-moves]").Closest(".move-table-scroll"));
     }
 
+    private static IReadOnlyList<MoveDto> Game(int plies) => [.. Enumerable.Range(1, plies).Select(ply => Move(ply, $"m{ply}"))];
+
+    private static string[] ShownPlies(IRenderedComponent<MoveTable> cut) =>
+        cut.FindAll("[data-testid=move-cell]").Select(cell => cell.GetAttribute("data-ply")!).ToArray();
+
+    [Fact]
+    public void ALongReplayShowsAPageOfRowsAndAShortOneShowsNoPaging()
+    {
+        using var ctx = new BunitContext();
+
+        var shortGame = ctx.Render<MoveTable>(p => p.Add(x => x.Moves, Game(20)).Add(x => x.PageRows, 15));
+        Assert.Empty(shortGame.FindAll("[data-testid=move-pages]"));
+        Assert.Equal(20, ShownPlies(shortGame).Length);
+
+        var longGame = ctx.Render<MoveTable>(p => p.Add(x => x.Moves, Game(156)).Add(x => x.PageRows, 15));
+        Assert.Equal(30, ShownPlies(longGame).Length);
+        Assert.Equal("Moves 1–15 of 78", longGame.Find("[data-testid=moves-range]").TextContent);
+        Assert.True(longGame.Find("[data-testid=moves-prev]").HasAttribute("disabled"));
+        Assert.DoesNotContain("move-table-fixed", longGame.Find(".move-table-scroll").ClassList);
+        Assert.Contains("move-table-paged", longGame.Find(".move-table-scroll").ClassList);
+    }
+
+    [Theory]
+    [InlineData(null, "1", "Moves 1–15 of 78")]
+    [InlineData(3, "3", "Moves 1–15 of 78")]
+    [InlineData(30, "30", "Moves 1–15 of 78")]
+    [InlineData(31, "31", "Moves 16–30 of 78")]
+    [InlineData(100, "100", "Moves 46–60 of 78")]
+    [InlineData(156, "156", "Moves 76–78 of 78")]
+    public void ThePageFollowsTheSelectedMoveSoItIsAlwaysInTheList(int? selected, string expectedPly, string range)
+    {
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<MoveTable>(p => p.Add(x => x.Moves, Game(156)).Add(x => x.PageRows, 15).Add(x => x.SelectedPly, selected));
+
+        Assert.Equal(range, cut.Find("[data-testid=moves-range]").TextContent);
+        if (selected is not null)
+        {
+            Assert.Contains(expectedPly, ShownPlies(cut));
+            Assert.Equal(expectedPly, cut.Find("[data-testid=move-cell][aria-pressed=true]").GetAttribute("data-ply"));
+        }
+    }
+
+    [Fact]
+    public void ThePagerTurnsThePagesByHandAndTheSelectionTakesItBack()
+    {
+        using var ctx = new BunitContext();
+        var cut = ctx.Render<MoveTable>(p => p.Add(x => x.Moves, Game(156)).Add(x => x.PageRows, 15).Add(x => x.SelectedPly, 3));
+
+        cut.Find("[data-testid=moves-next]").Click();
+        Assert.Equal("Moves 16–30 of 78", cut.Find("[data-testid=moves-range]").TextContent);
+        Assert.Contains("31", ShownPlies(cut));
+
+        cut.Find("[data-testid=moves-prev]").Click();
+        cut.Find("[data-testid=moves-prev]").Click();
+        Assert.Equal("Moves 1–15 of 78", cut.Find("[data-testid=moves-range]").TextContent);
+
+        cut.Find("[data-testid=moves-next]").Click();
+        cut.Render(p => p.Add(x => x.Moves, Game(156)).Add(x => x.PageRows, 15).Add(x => x.SelectedPly, 100));
+        Assert.Equal("Moves 46–60 of 78", cut.Find("[data-testid=moves-range]").TextContent);
+    }
+
     private static MoveDto Move(int ply, string san, int attempts = 1) =>
         new(ply, ply % 2 == 1 ? "White" : "Black", san, Fen, attempts, 900, null, null, null, null);
 }

@@ -22,6 +22,11 @@
     min-width: 0;
 }
 
+/* The target of the #board fragment the page navigates to after a start: it stops below the sticky header, not under it. */
+.play-board {
+    scroll-margin-top: calc(var(--space-7) + var(--space-4));
+}
+
 /* The side's king as a chip: the hollow king is White and the filled one is Black, in both themes. */
 .play-side-name {
     display: inline-flex;

@@ -102,6 +102,43 @@ public class OriginGuardTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("attacker.example:5080")]
+    [InlineData("attacker.example")]
+    [InlineData("localhost.evil.example:5080")]
+    [InlineData("localhost:9999")]
+    [InlineData("127.0.0.1:9999")]
+    public async Task Foreign_host_is_rejected_on_a_plain_read(string host)
+    {
+        await using var app = new BroadcastApp(Guid.NewGuid().ToString());
+        var request = new HttpRequestMessage(HttpMethod.Get, NowPath);
+        request.Headers.Host = host;
+
+        var response = await app.CreateClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Contains("Host rejected", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("localhost:5080")]
+    [InlineData("127.0.0.1:5080")]
+    [InlineData("[::1]:5080")]
+    [InlineData("localhost:5070")]
+    [InlineData("api")]
+    [InlineData("api:5080")]
+    public async Task Owner_hosts_are_accepted_without_an_origin(string host)
+    {
+        await using var app = new BroadcastApp(Guid.NewGuid().ToString());
+        var request = new HttpRequestMessage(HttpMethod.Get, NowPath);
+        request.Headers.Host = host;
+
+        var response = await app.CreateClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     [Fact]
     public async Task Arena_AllowedOrigins_extends_the_list_and_nothing_else()
     {
@@ -115,6 +152,16 @@ public class OriginGuardTests
 
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(allowed)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(foreign)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Arena_AllowedOrigins_also_allows_its_host()
+    {
+        await using var app = new ExtraOriginApp();
+        var request = new HttpRequestMessage(HttpMethod.Get, NowPath);
+        request.Headers.Host = "arena.test:9000";
+
+        Assert.Equal(HttpStatusCode.OK, (await app.CreateClient().SendAsync(request)).StatusCode);
     }
 
     /// <summary>The API on the InMemory provider with one extra origin in configuration.</summary>

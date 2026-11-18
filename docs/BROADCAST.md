@@ -33,10 +33,25 @@ running; detach with `Ctrl-b d` in tmux and reattach with `tmux attach`.
 2. Optionally set the name and the pacing (move delay 4000 ms and game gap 30 min by default; the gap is typed in minutes). There is no start time or duration.
 3. Pick a White player and a Black player (each model also appears with each reasoning effort it offers, and in each ticked prompt style) and press **Add game**. Repeat for every game, one line per game. **Up**, **Down** and **Delete** change the list.
 4. Under the list, **Estimated cost of the broadcast** shows the total premium requests, AI credits and USD of the games added, and each model's share, before anything is sent.
-5. Press **Start**. The app saves the games as a schedule that begins now and starts it in one click. The games play in list order. Each game starts after the previous one ends plus the game gap, and the next start time shown on the page is recalculated from the games already played. Start is disabled while another broadcast is playing or paused.
+5. Press **Start**. The app sends the games in one call (`POST /api/broadcast/schedules`, below), which checks them, saves the
+   schedule and starts it. The games play in list order. Each game starts after the previous one ends plus the game gap, and
+   the next start time shown on the page is recalculated from the games already played. Start is disabled while another
+   broadcast is playing or paused. If the API refuses, the page shows why, nothing is saved, and the games stay on the page.
+6. Under **Broadcasts**, each row has **Start** (a draft or scheduled day), **Pause**, **Resume**, **Stop** and, for a draft,
+   **Delete**. **Stop** asks for a second click ("Yes, stop"), because it cancels the day and aborts the game in play. While a
+   day is running or paused the list reloads every 5 seconds, so Start frees itself when the day ends.
 
-The schedule window is the span of the games, so a long list is limited to 168 hours.
-Only one day plays at a time. A second start while one is playing or paused is refused.
+**Timing model (one rule).** The planned start and end of each game are estimates, not appointments. The runner never waits for
+a clock time: it plays the first game when you press **Start**, and every next game one **game gap** after the previous game left
+*running* (finished, skipped after three failed attempts, or cut off by a restart). Whenever a game leaves *running*, the app
+re-times the games still to play from that moment (the next one at the end plus the gap, the rest back to back with their planned
+lengths) and moves the schedule's end to the end of its last game. The "Up next" times and the end on `/broadcast` therefore
+follow what really happened: a game that fails and is skipped does not push the next game out to its original time. The
+planner's lengths (80 plies at 44 s) only decide the first estimate.
+
+The random player is free: the estimate shows it as "free". A schedule holds at most 500 games, and its window is the span of
+the games, so a long list is limited to 168 hours. Only one day plays at a time. A second start while one is playing or
+paused is refused.
 
 ### Through the API
 
@@ -61,10 +76,37 @@ Content-Type: application/json
 }
 ```
 
-The answer (201) is the schedule and its slots, saved as a draft. Then:
+The answer (201) is the schedule and its slots, saved as a draft. The plan is capped at 500 games, and `assumedPlies` and
+`assumedMoveLatencyMs` must be finite (plies positive, latency not negative): a request that breaks a rule is a `400`. A
+`startsAt` with an offset is stored as UTC.
+
+To start a day from games you pick yourself (what the page does), one call validates, saves and optionally starts it, in
+order, with the times laid out by the API:
+
+```http
+POST /api/broadcast/schedules
+Content-Type: application/json
+
+{
+  "name": "LLM Chess 24h",
+  "pacing": { "moveDelayMs": 4000, "gameGapSeconds": 1800 },
+  "games": [
+    { "white": { "kind": "llm", "modelId": "<model id>" }, "black": { "kind": "random", "modelId": "random" } }
+  ],
+  "start": true
+}
+```
+
+`startsAt` (default: now, to the whole second), `assumedPlies` (80), `assumedMoveLatencyMs` (40000) and `seed` (1) are optional.
+The random player is `{"kind":"random","modelId":"random"}`; any other player is kind `llm`. The answer (201) is the schedule;
+with `"start": true` its status is `running`. A refusal (400 for a bad game, 409 when another broadcast is playing or paused)
+saves nothing: a start the broadcast runner refuses removes the schedule that was just saved, so no draft is left behind.
+
+Then:
 
 | Step | Call | Answer |
 |---|---|---|
+| Delete a draft | `DELETE /api/broadcast/schedules/{id}` | 204, 404, or 409 when it is not a draft |
 | Edit the slots of a draft or scheduled day | `PUT /api/broadcast/schedules/{id}/slots` (the array order is the play order) | 200 |
 | Start (Draft or Scheduled → Running) | `POST /api/broadcast/schedules/{id}/start` | 200, 404 or 409 |
 | Pause after the current move | `POST /api/broadcast/schedules/{id}/pause` | 200, 404 or 409 |
@@ -104,13 +146,14 @@ The estimate is the normal case, not a ceiling:
 
 ## 3. OBS: Browser Source
 
-The page is a full-screen 1920×1080 layout with no app chrome: the board on the full height, with the status line, the moves
-and the up-next games beside it, with a link to the repository in the header. Each player's
-model and reasoning effort (`model · effort`) show on its side of the board. Everything fits on the one screen; nothing scrolls.
-The row text is 28 px at 1080p (panel headings 25 px), so the stream stays readable on a phone. The same layout fits any
-landscape window, and on a phone held upright `/broadcast` switches to a two-column grid (moves and up next, under the board).
-To force that phone layout on any screen, open
-`/broadcast?view=mobile`. A model without a rating yet shows `prov.` in its rating column. Add the page as a source:
+The page is a full-screen 1920×1080 layout with no app chrome: the board on the full height, and beside it one column that
+takes the rest of the width, with the status line, the moves (which fill the column) and the up-next games, and a link to the
+repository in the header. Each player's model and reasoning effort (`model · effort`) show on its side of the board, and the
+same `model · effort` names are used in the up-next list and the intermission card. Everything fits on the one screen;
+nothing scrolls. The row text is 36 px at 1080p (panel headings 30 px, the floor is 28 px), so the stream stays readable on a
+phone. The same layout fits any landscape window, and on a phone held upright `/broadcast` switches to a two-column grid
+(moves and up next, under the board). To force that phone layout on any screen, open `/broadcast?view=mobile`;
+`/broadcast?theme=light` gives a light background. Add the page as a source:
 
 1. In OBS, select or create a scene for the channel. Set the canvas to **1920×1080** (Settings → Video) and **30 FPS**
    (Settings → Video → Common FPS Values).
@@ -129,7 +172,7 @@ The app does not stream. Set up the stream in OBS and YouTube:
 
 1. In YouTube Studio, create a live stream and copy its **stream key** from the stream settings.
 2. In OBS, **Settings → Stream**: Service **YouTube - RTMPS**, and paste the stream key.
-3. Start streaming from OBS. Start the day in the app shortly before the stream goes live, or let it run from its start time.
+3. Start streaming from OBS. Press **Start** in the planner shortly before the stream goes live: the first game starts when you press it (there is no start time to wait for).
 
 ## Keep the machine awake and the app running 24 h
 
@@ -145,7 +188,8 @@ The app does not stream. Set up the stream in OBS and YouTube:
 **A restart of the app** (a crash, an update, a reboot): a day that was running resumes at its next unfinished slot.
 
 - The slot in play is skipped with the note "interrupted by a restart". Its game is closed as interrupted and is **not rated**.
-- Slots whose start time passed during the downtime are played at once, one after another with the game gap, so the channel catches up.
+- A slot or request game that was saved but had not started is closed as interrupted too, so it is never played unpaced after the restart. Only games that no tournament, benchmark, slot or request owns are queued again.
+- The games still to play are re-timed from the restart, and the next one starts at once; after it the game gap applies as usual.
 - A day that was paused stays paused until you press **Resume**.
 
 **A Copilot outage or rate limit** (the model gives no reply):
@@ -159,12 +203,18 @@ The app does not stream. Set up the stream in OBS and YouTube:
 
 - **Pause** lets the game in play finish its current move, then holds. **Resume** continues the same game.
 - **Stop** aborts the game in play. Its slot is skipped with the note "stopped by the operator", and the day is cancelled. A
-  cancelled day cannot be resumed; plan a new one.
+  cancelled day cannot be resumed; plan a new one. A stop also ends the pause between games, so a new day started after it
+  plays its first game at once and does not wait out the old gap. A command that cannot be saved (the database is down) changes
+  nothing: the pause flag and the game in play stay as they were.
+
+**An error inside the runner** (for example the database refuses a write after a game started): a game that is marked *running*
+with nothing playing it is settled at the next step, so `/api/broadcast/now` does not keep showing a dead game. A game that
+finished counts as finished; an aborted one is tried again (up to three attempts); one left unfinished is closed as
+interrupted and its slot is skipped with the note "interrupted by an error".
 
 ## 6. Read the Results page during the stream
 
-Open `http://localhost:5070/results` on the streaming machine or in a browser on the side. It is the same ranking as the mini
-leaderboard on the channel.
+Open `http://localhost:5070/results` on the streaming machine or in a browser on the side. The stage itself shows no ranking.
 
 - Only **finished, decided** games count. The game on air is not in the ranking until it ends, and an interrupted or aborted game
   is never in it.
@@ -182,7 +232,8 @@ leaderboard on the channel.
 
 It starts the app with the fake profile, plans a one-hour schedule with 50 ms moves and 1 s gaps, starts it, prints
 `/api/broadcast/now` until the schedule is finished (or fails after 120 s), prints the standings and stops the app it started. It
-needs the .NET 10 SDK, `curl` and `jq`, and port 5080 must be free. The fake profile does not play Copilot; use it to check the
+needs the .NET 10 SDK, `curl`, `jq` and a `date` that can subtract an hour (GNU `-d`, or BSD `-v`; the script stops with a message
+otherwise), and port 5080 must be free. The fake profile does not play Copilot; use it to check the
 plumbing, and check the live models from the planner page before the first real day.
 
 ## 8. Viewer-paid requests on the stream
@@ -197,24 +248,36 @@ The owner's rules, prices and keys are in [docs/REQUESTS.md](REQUESTS.md). This 
 - Otherwise a request's game uses the running schedule's pace, like a slot.
 - **Pause** holds requests as well as slots. A paused day plays no request until **Resume**.
 - A request that is playing is never interrupted by a request that arrives after it. The queue is first in, first out.
+- After a request game the runner holds the game gap, re-times the games still to play from it like after a slot, and a stop of
+  the day ends that hold.
 - A request game is an ordinary rated game. Only the games the broadcast runner plays are paced; nothing else changes.
 
-**Idle replays.** While the broadcast is **running**, no game is on the schedule's slot and **nothing is queued or playing**, the
-`/broadcast` page replays a stored game instead of the intermission card:
+**Intermission and idle replays.** Between two scheduled games the `/broadcast` page shows the **intermission card** over the
+board, which is already set up for the next game: the next start time, the two players and a countdown ("Starts in 12:34", or
+"Starts in 1:29:00" from an hour on, "Starts in a moment" once the start time has passed). No replay plays during that gap. A
+replay plays only when all of these hold:
+
+- the broadcast is **running** (not paused or off air),
+- no game is on the schedule's current slot,
+- **no further game is scheduled** (the "Up next" list is empty), and
+- **nothing is queued or playing** in the request queue.
+
+Then the page replays a stored game instead of the intermission card:
 
 - The game is the best-rated recent finished rated game, with the two models' ratings added. It is not the game just shown.
-- The pace is the schedule's, or one move every 3 s with a 10 s gap when the schedule sends none. Replays cost nothing.
-- A request that arrives during a replay stops the replay at the page's next read of the queue, every 5 s, and the request plays next.
+- The pace is the schedule's move delay, or one move every 3 s when the schedule sends none. The final position stays for 10 s,
+  then the next stored game starts. Replays cost nothing.
+- A request that arrives during a replay, or a game that gets scheduled, stops the replay at the page's next read, every 5 s,
+  and the card returns; a request plays next.
+- With no stored game to replay, the card stays ("The schedule has no further games.").
 
-**Request panels on `/broadcast`.** The OBS page shows:
+**What the stage shows of a request.** The status line names the payer while the request's game is on the board
+("Requested by Ana · Move 12 · GPT is thinking…"). The stage shows no request queue, menu or rejections, and a viewer's
+message text is never shown on the stream.
 
-- **Now playing**, with "requested by" and the payer's display name, while the request's game is on the board.
-- **Next requests**: up to three queued requests, each with its queue position and the estimated wait. The estimate is 20 minutes
-  for each game ahead (`Arena:Requests:EstimatedMinutesPerGame`).
-- **The menu**: each code with its per-side cost, and how to order (`!g <white> vs <black> [style]`).
-- **Recent rejections**, as `@name: credit kept, see the menu`. The page never shows why a command was refused or what was typed.
-
-The panels show only the parsed configuration and the display name. A viewer's message text is never shown on the stream.
+**The page keeps running.** Every read of the poll loop and every game load (the broadcast, the request queue, the schedule, a game) is cut after 20 s,
+and a read that fails or times out is logged and retried on the next poll, so one bad answer or a machine that slept does not
+freeze the stage. While the broadcast cannot be read the header shows "Reconnecting to the arena…".
 
 **Admin.** `/admin/requests` lists what plays, what is queued and what finished recently, with cancel for a queued request. It is
 not in the navigation: open it by its address, `http://localhost:5070/admin/requests`. It has a simulate form in Mock mode only.

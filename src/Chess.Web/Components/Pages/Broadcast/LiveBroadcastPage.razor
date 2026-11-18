@@ -1,6 +1,7 @@
 @page "/broadcast"
 @layout BroadcastLayout
 @using System.Globalization
+@using Microsoft.Extensions.Logging
 @using Chess.Web.Api
 @using Chess.Web.Components.Layout
 @using Chess.Web.Components.Pages.Play
@@ -9,6 +10,7 @@
 @inject ArenaApiClient Api
 @inject GameEventsClient Events
 @inject IHttpClientFactory HttpClients
+@inject ILogger<LiveBroadcastPage> Log
 
 <PageTitle>LLM Chess 24h · Broadcast</PageTitle>
 
@@ -20,7 +22,7 @@
             {
                 <p class="bc-link" data-testid="broadcast-link">@LinkText</p>
             }
-            <p class="bc-clock" data-testid="broadcast-clock">@DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture)</p>
+            <p class="bc-clock" data-testid="broadcast-clock">@Time.GetLocalNow().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</p>
         </div>
     </header>
 
@@ -92,7 +94,7 @@
                     {
                         <li>
                             <span class="bc-time">@LiveBroadcastView.StartLabel(slot.PlannedStart)</span>
-                            <span class="bc-name">@PlayerName(slot.White) vs @PlayerName(slot.Black)</span>
+                            <span class="bc-name">@SideLabel(slot.White) vs @SideLabel(slot.Black)</span>
                         </li>
                     }
                 </ol>
@@ -116,9 +118,8 @@
     /// <summary>The first wait before reconnecting a stream that closed early. It doubles up to <see cref="MaxReconnectDelay"/>.</summary>
     private static readonly TimeSpan MaxReconnectDelay = TimeSpan.FromSeconds(30);
 
-    /// <summary>The replay pace when the schedule sends none: one move every three seconds, ten seconds between games.</summary>
+    /// <summary>The replay pace when the schedule sends none: one move every three seconds.</summary>
     private const int DefaultMoveDelayMs = 3000;
-    private const int DefaultGameGapSeconds = 30 * 60;
 
     /// <summary>The <c>?theme=</c> option: <c>light</c> for a light background, anything else is the dark default.</summary>
     [Parameter, SupplyParameterFromQuery(Name = "theme")]
@@ -128,10 +129,6 @@
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? View { get; set; }
 
-    /// <summary>The <c>?top=</c> option: how many models the leaderboard shows (default 8).</summary>
-    [Parameter, SupplyParameterFromQuery(Name = "top")]
-    public int? Top { get; set; }
-
     /// <summary>How often the page reads <c>/api/broadcast/now</c>.</summary>
     [Parameter]
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(5);
@@ -139,6 +136,21 @@
     /// <summary>The first wait before reconnecting a live stream.</summary>
     [Parameter]
     public TimeSpan ReconnectDelay { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// How long one poll read may take. A read that hangs (a database retry, a machine that slept) is cut here, so the next
+    /// poll goes out well before the HttpClient timeout of 100 s.
+    /// </summary>
+    [Parameter]
+    public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>How long a replay's final position stays on the board before the next stored game starts.</summary>
+    [Parameter]
+    public TimeSpan ReplayHold { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>The clock of the header, the countdown and the start times. The system clock unless a test sets one.</summary>
+    [Parameter]
+    public TimeProvider? Clock { get; set; }
 
     private readonly CancellationTokenSource _lifetime = new();
     private CancellationTokenSource? _follow;
@@ -149,14 +161,11 @@
     private LeaderboardDto? _leaderboard;
     private LiveNowNext? _now;
     private string? _linkError;
-    private LiveSlot? _slot;
     private LiveGame? _live;
-    private int? _totalGames;
     private RequestQueueDto? _queue;
 
     /// <summary>True once the queue has been read, even when the read failed. A replay waits for it, so an empty queue is never assumed.</summary>
     private bool _queueKnown;
-    private RequestMenuDto? _menu;
     private PacingProfile? _pacing;
 
     /// <summary>The replay loop while the queue is empty. Null when no replay is wanted or the API gave none.</summary>
@@ -166,6 +175,8 @@
     private bool _replaying;
 
     private Guid? _lastReplay;
+
+    private TimeProvider Time => Clock ?? TimeProvider.System;
 
     private bool IsLight => string.Equals(Theme, "light", StringComparison.OrdinalIgnoreCase);
 
@@ -200,15 +211,7 @@
                 return null;
             }
 
-            var left = next.PlannedStart - DateTimeOffset.Now;
-            if (left <= TimeSpan.Zero)
-            {
-                return "a moment";
-            }
-
-            return left.TotalHours >= 1
-                ? left.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
-                : left.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
+            return LiveBroadcastView.CountdownText(next.PlannedStart - Time.GetUtcNow());
         }
     }
 
@@ -260,7 +263,7 @@
             if (_now is { Next.Count: > 0 } now)
             {
                 var next = now.Next[0];
-                return $"Next game at {LiveBroadcastView.StartLabel(next.PlannedStart)}: {PlayerName(next.White)} vs {PlayerName(next.Black)}.";
+                return $"Next game at {LiveBroadcastView.StartLabel(next.PlannedStart)}: {SideLabel(next.White)} vs {SideLabel(next.Black)}.";
             }
 
             return _now?.Status switch
@@ -282,14 +285,43 @@
         {
             // Names fall back to the model ids until the next start.
         }
+        catch (OperationCanceledException)
+        {
+            // An HttpClient timeout surfaces as a cancellation. The page cannot be left without its loops, so go on.
+        }
 
         _modelIds = _models.Select(model => model.Id).Order(StringComparer.Ordinal).ToList();
         await RefreshLeaderboardAsync(_lifetime.Token);
 
-        _ = PollNowAsync(_lifetime.Token);
-        _ = TickClockAsync(_lifetime.Token);
+        _ = Observe(PollNowAsync(_lifetime.Token), "the poll loop");
+        _ = Observe(TickClockAsync(_lifetime.Token), "the clock");
     }
 
+    /// <summary>
+    /// Awaits a task nobody else awaits, so that a failure is logged instead of vanishing in a discarded task. The loops that
+    /// keep the stage alive catch their own failures; this is the net under them.
+    /// </summary>
+    private async Task Observe(Task task, string what)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception ex) when (!_lifetime.IsCancellationRequested)
+        {
+            Log.LogError(ex, "The broadcast page stopped {What}.", what);
+        }
+        catch (Exception)
+        {
+            // The page has gone.
+        }
+    }
+
+    /// <summary>
+    /// Polls the broadcast and the request queue until the page goes. A failed round (an HttpClient timeout surfaces as a
+    /// <see cref="TaskCanceledException"/> while the page's token is not cancelled) is logged and the loop goes on: the
+    /// stage is on screen for a day and must not freeze on one bad read.
+    /// </summary>
     private async Task PollNowAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(PollInterval);
@@ -297,12 +329,19 @@
         {
             do
             {
-                await RefreshNowAsync(ct);
-                await RefreshRequestsAsync(ct);
+                try
+                {
+                    await RefreshNowAsync(ct);
+                    await RefreshRequestsAsync(ct);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    Log.LogWarning(ex, "A broadcast poll failed; the next one runs in {Interval}.", PollInterval);
+                }
             }
             while (await timer.WaitForNextTickAsync(ct));
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (Exception) when (ct.IsCancellationRequested)
         {
             // The page has gone.
         }
@@ -319,22 +358,32 @@
             }
             while (await timer.WaitForNextTickAsync(ct));
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (Exception) when (ct.IsCancellationRequested)
         {
             // The page has gone.
         }
+    }
+
+    /// <summary>A token that also fires after <see cref="RequestTimeout"/>, so one hung read cannot hold a loop for long.</summary>
+    private CancellationTokenSource Bounded(CancellationToken ct)
+    {
+        var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(RequestTimeout);
+        return bounded;
     }
 
     private async Task RefreshNowAsync(CancellationToken ct)
     {
         try
         {
-            var now = await Broadcast.GetNowAsync(ct);
+            using var bounded = Bounded(ct);
+            var now = await Broadcast.GetNowAsync(bounded.Token);
             await InvokeAsync(() => ApplyNow(now));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // The last view stays on screen with the link line until a poll succeeds.
+            Log.LogWarning(ex, "Reading /api/broadcast/now failed.");
             await InvokeAsync(() =>
             {
                 _linkError = ex.Message;
@@ -350,27 +399,18 @@
         _linkError = null;
         if (now.Current is { GameId: { } gameId } current && gameId != _live?.GameId)
         {
-            FollowGame(current, gameId);
+            Follow(gameId, current.White, current.Black, current.PlannedStart);
         }
 
         Reconcile();
         StateHasChanged();
     }
 
-    private void FollowGame(LiveSlot slot, Guid gameId)
-    {
-        _slot = slot;
-        Follow(gameId, slot.White, slot.Black, slot.PlannedStart);
-    }
-
     /// <summary>
-    /// Follows a game of the request queue that is not in the schedule, so it has no slot and the title keeps the channel name.
+    /// Follows a game of the request queue that is not in the schedule, so the status line says who asked for it.
     /// </summary>
-    private void FollowRequest(GameRequestDto playing, Guid gameId)
-    {
-        _slot = null;
+    private void FollowRequest(GameRequestDto playing, Guid gameId) =>
         Follow(gameId, new PlayerSpec("llm", playing.White), new PlayerSpec("llm", playing.Black), playing.ReceivedAt);
-    }
 
     private void Follow(Guid gameId, PlayerSpec white, PlayerSpec black, DateTimeOffset startedAt)
     {
@@ -380,8 +420,7 @@
 
         // The placeholder summary carries the players from the slot; the load replaces it with the server's.
         _live = new LiveGame(new GameSummaryDto(gameId, null, white, black, true, "running", "*", null, 0, startedAt, null));
-        _ = FollowAsync(gameId, _follow.Token);
-        _ = RefreshScheduleAsync(_follow.Token);
+        _ = Observe(FollowAsync(gameId, _follow.Token), "following the game");
     }
 
     /// <summary>
@@ -397,7 +436,7 @@
             await reading;
             await RefreshLeaderboardAsync(ct);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (Exception) when (ct.IsCancellationRequested)
         {
             // The broadcast moved on to another game, or the page has gone.
         }
@@ -428,9 +467,10 @@
                     }
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception) when (!ct.IsCancellationRequested)
             {
-                // A stream that cannot be read is retried below, the same as one that closed early.
+                // A stream that cannot be read is retried below, the same as one that closed early. A timeout of the
+                // HttpClient is a TaskCanceledException, which is not a reason to give the game up.
             }
 
             // The stream closed before the game finished, or could not be opened: load the game as it is, then reconnect.
@@ -451,7 +491,8 @@
     {
         try
         {
-            var detail = await Api.GetGameAsync(gameId, ct);
+            using var bounded = Bounded(ct);
+            var detail = await Api.GetGameAsync(gameId, bounded.Token);
             await InvokeAsync(() =>
             {
                 if (!ct.IsCancellationRequested && _live is { } live && live.GameId == gameId)
@@ -461,9 +502,10 @@
                 }
             });
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // The next stream event or the next reconnect loads the game again.
+            Log.LogDebug(ex, "Loading game {GameId} failed.", gameId);
         }
     }
 
@@ -486,61 +528,62 @@
     {
         try
         {
-            var board = await Api.GetLeaderboardAsync(ct);
+            using var bounded = Bounded(ct);
+            var board = await Api.GetLeaderboardAsync(bounded.Token);
             await InvokeAsync(() =>
             {
                 _leaderboard = board;
                 StateHasChanged();
             });
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // The last table stays on screen; the next finished game reads it again.
+            Log.LogDebug(ex, "Reading the leaderboard failed.");
         }
     }
 
+    /// <summary>Reads the pace of the running schedule, which the replays use.</summary>
     private async Task RefreshScheduleAsync(CancellationToken ct)
     {
         try
         {
-            var schedules = await Broadcast.GetSchedulesAsync(ct);
+            using var bounded = Bounded(ct);
+            var schedules = await Broadcast.GetSchedulesAsync(bounded.Token);
             var active = schedules.FirstOrDefault(schedule => schedule.Status is "running" or "paused");
             await InvokeAsync(() =>
             {
-                _totalGames = active?.SlotsTotal;
                 _pacing = active?.Pacing;
                 StateHasChanged();
             });
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            // The header keeps the last game count it had.
+            // The replays keep the pace they had, or the default.
+            Log.LogDebug(ex, "Reading the schedules failed.");
         }
     }
 
     /// <summary>
-    /// Reads the menu once it is there, and the queue on every poll. Each read stands alone: a missing menu does not
-    /// hide the queue, and an API without requests leaves both null, so the panels are not drawn and nothing is logged.
+    /// Reads the request queue on every poll. An API without requests answers an error, which leaves the queue null, so
+    /// nothing is shown and nothing is logged as a failure of the stage.
     /// </summary>
     private async Task RefreshRequestsAsync(CancellationToken ct)
     {
-        var menu = _menu ?? await TryReadAsync(() => Api.GetRequestMenuAsync(ct), ct);
-        var queue = await TryReadAsync(() => Api.GetRequestQueueAsync(ct), ct);
-        await InvokeAsync(() =>
-        {
-            _menu ??= menu;
-            ApplyRequests(queue);
-        });
+        var queue = await TryReadAsync(token => Api.GetRequestQueueAsync(token), ct);
+        await InvokeAsync(() => ApplyRequests(queue));
     }
 
-    private static async Task<T?> TryReadAsync<T>(Func<Task<T>> read, CancellationToken ct) where T : class
+    private async Task<T?> TryReadAsync<T>(Func<CancellationToken, Task<T>> read, CancellationToken ct) where T : class
     {
         try
         {
-            return await read();
+            using var bounded = Bounded(ct);
+            return await read(bounded.Token);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            Log.LogDebug(ex, "A read of the request queue failed.");
             return null;
         }
     }
@@ -561,11 +604,14 @@
 
     /// <summary>
     /// Starts or stops the replay loop from the state the page has: a replay runs only while the broadcast is running, no
-    /// game is scheduled, and nothing is queued or playing (03 §15.6). Runs on the render thread.
+    /// game is scheduled after this one, and nothing is queued or playing (03 §15.6). Before a scheduled game the
+    /// intermission card with its countdown is shown instead, so a replay never covers it. Runs on the render thread.
     /// </summary>
     private void Reconcile()
     {
-        var replayWanted = _queueKnown && _now is { Status: "running", Current: null } && !LiveRequestView.HasWaiting(_queue);
+        var replayWanted = _queueKnown
+            && _now is { Status: "running", Current: null, Next: { Count: 0 } }
+            && !LiveRequestView.HasWaiting(_queue);
         if (!replayWanted)
         {
             StopReplays();
@@ -574,7 +620,7 @@
         {
             var replays = new CancellationTokenSource();
             _replays = replays;
-            _ = PlayReplaysAsync(replays);
+            _ = Observe(PlayReplaysAsync(replays), "the replays");
         }
     }
 
@@ -591,15 +637,16 @@
     }
 
     /// <summary>
-    /// Plays stored games one after another at the broadcast's pace: one move per move delay, then the game gap. The stored
-    /// games come from the finished list, the best-rated pick first. With none to play the loop ends and the intermission shows.
+    /// Plays stored games one after another at the broadcast's move pace, holding each final position for
+    /// <see cref="ReplayHold"/>. The stored games come from the finished list, the best-rated pick first. With none to play
+    /// the loop ends and the intermission shows.
     /// </summary>
     private async Task PlayReplaysAsync(CancellationTokenSource replays)
     {
         var ct = replays.Token;
         try
         {
-            // The pace comes from the schedule, which is read only when a game is followed: read it for the replays too.
+            // The pace comes from the schedule: read it before the first replay.
             await RefreshScheduleAsync(ct);
             while (!ct.IsCancellationRequested)
             {
@@ -619,16 +666,18 @@
                     await InvokeAsync(() => ShowReplay(replays, game, ply));
                 }
 
-                await Task.Delay(GameGap, ct);
+                await Task.Delay(ReplayHold, ct);
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // A replay is optional: without one the broadcast shows its intermission card. A timeout of the HttpClient is
+            // a TaskCanceledException and ends the loop the same way.
+            Log.LogDebug(ex, "The replays stopped.");
+        }
+        catch (Exception) when (ct.IsCancellationRequested)
         {
             // The queue or the schedule moved on, or the page has gone.
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // A replay is optional: without one the broadcast shows its intermission card.
         }
         finally
         {
@@ -653,17 +702,12 @@
         }
 
         _replaying = true;
-        _slot = null;
         _live = new LiveGame(game.Summary);
         _live.Load(ReplayPicker.UpTo(game, ply));
         StateHasChanged();
     }
 
     private TimeSpan MovePace => TimeSpan.FromMilliseconds(_pacing?.MoveDelayMs ?? DefaultMoveDelayMs);
-
-    private TimeSpan GameGap => TimeSpan.FromSeconds(_pacing?.GameGapSeconds ?? DefaultGameGapSeconds);
-
-    private string PlayerName(PlayerSpec? player) => player is null ? "—" : ModelName(player.ModelId);
 
     /// <summary>The name of a side on the board, with its reasoning effort after a dot when the model has one.</summary>
     private string SideLabel(PlayerSpec? player)

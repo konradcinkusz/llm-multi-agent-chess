@@ -46,6 +46,22 @@ internal sealed class BrokenOrRealPlayers(IChessPlayerFactory real) : IChessPlay
 }
 
 /// <summary>
+/// The gateway the paid-request catalog reads: the fake one, whose state a test can set, as the real gateway is Unavailable while
+/// the Copilot runtime starts and Ready after.
+/// </summary>
+internal sealed class SwitchableGateway(ILlmGateway inner) : ILlmGateway
+{
+    public LlmGatewayState? Override { get; set; }
+
+    public LlmGatewayStatus Status => Override is { } state ? new LlmGatewayStatus(state, "test") : inner.Status;
+
+    public Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(CancellationToken ct) => inner.ListModelsAsync(ct);
+
+    public Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct) =>
+        inner.StartConversationAsync(options, ct);
+}
+
+/// <summary>
 /// The broadcast runner over the InMemory provider, the real game runner and random players, with a clock the test drives.
 /// The schedule and its slots are seeded straight into the database; the controller and the runner are the real ones.
 /// </summary>
@@ -81,7 +97,8 @@ internal sealed class RunnerHarness : IAsyncDisposable
             Readiness,
             NullLogger<GameRunner>.Instance);
         Controller = new BroadcastRunnerController(Factory, Signals, Clock);
-        Requests = BroadcastRequestsFor(Factory, gateway, Clock, customModels);
+        CatalogGateway = new SwitchableGateway(gateway);
+        Requests = BroadcastRequestsFor(Factory, CatalogGateway, Clock, customModels);
         Runner = new BroadcastRunner(Factory, Games, Players, Requests, Signals, Clock, Readiness, NullLogger<BroadcastRunner>.Instance);
     }
 
@@ -89,7 +106,7 @@ internal sealed class RunnerHarness : IAsyncDisposable
     /// The paid-request service over the same database and clock: the queue, the catalog served by <paramref name="gateway"/>,
     /// and the arena's custom models for the bring-your-own-key check.
     /// </summary>
-    public static BroadcastRequests BroadcastRequestsFor(IDbContextFactory<ArenaDbContext> factory, FakeLlmGateway gateway,
+    public static BroadcastRequests BroadcastRequestsFor(IDbContextFactory<ArenaDbContext> factory, ILlmGateway gateway,
         TimeProvider clock, IEnumerable<CustomModelOptions> customModels, RequestOptions? requestOptions = null)
     {
         var requests = Options.Create(requestOptions ?? new RequestOptions());
@@ -98,6 +115,9 @@ internal sealed class RunnerHarness : IAsyncDisposable
         var arena = Options.Create(new ArenaOptions { CustomModels = customModels.ToList() });
         return new BroadcastRequests(factory, queue, catalog, arena, requests, Options.Create(new CatalogOptions()), clock);
     }
+
+    /// <summary>The gateway behind the paid requests' model catalog; set <see cref="SwitchableGateway.Override"/> to make it not ready.</summary>
+    public SwitchableGateway CatalogGateway { get; }
 
     public RunnerClock Clock { get; }
 

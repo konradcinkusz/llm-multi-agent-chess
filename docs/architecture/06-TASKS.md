@@ -650,6 +650,7 @@ edit/reorder/delete, Save draft / Start, schedules list with Pause/Resume/Stop. 
 auto-reconnect with back-off, `?theme=` / `?top=` options, minimum 28 px text. No scrollbars, no cursor. Reads `/api/broadcast/now` every 5 s.
 **Done when:** bUnit: shows current slot players and board from stub; intermission card when `Current` is null; technical-break card when `Notice` set; leaderboard limited by `?top`.
 **Verify:** V-NET.
+**Since then:** the mini leaderboard and `?top=` were removed and `?view=mobile` added; 03 §9.4 describes the page as it is.
 
 ### T5.6 — 24-hour soak test + runbook
 **Owns:** `tests/Chess.Api.Tests/Broadcast/Soak*`, `docs/BROADCAST.md`, `scripts/broadcast-smoke.sh`.
@@ -710,10 +711,10 @@ classes). These rows are not on the board above.
 |---|---|---|---|
 | U1 | Design tokens, base styles, shared classes, app shell | — | done (#69) |
 | U2 | Chart polish | — | done (#68) |
-| U3 | Results and head-to-head pages | U1 | in progress |
-| U4 | Live game, games list and replay | U1 | in progress |
-| U5 | Tournaments, broadcast planner, attempts log | U1 | in progress |
-| U6 | Charts fill their card on wide screens | U2 | todo |
+| U3 | Results and head-to-head pages | U1 | done (#73) |
+| U4 | Live game, games list and replay | U1 | done (#77) |
+| U5 | Tournaments, broadcast planner, attempts log | U1 | done (#75) |
+| U6 | Charts fill their card on wide screens | U2 | done (#72) |
 | U7 | Stockfish status reads `available` or `absent` | U1 | done (#74) |
 
 Common to every U task: follow 07-UI-STYLE §1 (no dependencies, tokens only, both themes, phone width, accessibility, test
@@ -949,6 +950,8 @@ only for the newest `FullLogGames` games.
 
 ### S3 — Publishing to `gh-pages`, `/admin/site`, auto-publish, workflow and README
 
+> Since ADR-013 (amended 2026-11-17) the public URL is deployed from Actions (`publish-site.yml`); the in-app publish to a branch is an advanced option.
+
 **Owns:** `src/Chess.Web/Site/Publishing/**`, `src/Chess.Web/Components/Pages/Admin/Site*` (new page `/admin/site`),
 `src/Chess.Web/Components/Layout/NavMenu.razor` (one item after Attempts), `tests/Chess.Web.Tests/Site/Publishing/**`,
 `.github/workflows/deploy-pages.yml`, `README.md` (a "Public results site" section only).
@@ -1154,9 +1157,9 @@ The supervisor PR froze the following, so V1, V2, V4 and V5 run in parallel agai
 | V1 | Gateway: the `anthropic` provider type; Anthropic, OpenAI and DeepInfra custom models | contract | done (#108) |
 | V2 | API: request menu, quote and tiers, ledger and queue, command parser, intake, endpoints, mock simulate | contract | done (#110) |
 | V3 | Broadcast runner plays requests; the per-game budget guard (`budget` termination); recovery | V2 | done (#112) |
-| V4 | UI: request panels and idle replays on `/broadcast`, `/admin/requests`, the site's menu and price matrix | contract | done (#111) |
+| V4 | UI: request panels and idle replays on `/broadcast`, `/admin/requests`, the site's menu and price matrix | contract | done (#111); the stage panels and the site menu page were removed by the owner (`0d1056b`), `/admin/requests` and the replays remain |
 | V5 | YouTube intake: OAuth, live chat polling, Super Chat mapping, currency, AppHost secrets, smoke script | contract | done (#109) |
-| V6 | Docs: `docs/REQUESTS.md` (owner setup), README, BROADCAST.md, recorded mock run | V1–V5 | in review (this PR) |
+| V6 | Docs: `docs/REQUESTS.md` (owner setup), README, BROADCAST.md, recorded mock run | V1–V5 | done (#113) |
 
 ### V1 — Gateway: Anthropic, OpenAI and DeepInfra keys
 
@@ -1258,6 +1261,9 @@ The supervisor PR froze the following, so V1, V2, V4 and V5 run in parallel agai
 - With an empty queue it plays replays of stored games at the broadcast pace.
 - `/admin/requests`: the queue, the recent requests, cancel and requeue, and a simulate form shown only in Mock mode.
 - The site: a menu page with the price matrix (menu × menu, classic and think) and no script.
+
+**Since then (owner, `0d1056b`):** the `/broadcast` request panels and the site's menu page were removed; the "requested by" status line, the replays
+and `/admin/requests` (without a requeue) remain. 03 §15.6 describes what exists.
 
 **Done when:**
 - bUnit covers each panel, the empty-queue replay, the admin simulate form (absent outside Mock) and the matrix page;

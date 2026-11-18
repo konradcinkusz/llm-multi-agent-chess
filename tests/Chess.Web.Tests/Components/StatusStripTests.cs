@@ -4,6 +4,7 @@ using Chess.Web.Api;
 using Chess.Web.Components.Shared;
 using Chess.Web.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
+using Polly.CircuitBreaker;
 using Xunit;
 
 namespace Chess.Web.Tests.Components;
@@ -112,6 +113,30 @@ public class StatusStripTests
     }
 
     [Fact]
+    public void ShowsThatItIsCheckingWhileTheApiHasNotAnswered()
+    {
+        var gate = new TaskCompletionSource();
+        var handler = new SlowHandler(gate.Task);
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(new HttpClient(handler) { BaseAddress = new Uri("http://api") }));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        Assert.Contains("Checking services", cut.Find(".status-strip").TextContent);
+        gate.SetResult();
+        cut.WaitForAssertion(() => Assert.Contains("Copilot: Ready", cut.Find(".status-strip").TextContent));
+    }
+
+    private sealed class SlowHandler(Task gate) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            await gate;
+            return Canned.Json("""{"copilot":"Ready","copilotDetail":"signed in","database":"healthy","stockfish":"healthy"}""");
+        }
+    }
+
+    [Fact]
     public void SaysSoWhenTheApiCannotBeReached()
     {
         var handler = new FakeHandler(_ => Canned.Json("{}", HttpStatusCode.BadGateway));
@@ -120,7 +145,9 @@ public class StatusStripTests
 
         var cut = ctx.Render<StatusStrip>();
 
-        cut.WaitForAssertion(() => Assert.Contains("API unavailable", cut.Find(".status-strip").TextContent));
+        // The outage is worded plainly; a status code is not the library's "Response status code does not indicate...".
+        cut.WaitForAssertion(() => Assert.Contains("The arena API answered with an error. Checking again shortly.",
+            cut.Find(".status-strip").TextContent));
         Assert.DoesNotContain("Copilot:", cut.Find(".status-strip").TextContent);
     }
 
@@ -133,6 +160,54 @@ public class StatusStripTests
 
         var cut = ctx.Render<StatusStrip>();
 
-        cut.WaitForAssertion(() => Assert.Contains("API unavailable: no service endpoint", cut.Find(".status-strip").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("The arena API is not answering. Checking again shortly.",
+            cut.Find(".status-strip").TextContent));
+        Assert.DoesNotContain("no service endpoint", cut.Find(".status-strip").TextContent);
+    }
+
+    [Fact]
+    public void AnOpenCircuitIsReportedInPlainWordsNotInTheLibrariesText()
+    {
+        var handler = new FakeHandler(_ => throw new BrokenCircuitException("The circuit is now open and is not allowing calls."));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Contains("The arena API is not answering. Checking again shortly.",
+            cut.Find("[data-testid='status-unavailable']").TextContent));
+        Assert.DoesNotContain("circuit", cut.Find(".status-strip").TextContent);
+    }
+
+    [Fact]
+    public void TheStripAsksAgainOnATimerSoItFollowsAnOutageAndItsEnd()
+    {
+        var up = true;
+        var handler = new FakeHandler(_ => up
+            ? Canned.Json("""{"copilot":"Ready","copilotDetail":"signed in","database":"healthy","stockfish":"healthy"}""")
+            : throw new HttpRequestException("refused"));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>(p => p.Add(s => s.Interval, TimeSpan.FromMilliseconds(50)));
+        cut.WaitForAssertion(() => Assert.Contains("Copilot: Ready", cut.Find(".status-strip").TextContent));
+
+        up = false;
+        cut.WaitForAssertion(() => Assert.Contains("not answering", cut.Find(".status-strip").TextContent));
+
+        up = true;
+        cut.WaitForAssertion(() => Assert.Contains("Copilot: Ready", cut.Find(".status-strip").TextContent));
+    }
+
+    [Fact]
+    public void ATimeoutIsReportedAsAnOutageToo()
+    {
+        var handler = new FakeHandler(_ => throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout"));
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+
+        var cut = ctx.Render<StatusStrip>();
+
+        cut.WaitForAssertion(() => Assert.Contains("not answering", cut.Find(".status-strip").TextContent));
     }
 }

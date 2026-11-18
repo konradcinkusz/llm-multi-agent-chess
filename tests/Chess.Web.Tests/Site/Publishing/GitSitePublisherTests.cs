@@ -162,12 +162,122 @@ public class GitSitePublisherTests : IDisposable
         Assert.Equal("not ours", File.ReadAllText(keep));
     }
 
-    private GitSitePublisher Publisher(string? remote, string? workDir = null, string? sourceDirectory = null, string git = "git") =>
+    [Fact]
+    public async Task The_work_folder_is_refused_inside_the_repository_even_when_the_app_runs_from_a_subfolder()
+    {
+        _git.CreateBareRemote();
+        _git.CreateSourceRepository();
+        var app = Directory.CreateDirectory(Path.Combine(_git.Source, "src", "Chess.Web")).FullName;
+
+        var result = await Publisher(_git.Remote, workDir: Path.Combine(_git.Source, "site-work"), sourceDirectory: app)
+            .PublishAsync(SiteTestGit.WriteSite(Path.Combine(_git.Root, "export")), default);
+
+        Assert.False(result.Published);
+        Assert.Contains("folder of its own", result.Detail);
+        Assert.False(Directory.Exists(Path.Combine(_git.Source, "site-work")));
+    }
+
+    [Fact]
+    public async Task The_default_branch_of_the_remote_is_never_force_pushed_to()
+    {
+        SiteTestGit.Run(_git.Root, "init", "--bare", "--quiet", "--initial-branch=pages-root", _git.Remote);
+        SiteTestGit.Run(_git.Root, "clone", "--quiet", _git.Remote, Path.Combine(_git.Root, "seed"));
+        var seed = Path.Combine(_git.Root, "seed");
+        File.WriteAllText(Path.Combine(seed, "keep.txt"), "the owner's work\n");
+        SiteTestGit.Run(seed, "add", "--all");
+        SiteTestGit.Run(seed, "-c", "user.name=owner", "-c", "user.email=owner@example.invalid", "commit", "--quiet", "-m", "Work");
+        SiteTestGit.Run(seed, "push", "--quiet", "origin", "HEAD:refs/heads/pages-root");
+        var before = SiteTestGit.Run(_git.Remote, "rev-parse", "pages-root");
+
+        var result = await Publisher(_git.Remote, branch: "pages-root")
+            .PublishAsync(SiteTestGit.WriteSite(Path.Combine(_git.Root, "export")), default);
+
+        Assert.False(result.Published);
+        Assert.Contains("default branch", result.Detail);
+        Assert.Equal(before, SiteTestGit.Run(_git.Remote, "rev-parse", "pages-root"));
+    }
+
+    [Theory]
+    [InlineData("main")]
+    [InlineData("master")]
+    [InlineData("--delete")]
+    [InlineData("a..b")]
+    [InlineData("pages;rm")]
+    public async Task A_branch_name_that_is_protected_or_not_plain_is_refused(string branch)
+    {
+        _git.CreateBareRemote();
+
+        var result = await Publisher(_git.Remote, branch: branch)
+            .PublishAsync(SiteTestGit.WriteSite(Path.Combine(_git.Root, "export")), default);
+
+        Assert.False(result.Published);
+        Assert.Contains("Arena:Site:Branch", result.Detail);
+        Assert.Equal(string.Empty, SiteTestGit.Run(_git.Remote, "branch", "--list"));
+    }
+
+    [Fact]
+    public async Task A_branch_whose_tip_another_author_made_is_not_overwritten()
+    {
+        _git.CreateBareRemote();
+        SiteTestGit.Run(_git.Root, "clone", "--quiet", _git.Remote, Path.Combine(_git.Root, "seed"));
+        var seed = Path.Combine(_git.Root, "seed");
+        File.WriteAllText(Path.Combine(seed, "page.html"), "someone else's pages\n");
+        SiteTestGit.Run(seed, "add", "--all");
+        SiteTestGit.Run(seed, "-c", "user.name=someone", "-c", "user.email=someone@example.invalid", "commit", "--quiet", "-m", "Their pages");
+        SiteTestGit.Run(seed, "push", "--quiet", "origin", "HEAD:refs/heads/gh-pages");
+        var before = SiteTestGit.Run(_git.Remote, "rev-parse", "gh-pages");
+
+        var result = await Publisher(_git.Remote).PublishAsync(SiteTestGit.WriteSite(Path.Combine(_git.Root, "export")), default);
+
+        Assert.False(result.Published);
+        Assert.Contains("was not left by this publisher", result.Detail);
+        Assert.Equal(before, SiteTestGit.Run(_git.Remote, "rev-parse", "gh-pages"));
+    }
+
+    [Fact]
+    public async Task A_remote_that_looks_like_an_option_is_refused()
+    {
+        var result = await Publisher("--upload-pack=touch /tmp/arena-pwned")
+            .PublishAsync(SiteTestGit.WriteSite(Path.Combine(_git.Root, "export")), default);
+
+        Assert.False(result.Published);
+        Assert.Contains("not an option", result.Detail);
+    }
+
+    [Fact]
+    public async Task The_export_is_published_whole_even_when_a_gitignore_in_it_would_hide_files_and_without_the_marker()
+    {
+        _git.CreateBareRemote();
+        var site = SiteTestGit.WriteSite(Path.Combine(_git.Root, "export"));
+        File.WriteAllText(Path.Combine(site, ".gitignore"), "*.json\n");
+        File.WriteAllText(Path.Combine(site, SiteFolders.ExportMarker), "marker\n");
+
+        var result = await Publisher(_git.Remote).PublishAsync(site, default);
+
+        Assert.True(result.Published, result.Detail);
+        var files = SiteTestGit.Run(_git.Remote, "ls-tree", "-r", "--name-only", "gh-pages");
+        Assert.Contains("data/leaderboard.json", files);
+        Assert.DoesNotContain(SiteFolders.ExportMarker, files);
+    }
+
+    [Fact]
+    public async Task The_commit_is_made_by_the_publisher_identity()
+    {
+        _git.CreateBareRemote();
+
+        await Publisher(_git.Remote).PublishAsync(SiteTestGit.WriteSite(Path.Combine(_git.Root, "export")), default);
+
+        Assert.Equal(GitSitePublisher.AuthorEmail, SiteTestGit.Run(_git.Remote, "log", "-1", "--format=%ae", "gh-pages"));
+    }
+
+    private GitSitePublisher Publisher(string? remote, string? workDir = null, string? sourceDirectory = null, string git = "git",
+        string branch = "gh-pages") =>
         new(Options.Create(new SitePublishingOptions
             {
                 Remote = remote,
                 WorkDir = workDir ?? _git.WorkDir,
                 GitExecutable = git,
+                Branch = branch,
             }),
             TimeProvider.System,
             sourceDirectory ?? Directory.CreateDirectory(Path.Combine(_git.Root, "app")).FullName);

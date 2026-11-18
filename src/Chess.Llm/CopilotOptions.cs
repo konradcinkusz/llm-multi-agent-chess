@@ -14,4 +14,7 @@ public sealed class CopilotOptions
 
     /// <summary>How long the runtime may take to start, authenticate and list models before the gateway reports Unavailable.</summary>
     public TimeSpan StartupTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long opening one conversation (an SDK session) may take. Board and think styles open one for every move.</summary>
+    public TimeSpan SessionStartTimeout { get; set; } = TimeSpan.FromSeconds(30);
 }

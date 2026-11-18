@@ -324,8 +324,10 @@ and there is no CORS — without a second stack:
 - Live updates: `GameEventsClient` reads `GET /api/games/{id}/events` as a stream
   (`HttpCompletionOption.ResponseHeadersRead`, line-by-line SSE parsing) and raises C# events
   the page re-renders on. No SignalR client package, no hub on the API.
-- Pages: `/results` (**first item in the navigation**) · `/` live game · `/head-to-head` ·
-  `/tournaments` (+ `/{id}`) · `/games` (+ `/{id}` replay) · `/admin/attempts`.
+- Pages, in the order of the navigation: `/results` (**first item**) · `/` live game · `/head-to-head` ·
+  `/tournaments` (+ `/{id}`) · `/benchmark` (+ `/{id}` report) · `/broadcast` (live broadcast) · `/broadcast/plan` ·
+  `/games` (+ `/{id}` replay), then under **More**: `/admin/attempts` · `/admin/site`. `/admin/requests` has no navigation
+  link. `/not-found` is the 404 page.
 - Charts are pure Razor SVG components in `Components/Charts/` (no JS library), following the
   dataviz rules in §6.1.
 
@@ -406,9 +408,14 @@ the dependency budget and is not the product.)
   and an ordered list of **slots** (one slot = one game: white model, black model, planned start,
   planned end).
 - **Pacing** makes games watchable: `MoveDelayMs` (pause after every move so viewers can read, default
-  4000), `GameGapSeconds` (title-card pause between games, default 20), `MoveTimeoutSeconds`
+  4000), `GameGapSeconds` (title-card pause between games; the API has no default, the planner page sends 1800), `MoveTimeoutSeconds`
   as before. Pacing is a property of broadcast games only (stored on the schedule) — ordinary games
   keep running at full speed.
+- **Timing.** Planned start and end are estimates, not appointments (the planner's lengths give the first one). The runner
+  never waits for a clock time: the first game plays when the schedule starts, each next game one `GameGapSeconds` after the
+  previous slot left `Running` (finished, skipped, or interrupted by a restart). Whenever a slot leaves `Running` the runner
+  re-times the pending slots from that moment (next start = end + gap, the rest back to back with their planned lengths) and sets
+  the schedule's `EndsAt` to the end of the last slot. A stop of the schedule ends a gap.
 - **One game on screen at a time.** The broadcast runner plays slots strictly sequentially
   (concurrency 1), independent of `Arena:MaxConcurrentGames`.
 - The **planner** is a pure function: given models, target duration, pacing and an estimated
@@ -418,8 +425,10 @@ the dependency budget and is not the product.)
   stopping with a final partial gap rather than starting a game that cannot finish before `endsAt`.
   Its output includes the **premium-request estimate** for the whole day (per model).
 - Status: `Draft → Scheduled → Running ⇄ Paused → Finished | Cancelled`. A schedule that is
-  `Running` when the API restarts **resumes** at its next unfinished slot (the interrupted game is
-  marked `interrupted` and excluded from the rating, as in §7; the slot is marked `skipped`).
+  `Running` when the API restarts **resumes** at its next unfinished slot, played at once (the interrupted game is
+  marked `interrupted` and excluded from the rating, as in §7; the slot is marked `skipped`; the pending slots are re-timed
+  from the restart). A slot left `Running` by an error inside the runner is settled the same way at the next step.
+  `Scheduled` is a stored value no code sets today (a started day goes straight to `Running`).
 - Failure policy: if a game cannot be played because Copilot is unavailable or rate-limited, the
   runner **backs off** (30 s, 1 min, 2 min … capped at 10 min), shows an "technical break" card, and
   retries the same slot; after 3 failed attempts the slot is `skipped` and the schedule moves on. The
@@ -446,7 +455,9 @@ public sealed record NowNextDto(string Status, SlotDto? Current, IReadOnlyList<S
 Endpoints (`/api/broadcast/…`): `POST /plan` (PlanRequest → ScheduleDetailDto, saved as Draft — nothing
 runs), `GET /schedules`, `GET /schedules/{id}`, `PUT /schedules/{id}/slots` (replace/reorder slots of a
 Draft/Scheduled schedule), `POST /schedules/{id}/start` (Scheduled → Running now, or at `startsAt`),
-`POST /pause`, `POST /resume`, `POST /stop`, `GET /now` (NowNextDto — for the broadcast page and OBS).
+`POST /pause`, `POST /resume`, `POST /stop`, `GET /now` (NowNextDto — for the broadcast page and OBS). Added since:
+`POST /schedules` (create a schedule from picked games in one call, optionally started; the planner page uses it) and
+`DELETE /schedules/{id}` (a draft only).
 Live game events reuse `GET /api/games/{id}/events`.
 
 ### 9.3 Persistence (Postgres, migration `AddBroadcast`)
@@ -458,17 +469,19 @@ attempts, note?`). Everything the channel plays is stored; nothing about the sch
 
 ### 9.4 Pages
 
-- `/broadcast/plan` (in the app navigation): the planner form — pick models (premium multiplier
-  shown), start time, 24 h default, pacing, seed; **preview timeline** of all slots and the day's
-  premium-request estimate **before** anything is saved; edit/reorder/delete slots; Save as draft;
-  Start. Lists existing schedules with status and a Pause/Resume/Stop control.
-- `/broadcast` (**not** in the navigation, no app chrome — the OBS Browser Source): full-viewport
-  1920×1080 layout on a dark theme, readable at stream bitrates: large board with last-move
-  highlight; both model names with colours; move list tail; "move N · thinking…" indicator; a header
-  "LLM Chess 24h — Game 17 of 48"; a **mini leaderboard** (top 8, arena score + rating) refreshed after every
-  game; **Up next** (next 3 slots with start times); local clock; "technical break" and "intermission
-  between games" cards; auto-reconnect of the live stream; no scrollbars, no cursor, no text
-  smaller than 28 px. Query options: `?theme=light`, `?top=5`.
+- `/broadcast/plan` (in the app navigation): the planner as built (owner rework, commit `0d1056b`). Games are added one by one
+  (White, Black), with no dates and no duration; pacing is the move delay and the game gap; the day's cost estimate (AI credits
+  and USD, per model) shows **before** anything is saved; **Start** sends the games in one call (`POST /schedules`) and starts
+  the day; the list of broadcasts has Start, Pause, Resume, Stop (after a confirmation) and, for a draft, Delete.
+- `/broadcast` (in the navigation as "Live broadcast", no app chrome — the OBS Browser Source): full-viewport 1920×1080 layout on
+  a dark theme: the board on the full height with a last-move highlight and both players' model names and colours, and one
+  column beside it with the status line ("Move N · model is thinking…", "Requested by …", "Replay of a past game"), the move
+  list (filling the column) and **Up next** (the next slots with start times); the header has the repository link, a link line
+  while the API cannot be read, and a local clock. Cards over the board: "technical break" and "intermission between games"
+  (the next start, the two players and a countdown). There is **no leaderboard and no request panel**. Replays of stored games
+  play only while the broadcast is running, no game is scheduled next and nothing is queued or playing (§15.6). Auto-reconnect of
+  the live stream; every poll read is cut after 20 s and a failed read is retried; no scrollbars, no cursor, no text smaller
+  than 28 px. Query options: `?theme=light`, `?view=mobile`. (`?top=` went with the leaderboard.)
 
 ## 10. Live game transparency and cost (owner request 2026-10-25)
 
@@ -603,8 +616,9 @@ current position at once; only new moves are paced.
 ## 11. Public results site: a static export on GitHub Pages (owner decision 2026-10-25, ADR-013)
 
 The owner wants a public page with all the results and charts, without exposing the app or a database. The local app
-renders a **static snapshot** of everything public and pushes it to the repository's `gh-pages` branch; GitHub Pages serves
-that branch. No server, no database and no script runs on the public side.
+renders a **static snapshot** of everything public; GitHub Pages serves the snapshot that the `publish-site` GitHub Actions
+workflow builds from the results archive and deploys (ADR-013, amended 2026-11-17). The app can also push its own export to a
+branch, as an advanced option that does not serve the public URL. No server, no database and no script runs on the public side.
 
 **What the site holds** (relative links only, so it works under `https://<owner>.github.io/<repo>/`):
 
@@ -618,6 +632,9 @@ that branch. No server, no database and no script runs on the public side.
 | `about/index.html` | the project one-pager (today `docs/index.html`) |
 | `data/*.json` | the same snapshot as JSON: leaderboard, matrix, history, breakdown, games, usage |
 | `assets/` | `app.css`, the scoped styles bundle, the favicon; `.nojekyll` at the root |
+
+Games that ended undecided (result `*`, termination `aborted`) are not on the site and have no page, PGN or log. A game the
+API has no PGN for gets its page without a `game.pgn` and without the Download link.
 
 Every page carries the snapshot time (UTC), the number of rated games, a "Watch live" link (`Arena:Site:YouTubeUrl`) and the
 support links (`Arena:Site:SupportLinks`, label + URL each). Interactive controls (filters, start, cancel, pickers) are not
@@ -636,14 +653,15 @@ public interface ISitePublisher { Task<SitePublishResult> PublishAsync(string si
 public sealed record SitePublishResult(bool Published, string? Commit, string Detail, DateTimeOffset At);
 ```
 
-**How it is published.** `GitSitePublisher` keeps its own clone in `Arena:Site:WorkDir` (never the owner's working tree),
-replaces the content of the `gh-pages` branch with the export as **one orphan commit** and force-pushes it, so the branch
-never grows a history and `main` is never touched. It uses the `git` on the owner's machine and its existing credentials;
-nothing is stored by the app. Triggers: "Export" and "Publish" on `/admin/site` (status, last result, size, link to the
-site), and automatically every `Arena:Site:AutoPublishMinutes` (default 0 = off) when a game has finished since the last
-publish. One-time owner step: Settings → Pages → Source: *Deploy from a branch*, `gh-pages`, `/ (root)`. The
-`deploy-pages` workflow stops deploying (the one-pager moves into the export as `about/`) and only checks that
-`docs/index.html` still assembles.
+**How it is published.** The public URL is deployed by `.github/workflows/publish-site.yml` (one-time owner step: Settings →
+Pages → Source: *GitHub Actions*). The in-app option: `GitSitePublisher` keeps its own clone in `Arena:Site:WorkDir` (never the
+owner's working tree), replaces the content of `Arena:Site:Branch` (default `gh-pages`) with the export as **one orphan commit**
+and force-pushes it, so the branch never grows a history and `main` is never touched. It refuses the remote's default branch,
+`main`, `master` and a branch whose tip it did not author. It uses the `git` on the owner's machine and its existing
+credentials; nothing is stored by the app. Triggers: "Export" and "Publish" on `/admin/site` (status, last result, size against
+the 1 GB Pages limit), and automatically every `Arena:Site:AutoPublishMinutes` (default 0 = off) when the number of finished
+games has changed since the last publish. The `deploy-pages` workflow deploys nothing; it only checks that `docs/index.html`
+still assembles.
 
 **What becomes public:** everything on those pages, including prompts, replies, reasoning and costs. Nothing else (no
 configuration, no secrets, no attempts of aborted games).
@@ -836,7 +854,8 @@ cheap configuration costs little.
      Super Chat, so a payment is never lost: it is either played or kept as credit.
 4. The broadcast runner plays queued requests one at a time, oldest first, at the broadcast pace. A playing game is
    never interrupted.
-5. When the queue is empty, the stream shows replays of past games, which cost nothing, and the menu with its prices.
+5. When the queue is empty, no game is scheduled next and the broadcast is running, the stream replays past games, which cost
+   nothing (§15.6). It no longer shows the menu or its prices.
 
 ### 15.2 Menu, prices and the budget
 
@@ -921,12 +940,15 @@ public sealed record SimulateChatRequest(string PayerId, string PayerDisplay, do
 
 ### 15.6 Stream
 
-- The `/broadcast` page gains:
-  - "Now playing, requested by …";
-  - the next requests with an estimated wait;
-  - the menu with codes and per-side cost, and how to order;
-  - recent rejections as "@name: credit kept, see the menu", with no free text.
-- With an empty queue, it replays stored games (the best-rated recent games) at the broadcast pace.
-- `/admin/requests` holds the queue and the ledger, cancel and requeue, and a simulate form in Mock mode.
-- The static site gets a menu page with the full price matrix (menu × menu, classic and think), so a viewer can check
-  a price before paying.
+- **As designed (V4), now removed.** `/broadcast` had panels for "Now playing, requested by …", the next requests with an
+  estimated wait, the menu with codes and per-side cost, and recent rejections; the static site had a menu page with the price
+  matrix (menu × menu, classic and think). The owner removed the panels and the site page (commit `0d1056b`). The owner is
+  deferring the decision whether to restore them or retire viewer-paid games, so no viewer-facing menu, price or queue view
+  exists today. `GET /api/requests/menu`, `/quote` and `/queue` remain.
+- **What the stream shows now.** The status line names the payer while the requested game is on the board ("Requested by …").
+  Nothing else of the request is shown, and a viewer's message text never is.
+- **Replays.** With an empty queue the page replays stored games (the best-rated recent games) at the broadcast pace, and only
+  while the broadcast is running and no further game is scheduled. Before a scheduled game the intermission card with its
+  countdown shows, so a replay never covers it. A final position is held for 10 s.
+- `/admin/requests` holds the queue (playing, queued, recent), cancel of a queued request, and a simulate form in Mock mode. It
+  has no ledger view and no requeue. It is not in the navigation.

@@ -127,11 +127,17 @@ internal sealed class GameHarness : IAsyncDisposable
         IMoveQualityAnalyzer? analyzer = null,
         int maxPlies = 200,
         int maxConcurrentGames = 2,
-        Action<IGameEvent>? onPublish = null)
+        Action<IGameEvent>? onPublish = null,
+        TechnicalFailureCooldown? cooldown = null,
+        Action<DbContextOptionsBuilder>? configureDb = null)
     {
         // The same registration the app uses, over a database nobody else sees.
         var services = new ServiceCollection();
-        services.AddDbContextFactory<ArenaDbContext>(o => o.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        services.AddDbContextFactory<ArenaDbContext>(o =>
+        {
+            o.UseInMemoryDatabase(Guid.NewGuid().ToString());
+            configureDb?.Invoke(o);
+        });
         _services = services.BuildServiceProvider();
         Factory = _services.GetRequiredService<IDbContextFactory<ArenaDbContext>>();
         Events = new InMemoryGameEventStream();
@@ -144,7 +150,8 @@ internal sealed class GameHarness : IAsyncDisposable
             Options.Create(new GameRunnerOptions { MaxConcurrentGames = maxConcurrentGames, MaxPlies = maxPlies }),
             TimeProvider.System,
             Readiness,
-            NullLogger<GameRunner>.Instance);
+            NullLogger<GameRunner>.Instance,
+            cooldown);
     }
 
     private readonly ServiceProvider _services;

@@ -32,15 +32,3 @@
 .tournament-created p {
     margin: var(--space-1) 0;
 }
-
-/* Kept off the layout, but still read by screen readers. Pinned to the top left so it never widens the page. */
-.visually-hidden {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-}

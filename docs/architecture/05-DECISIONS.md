@@ -191,6 +191,8 @@ limits are the dominant operational risk and are handled by the failure policy, 
 
 **Amended 2026-10-24: broadcast games are outside `Arena:MaxConcurrentGames` by decision; the cap is per source; operational rule: do not run a tournament during a broadcast.**
 
+**Amended 2026-11-17: the planner takes games one by one with no dates; planned times are estimates, and the runner plays each game one game gap after the previous one left `Running`, re-timing the pending slots (03 §9.1). The `/broadcast` page shows no leaderboard and no request panels, and replays only when no game is scheduled next (03 §9.4, §15.6). The cap decision above is unchanged.**
+
 ## ADR-012 — Cost in AI credits and US dollars; reasoning is stored
 
 **Status:** Accepted (2026-10-25).
@@ -207,9 +209,9 @@ machine, P5 unaffected). The 1 AI unit = 1 AI credit assumption and the price un
 smoke run; both are isolated in one place each so a correction is one line. The multiplier-based estimates in the
 tournament form and the broadcast planner are replaced by AI-credit estimates (G5).
 
-## ADR-013 — The public results site is a static export on the `gh-pages` branch
+## ADR-013 — The public results site is a static export, deployed to GitHub Pages from Actions
 
-**Status:** Accepted (2026-10-25).
+**Status:** Accepted (2026-10-25). Amended (2026-11-17): GitHub Pages is deployed from the `publish-site` GitHub Actions workflow, not from a branch.
 
 **Context.** The owner wants a public page with every result and chart. Deploying the web app read-only (Fly.io, a hosted
 Postgres, a read-only mode, a SELECT-only role, caching of the on-read rating) was analysed and costs about 40 USD a month
@@ -217,9 +219,17 @@ plus a new attack surface; the live game stream would not reach it anyway, becau
 **Decision.** The local app exports a static snapshot (03 §11) and force-pushes it as one orphan commit to `gh-pages`;
 GitHub Pages serves the branch. ADR-002 holds: nothing runs anywhere but the owner's machine. The live view stays on
 YouTube; the site lags by at most the auto-publish interval.
-**Consequences.** No server, no database online, no cost. Everything the site shows is public by design. Pages' source
-moves from GitHub Actions to the `gh-pages` branch (one owner setting). The site is plain HTML and SVG, so it has no search
-or filtering; the JSON files are there for anyone who wants to analyse the data.
+**Amendment (2026-11-17).** The public URL is served from the GitHub Actions workflow `publish-site.yml` (Settings, Pages,
+Source = GitHub Actions), which builds the site from the results archive (`results/`, RESULTS-ARCHIVE.md) and deploys it; the
+build job holds `contents: read` only and the deploy job alone holds `pages: write` and `id-token: write`. The in-app publisher
+(`/admin/site`, `GitSitePublisher`) stays as an advanced option: it force-pushes an export of the owner's own database, with
+prompts and replies, to a branch, and it is not what serves the public URL. It never writes the remote's default branch, `main`,
+`master` or a branch whose tip it did not author. Games that ended undecided (result `*`) are not on the site. The owner decides
+whether the in-app publisher is kept.
+
+**Consequences.** No server, no database online, no cost. Everything the site shows is public by design. The site is plain HTML
+and SVG, so it has no search or filtering; the JSON files are there for anyone who wants to analyse the data. The first version
+of this decision had Pages serve the `gh-pages` branch; the amendment replaces that.
 
 ## ADR-014 — Benchmark runs, player variants and custom models
 
@@ -282,3 +292,33 @@ terms. The app runs on localhost only.
 not live data. Super Chat cannot refund, so failures become credit. The YouTube Data API quota bounds the poll rate. A
 request game that hits its budget is adjudicated. Before going live, the owner checks the YouTube Super Chat policy and
 the tax treatment of the income.
+
+**Amended 2026-11-17.** The viewer-facing views of this decision were removed by the owner: the request panels on `/broadcast`
+(next requests, the menu, recent rejections) and the public site's menu and price page. The intake, ledger, queue, budget stop,
+`/admin/requests` and the replays remain, and the stage still names the payer of the game on air. The owner is deferring the
+decision whether to restore the views or to retire viewer-paid games; until then a viewer learns the menu and prices from what the
+owner posts (REQUESTS.md §5).
+
+## ADR-017 — A gateway error aborts the game; dispatch backs off
+
+**Status:** Accepted (2026-11-17).
+
+**Context.** `LlmChessPlayer` turns a gateway exception into a rejected attempt, so three failures in a row forfeited the side
+and the game was rated as a win for the opponent. The broadcast runner had its own rule for this (a move with no reply aborts
+the game); tournaments, benchmarks and the Play page had none. A Copilot outage of five minutes therefore turned a 360-game
+benchmark into rated wins, because the scheduler tops a run up to its concurrency every second.
+
+**Decision.**
+
+1. A forfeit in which every attempt is a gateway error (attempt kind `error`) is not a forfeit. The game runner aborts the
+   game, records its attempts and closes it as `aborted`, which the rating leaves out. This applies to every game. Timeouts,
+   illegal replies and unparseable replies stay forfeits (RATING.md §2); the formula does not change. The rule is applied in
+   `GameRun`, above the player: `LlmChessPlayer` still records every failure as an attempt.
+2. A game that ends in a technical failure (rule 1, a conversation that could not be opened, a crash) starts a cooldown
+   (`TechnicalFailureCooldown`, `Arena:TechnicalCooldown`, default 15 s, doubling per failure in a row up to
+   `Arena:MaxTechnicalCooldown`, default 2 min). While it holds, `TournamentService` hands no new game to the runner. A game
+   played to a real end clears it. The broadcast runner keeps its own back-off.
+
+**Consequences.** An outage costs the games that were running, not the whole run, and none of them is rated. An aborted
+tournament game is not replayed: the run finishes with fewer rated games than it planned, and the progress counts it as
+finished. A model that never answers (a bad id) slows the run down by the cooldown, not stops it.

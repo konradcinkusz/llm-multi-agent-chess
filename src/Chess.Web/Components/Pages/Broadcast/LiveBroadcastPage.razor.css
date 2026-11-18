@@ -2,13 +2,12 @@
  * The OBS frame, and the page a viewer opens on a phone. Everything must be on one screen, nothing scrolls, nothing is cut.
  *
  * Landscape (OBS at 1920x1080, a desktop, a phone held sideways): a 16:9 stage that fits the window. The board takes the
- * full height on the left; the left column beside it holds the status, the moves and up next. The right column holds the
- * requests, the order menu and, last and largest, the leaderboard. Sizes are in cqh of the stage: at 1080 px high 1cqh is
- * 10.8 px, so the row text (2.6cqh) is 28 px, the floor for text read on a phone watching the stream.
+ * full height on the left; the one column beside it takes all the width that is left and holds the status, the moves (which
+ * grow to fill the column) and up next. Sizes are in cqh of the stage: at 1080 px high 1cqh is 10.8 px, so the row text
+ * (3.3cqh) is 36 px and the panel headings (2.8cqh) 30 px, above the 28 px floor for text read on a phone watching the stream.
  *
- * Portrait (a phone held upright): a 9:19.5 stage that fits the window, one column: board, status, moves and up next, the
- * requests and menu, then the leaderboard at the bottom. Sizes are in cqw of the stage. The side columns dissolve into the
- * stage grid (display: contents).
+ * Portrait (a phone held upright): a 9:19.5 stage that fits the window, one column: board, then the moves and up next side
+ * by side. Sizes are in cqw of the stage. The side column dissolves into the stage grid (display: contents).
  *
  * Every size comes from the variables below, so the two modes differ only in their values and their grid.
  */
@@ -29,11 +28,11 @@
     --player-h: 5.2cqh;
     --player: 3.4cqh;
     --board: 76cqh;
-    --status: 2.8cqh;
-    --panel-pad: 1.2cqh 1.6cqh;
-    --h2: 2.3cqh;
-    --row: 3.6cqh;
-    --fs: 2.6cqh;
+    --status: 3.6cqh;
+    --panel-pad: 1.4cqh 2cqh;
+    --h2: 2.8cqh;
+    --row: 5.2cqh;
+    --fs: 3.3cqh;
     --swatch: 2cqh;
     --radius: 1cqh;
     --card-title: 6cqh;
@@ -49,11 +48,11 @@
     box-sizing: border-box;
     overflow: hidden;
     display: grid;
-    grid-template-columns: var(--board) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-columns: var(--board) minmax(0, 1fr);
     grid-template-rows: var(--head) minmax(0, 1fr);
     grid-template-areas:
-        "head head head"
-        "game cola colb";
+        "head head"
+        "game cola";
     column-gap: calc(var(--gap) * 1.6);
     row-gap: var(--gap);
     padding: 0 var(--pad) var(--pad);
@@ -260,7 +259,6 @@
 }
 
 .bc-col-a { grid-area: cola; }
-.bc-col-b { grid-area: colb; }
 
 /* The game's status line: thinking, result, replay, who requested it. Two lines at most. */
 .bc-status {
@@ -312,6 +310,11 @@
     align-items: center;
 }
 
+/* The moves take what the status and up next leave, so the column has no dead area at the foot. */
+.bc-moves-panel {
+    flex: 1 1 auto;
+}
+
 .bc-muted {
     margin: 0;
     font-size: var(--fs);
@@ -323,40 +326,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.bc-num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
-.bc-prov {
-    font-weight: 400;
-    color: var(--bc-muted);
-}
-
-/* Leaderboard: one line per model; a long name is cut, never wrapped. */
-
-.bc-table li {
-    display: grid;
-    grid-template-columns: 1.4em var(--swatch) minmax(0, 1fr) 2.6em 2.6em;
-    gap: 0 0.5em;
-    height: var(--row);
-}
-
-.bc-table .bc-table-head {
-    height: auto;
-    min-height: 0;
-    font-size: 0.85em;
-    color: var(--bc-muted);
-}
-
-.bc-table .bc-table-head span:nth-child(n + 4) {
-    text-align: right;
-}
-
-.bc-rank {
-    font-weight: 700;
 }
 
 /* Moves */
@@ -372,11 +341,11 @@
     color: var(--bc-muted);
 }
 
-/* Up next and requests: the time or the place, then the matchup, which wraps onto a second line rather than being cut. */
+/* Up next: the start time, then the matchup, which wraps onto a second line rather than being cut. */
 
 .bc-next li {
     display: grid;
-    grid-template-columns: 2.9em minmax(0, 1fr);
+    grid-template-columns: 3.2em minmax(0, 1fr);
     gap: 0.4em;
     align-items: start;
     padding: 0.15em 0;
@@ -392,20 +361,6 @@
 
 .bc-time {
     font-variant-numeric: tabular-nums;
-    color: var(--bc-accent);
-}
-
-/* Order menu: code, label, price */
-
-.bc-menu li {
-    display: grid;
-    grid-template-columns: 2.4em minmax(0, 1fr) auto;
-    gap: 0.5em;
-    height: var(--row);
-}
-
-.bc-code {
-    font-weight: 700;
     color: var(--bc-accent);
 }
 
@@ -457,10 +412,6 @@
     .bc-status { display: none; }
     .bc-moves-panel { grid-area: moves; }
     .bc-next-panel { grid-area: next; }
-
-    .bc-table li {
-        grid-template-columns: 2.4em var(--swatch) minmax(0, 1fr) 3.6em 3.6em;
-    }
 }
 
 /* The same portrait layout, forced by ?view=mobile on any screen. Keep in step with the media block above. */
@@ -508,10 +459,6 @@
 .bc-stage.bc-portrait .bc-status { display: none; }
 .bc-stage.bc-portrait .bc-moves-panel { grid-area: moves; }
 .bc-stage.bc-portrait .bc-next-panel { grid-area: next; }
-
-.bc-stage.bc-portrait .bc-table li {
-    grid-template-columns: 2.4em var(--swatch) minmax(0, 1fr) 3.6em 3.6em;
-}
 
 /* Between games the card is a banner at the foot of the ready board, not a cover. */
 .bc-intermission {

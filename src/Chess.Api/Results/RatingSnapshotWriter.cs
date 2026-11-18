@@ -15,9 +15,25 @@ public static class RatingSnapshotWriter
 {
     public const string FormulaVersion = "1";
 
+    // The background service and the archive import both write batches; one at a time, so a batch is never written twice.
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
     /// <summary>Writes one batch for every rated game finished after the newest snapshot.</summary>
     /// <returns>The number of batches written.</returns>
     public static async Task<int> WriteNewAsync(ArenaDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            return await WriteNewCoreAsync(db, clock, ct);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private static async Task<int> WriteNewCoreAsync(ArenaDbContext db, TimeProvider clock, CancellationToken ct)
     {
         var cursor = await db.RatingSnapshots
             .OrderByDescending(s => s.Id)

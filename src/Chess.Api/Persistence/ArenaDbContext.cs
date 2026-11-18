@@ -50,6 +50,8 @@ public sealed class ArenaDbContext(DbContextOptions<ArenaDbContext> options) : D
         {
             e.ToTable("move_attempts");
             e.HasKey(a => new { a.GameId, a.Ply, a.Number });
+            // GET /api/attempts lists the newest attempts first; the primary key (game_id, ply, number) cannot serve that order.
+            e.HasIndex(a => new { a.CreatedAt, a.GameId, a.Ply, a.Number });
             e.HasOne<GameEntity>().WithMany().HasForeignKey(a => a.GameId).OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -6,7 +6,7 @@
 
 A local arena that ranks the LLMs available through your GitHub Copilot subscription by playing them against each other in chess, and publishes the ranking with a deterministic, documented formula.
 
-It runs on `localhost` only. Nothing is deployed. Every game, move, LLM attempt and rating snapshot is stored in PostgreSQL.
+The app runs on `localhost` only. The one thing published is the static results site on GitHub Pages ([Public results site](#public-results-site)). Every game, move, LLM attempt and rating snapshot is stored in PostgreSQL.
 
 ## Contents
 
@@ -33,11 +33,11 @@ It runs on `localhost` only. Nothing is deployed. Every game, move, LLM attempt 
 | Needed for | What |
 |---|---|
 | Everything | **.NET 10 SDK.** `global.json` pins the 10.0 feature band. Install: `sudo apt-get update && sudo apt-get install -y dotnet-sdk-10.0` on Ubuntu, or the [Microsoft installer](https://dotnet.microsoft.com/download). |
-| Every build | **The Copilot CLI bundle.** The first `dotnet build` downloads it: about 89 MB from the [github/copilot-cli releases](https://github.com/github/copilot-cli/releases) page on github.com, and its SHA-256 is checked against `SHA256SUMS.txt` from the same host. The first build therefore needs internet access. The bundle is then cached under `src/Chess.Llm/obj`. |
+| Every build | **The Copilot CLI bundle.** The first `dotnet build` downloads it: about 89 MB from the [github/copilot-cli releases](https://github.com/github/copilot-cli/releases) page on github.com, and its SHA-256 is checked against `SHA256SUMS.txt` from the same host. The first build therefore needs internet access. The bundle is then cached under `src/Chess.Llm/obj`. Set `CopilotSkipCliDownload=true` (an environment variable or an MSBuild property) to skip the download: the unit tests and the `fake` profile never start the Copilot client, and CI does this. |
 | The browser journeys (`tests/Chess.E2E`) | **A Chromium.** Point `E2E_CHROMIUM_PATH` at one, or run `pwsh tests/Chess.E2E/bin/Debug/net10.0/playwright.ps1 install chromium` once. See [Tests and CI](#tests-and-ci). |
 | The default profile | **Docker**, running. The AppHost starts PostgreSQL in a container. |
 | LLM players | **GitHub Copilot CLI** (`copilot`) installed and logged in on this machine. The app uses that login, or the `copilot-github-token` AppHost secret parameter when you set one. The `fake` profile and `random` players do not need it. |
-| Move-quality analysis (optional) | **Stockfish** on `PATH`, or the path in `Analysis:StockfishPath` in `src/Chess.Api/appsettings.json`. Without it the arena still works; move quality is disabled and the ranking uses legality only. |
+| Move-quality analysis (optional) | **Stockfish** on `PATH`, or the path in `Analysis:StockfishPath` in `src/Chess.Api/appsettings.json`. Without it the arena still works; move quality is disabled and the ranking uses legality only. A binary that does not answer the UCI handshake within `Analysis:HandshakeTimeoutSeconds` (default 10), or a search that runs past `Analysis:SearchTimeoutSeconds` (default 60), is stopped and the arena carries on without it (a game that reaches `MaxPlies` is then adjudicated on material); the next try comes after `Analysis:RetryAfterSeconds` (default 30). |
 
 Run `scripts/dev-setup.sh` to see what is installed and what is missing. It only reports; it never installs.
 
@@ -72,21 +72,21 @@ This starts the PostgreSQL container with the named volume `chess-arena-pg`, the
 
 ## Pages
 
-The navigation lists them in this order:
+The table lists the pages in the order of the navigation: Results, Live game, Head-to-head, Tournaments, Benchmark, Live broadcast, Broadcast plan, Games. Attempts and Site sit under **More** at the end of the strip (a disclosure that needs no script), so every item fits the header at 1366 px; on a phone the strip scrolls sideways. Viewer requests is not in the navigation. The filters of Results, Head-to-head, Games and Attempts, and the game the Live game page follows, are kept in the address (Results `?tournament=&order=&style=`, Head-to-head `?a=&b=`, Games `?model=&status=&page=`, Attempts `?game=&model=&reply=&page=`, Live game `?game=`), so a link, a reload and the Back button show the same page.
 
 | Page | Route | What it shows |
 |---|---|---|
-| **Results** | `/results` | The ranking. The **Big picture** comes first: a headline naming the best model, with its arena score and rating, then a ranked bar chart with 95 % intervals. Next, the **Model map**: every model on two coefficients you pick (rating, arena score, first-attempt legality, move quality, latency, tokens, cost, forfeit rate). Below it: rating over time, head-to-head matrix, results breakdown, move quality, strength against cost, and a full table. A tournament filter and an **Order** control sit above the Big picture. The order is **Arena score** (the default) or **Conservative**, which ranks by the lower bound of the arena score, so a model with more games outranks one with the same score and fewer (RATING.md §6). A **style filter** (All, then one chip per prompt style that has played) shows only the players of one style: it hides rows and never refits the ratings. The **Prompt styles compared** section, after the full table, gives each model played under two or more styles its rating per style, with the 95 % interval, legality, move quality and cost per game, and each style's verdict against the baseline (see [Prompt styles](#prompt-styles)). |
-| Live game | `/` | Pick a model for each side (or `random`), start a game and follow it. Each side's bar shows its model, whose turn it is, the attempt in progress with its seconds, the pieces it has captured, and its tokens and estimated cost. Beside the board, the **move table** lists every move, newest on top, in a box of fixed height; picking one selects its entries in the **engine log**. Nothing above the board changes size during a game, so the board stays in one place from the first move to the last. The engine log lists every reply the models sent to the engine, newest first: the move, whether it was legal or why it was rejected, the latency, the tokens, the cost, and the model's reasoning when it exposes it. Rejected attempts appear under the board. When the game ends, the **game summary** gives the tokens, AI credits and estimated cost per side, and the PGN can be shown. The **Pace** control sets how far the view runs behind the game: Live, or moves at least 1, 2, 3 or 5 seconds apart. Catch up shows every move at once. The game itself is not slowed. The default pace is 2 s, set by `Arena:Viewer:MinMovePauseSeconds`. |
-| Head-to-head | `/head-to-head` | Two models: relative coefficient with its interval, a plain-language reading, expected score, direct record and direct games. |
-| Tournaments | `/tournaments`, `/tournaments/{id}` | Round-robin creation with the AI-credit and USD estimate shown before you confirm, progress, a per-tournament leaderboard, and cancel. |
+| **Results** | `/results` | The ranking. The **Big picture** comes first: a headline naming the best model, with its arena score and rating, then a ranked bar chart with 95 % intervals. Next, the **Model map**: every model on two coefficients you pick (rating, arena score, first-attempt legality, move quality, latency, tokens, cost, forfeit rate). Below it: rating over time, head-to-head matrix, results breakdown, move quality, strength against cost, and a full table. A tournament filter and an **Order** control sit above the Big picture (the choices are written into the address). The order is **Arena score** (the default) or **Conservative**, which ranks by the lower bound of the arena score, so a model with more games outranks one with the same score and fewer (RATING.md §6). A **style filter** (All, then one chip per prompt style that has played) shows only the players of one style: it hides rows and never refits the ratings. The **Prompt styles compared** section, after the full table, gives each model played under two or more styles its rating per style, with the 95 % interval, legality, move quality and cost per game, and each style's verdict against the baseline (see [Prompt styles](#prompt-styles)). |
+| Live game | `/` | Pick a model for each side (or `random`), start a game and follow it. Start writes the game into the address (`?game=`) and brings the board into view, which on a phone sits below the form. Each side's bar shows its model, whose turn it is, the attempt in progress with its seconds, the pieces it has captured, and its tokens and estimated cost. Beside the board, the **move table** lists every move, newest on top, in a box of fixed height; picking one selects its entries in the **engine log**. Nothing above the board changes size during a game, so the board stays in one place from the first move to the last. The engine log lists every reply the models sent to the engine, newest first: the move, whether it was legal or why it was rejected, the latency, the tokens, the cost, and the model's reasoning when it exposes it. Rejected attempts appear under the board. When the game ends, the **game summary** gives the tokens, AI credits and estimated cost per side, and the PGN can be shown. The **Pace** control sets how far the view runs behind the game: Live, or moves at least 1, 2, 3 or 5 seconds apart. Catch up shows every move at once. The game itself is not slowed. The default pace is 2 s, set by `Arena:Viewer:MinMovePauseSeconds`. |
+| Head-to-head | `/head-to-head` | Two players: relative coefficient with its interval, a plain-language reading, expected score, direct record and direct games. The pickers list the rated players (a model at an effort or in a style is its own player, so `gpt@high` and `gpt~think` can be picked), and the pair opens on the two best players. |
+| Tournaments | `/tournaments`, `/tournaments/{id}` | Round-robin creation (at most 16 models, 100 games per pair and 2000 games in all) with the AI-credit and USD estimate shown before you confirm (the random player is free in every column), progress, a per-tournament leaderboard, and cancel. The form says what is missing after you first change it, and Start stays disabled until it is complete. |
 | Benchmark | `/benchmark`, `/benchmark/{id}` | One candidate against every other model: the estimate before you start, progress, a cancel button, and the report with downloads (Markdown and JSON). See [Benchmark your own model](#benchmark-your-own-model). |
-| Games | `/games`, `/games/{id}` | Paged archive. Replay shows the same move table, engine log and game summary as the live page, with each move's attempts, latency, centipawn loss and best move, and a PGN download. |
-| Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, model and legality. |
-| Viewer requests | `/admin/requests` | Not in the navigation. The requests playing now, the queue with cancel, the recent requests, and a simulate form in Mock mode. See [Viewer-paid games](#viewer-paid-games). |
-| Broadcast plan | `/broadcast/plan` | Add games one by one (White and Black), see the estimated cost of the broadcast, press Start; pause, resume or stop from the list. |
-| Site | `/admin/site` | Export the public results site, publish it to the `gh-pages` branch, and see the last export and publish. See [Public results site](#public-results-site). |
-| Broadcast (OBS) | `/broadcast` | The live page, linked from the navigation as "Live broadcast". It is also the page OBS captures. |
+| Live broadcast | `/broadcast` | The page OBS captures, with no app chrome (see [Broadcast mode](#broadcast-mode-24-h-channel)). The board takes the full height; beside it are the status line, the moves and the **Up next** list. It shows no ranking and no request panels. Between two scheduled games an **intermission card** with a countdown covers the board, which is already set up for the next game. A stored game is replayed only when the broadcast is running, no further game is scheduled and nothing is queued or playing. `?theme=light` and `?view=mobile` change the background and force the portrait layout. |
+| Broadcast plan | `/broadcast/plan` | Add games one by one (White and Black), see the estimated cost of the broadcast, press Start; pause, resume or stop (after a confirmation) from the list, and delete a leftover draft. |
+| Games | `/games`, `/games/{id}` | Paged archive, filterable by player (the rated players, then the models that have no rating) and status. Replay shows the same move table, engine log and game summary as the live page, with each move's attempts, latency, centipawn loss and best move, and a PGN download. A long game's move list is paged and follows the move on the board; a slider steps through the plies. |
+| Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, player and legality. The legality filter is applied by the API, so it covers every page. Times are UTC. |
+| Site | `/admin/site` | Export the public results site of your own database and, as an advanced option, publish it to a branch; see the last export, its size against the Pages limit, and the last publish. The public URL is served by the `publish-site` workflow, not by this. See [Public results site](#public-results-site). |
+| Viewer requests | `/admin/requests` | Not in the navigation. The requests playing now, the queue with cancel, the recent requests, and a simulate form in Mock mode. The stage and the public site show no menu, price or queue; see [Viewer-paid games](#viewer-paid-games). |
 
 Copilot's `auto` model is hidden from the model pickers unless `Arena:ShowAutoModel` is `true`: it picks a different model for each request, so it is not one player.
 
@@ -96,7 +96,7 @@ The status strip under the header of every page shows the Copilot, database and 
 
 The full formula is in [docs/RATING.md](docs/RATING.md). In short:
 
-1. **Results come first.** Who won a game is 75 % of the relative coefficient. A side gets three attempts per move (`Arena:MaxAttemptsPerMove`); if all three are rejected, it forfeits the game. A rejection is an illegal or unparseable reply, a gateway error, or a timeout. A reply that takes longer than 180 s (`Arena:MoveTimeoutSeconds`) is a rejected attempt of kind `timeout`, and the request is aborted.
+1. **Results come first.** Who won a game is 75 % of the relative coefficient. A side gets three attempts per move (`Arena:MaxAttemptsPerMove`); if all three are rejected, it forfeits the game. A rejection is an illegal or unparseable reply, a gateway error, or a timeout; a move where every attempt was a gateway error aborts the game instead of forfeiting it (see [Cost](#cost-ai-credits-per-move)). A reply that takes longer than 180 s (`Arena:MoveTimeoutSeconds`) is a rejected attempt of kind `timeout`, and the request is aborted.
 2. **Strength is a Bradley–Terry fit** over every finished rated game, anchored so that `random` is 0. A rating of 400 means an expected score of about 0.91 against `random`.
 3. **The relative coefficient, RQC(A, B),** is `0.75 × expected score + 0.25 × quality share`. 0.5 means equal, and RQC(A, B) + RQC(B, A) = 1.
 4. **Quality** is legality, plus Stockfish centipawn loss when Stockfish is available. Latency and cost never enter the score; the Results page shows them beside it.
@@ -140,41 +140,59 @@ The full runbook is [docs/BROADCAST.md](docs/BROADCAST.md): planning, OBS setup,
 
 ## Viewer-paid games
 
-Viewers can pay a YouTube Super Chat to choose a game for the stream, for example `!g ca vs oa think`. The price comes from a menu of models and is the smallest tier that covers the game's expected cost. With `Arena:Requests:RequireApiKeyModels` on (the default), paid games run only on your own API keys at Anthropic, OpenAI or DeepInfra, never on the Copilot subscription. A payment is either played or kept as credit, and nothing is refunded through Super Chat.
+Viewers can pay a YouTube Super Chat to choose a game for the stream, for example `!g ca vs oa think`. The price comes from the owner's menu of models and is the smallest tier that covers the game's expected cost. With `Arena:Requests:RequireApiKeyModels` on (the default), paid games run only on your own API keys at Anthropic, OpenAI or DeepInfra, never on the Copilot subscription. A payment is either played or kept as credit, and nothing is refunded through Super Chat.
+
+**What is in the app and what is not.** The intake, the price check, the payer ledger, the queue, the budget stop and the admin
+page `/admin/requests` are in the app and work. The viewer-facing views were removed: the stage (`/broadcast`) shows no request
+queue, menu or rejections (it names the payer in its status line while a requested game is on the board), and the public site has
+no menu or price page. A viewer therefore cannot look up the menu or the prices in the app: you tell them in the stream description
+or the chat. The owner is deferring the decision whether to bring those views back or to retire the feature, so use it as the
+owner's own tool.
 
 The owner's setup is in [docs/REQUESTS.md](docs/REQUESTS.md): the API keys, the provider spend limits, the YouTube OAuth steps, the menu, the tiers and the currency table, the viewer's rules to show on stream, and a recorded run on the fake profile. The fake profile runs the whole path offline with `dotnet run --project src/Chess.AppHost --launch-profile fake`, and the simulate form on `/admin/requests` sends a message through the same intake as YouTube. The broadcast runner plays the queue before the planned slots: see [BROADCAST.md §8](docs/BROADCAST.md#8-viewer-paid-requests-on-the-stream).
 
 ## Public results site
 
-The results, head-to-head, games, tournaments and this one-page description can be published as a static site on
-GitHub Pages ([ADR-013](docs/architecture/05-DECISIONS.md)). The app makes a snapshot on your machine and pushes it to the
-`gh-pages` branch. Nothing runs online: no server, no database and no script on the public side, and the site lags the
-live app by at most the auto-publish interval. The live game stays on YouTube.
+The results, head-to-head, games, tournaments and this one-page description are published as a static site on GitHub Pages
+([ADR-013](docs/architecture/05-DECISIONS.md)). Nothing runs online: no server, no database and no script on the public side.
+The live game stays on YouTube.
 
-**One-time setup, in this order.**
+**The public URL is deployed by the `publish-site` GitHub Actions workflow** (`.github/workflows/publish-site.yml`). It builds
+the site from the results archive in `results/` ([docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARCHIVE.md)): it starts the API on the
+fake profile, imports the archive (games and their rating snapshots), exports the site and deploys it. It runs on a push to
+`main` that changes `results/`, the code that makes the site, or the workflow itself, and by hand (Actions, publish-site, Run
+workflow). The site is the archive's ranking: it shows the archived games, without prompts or replies, and not the games in
+your own database.
 
-1. Open `/admin/site` in the app and press **Publish**. That creates the `gh-pages` branch on the remote. GitHub offers no
-   branch to serve until it exists.
-2. On GitHub: Settings → Pages → Source: *Deploy from a branch*, branch `gh-pages`, folder `/ (root)`.
+**One-time setup.** On GitHub: Settings → Pages → Source: *GitHub Actions*. Until you set it, the build job of the workflow
+runs and the deploy job fails. The `deploy-pages` workflow deploys nothing; it only checks that `docs/index.html` still
+assembles.
 
-The `deploy-pages` workflow no longer deploys anything; it only checks that `docs/index.html` still assembles.
+**What becomes public.** The archive holds only the moves and figures of finished rated games, no prompts, replies or
+reasoning. Games that ended undecided (aborted: a cancelled tournament's queued games, a game cut off by a restart) are not on
+the site, and neither are their attempts.
 
-**Publishing.** Open `/admin/site` in the app. *Export* writes the site to `Arena:Site:ExportDirectory` (the folder is
-emptied first). *Publish* exports afresh and force-pushes the export to `gh-pages` as one commit, so the branch never
-grows a history. The app uses the `git` on your machine and its existing credentials; it stores none. A failed step is
-shown on the page with git's message, and `main` and your working tree are never touched.
+### Publishing from the app (advanced)
 
-**What becomes public.** Everything on the site, including prompts, replies, reasoning and costs. Nothing else is sent:
-no configuration, no secrets, no attempts of aborted games.
+The app can also export the site of **your own database**, with prompts, replies, reasoning and costs, and push it to a branch.
+This is not what serves the public URL: with the Pages source set to GitHub Actions, a branch is not served at all. Use it to
+look at your own site (*Export*), or to host the export somewhere that serves a branch.
+
+Open `/admin/site`. *Export* writes the site to `Arena:Site:ExportDirectory` (a folder the export made is emptied first; a
+folder with other content is refused). *Publish* exports afresh and force-pushes the export to `Arena:Site:Branch` as one
+commit, so the branch never grows a history. The app uses the `git` on your machine and its existing credentials; it stores
+none. A failed step is shown on the page with git's message. `main` and your working tree are never touched, and the
+publisher refuses to write the remote's default branch, `main`, `master`, or a branch whose last commit it did not make.
+Everything in this export is public, including prompts, replies, reasoning and costs; no configuration or secrets are sent.
 
 | Option (`Arena:Site:…`) | Default | Meaning |
 |---|---|---|
 | `Remote` | the `origin` of the repository the app runs from | Where to push. A local path also works. |
-| `Branch` | `gh-pages` | The branch GitHub Pages serves. |
-| `WorkDir` | a folder in the system temp directory | The publisher's own clone, deleted and recreated on each publish. Give it a folder of its own. |
-| `ExportDirectory` | a folder in the system temp directory | Where the export is written, emptied before each export. |
-| `PublicUrl` | `https://<owner>.github.io/<repo>/`, derived from a GitHub remote | The address shown on the page. |
-| `AutoPublishMinutes` | `0` (off) | Publish every N minutes when a game has finished since the last publish. A restart does not publish by itself. |
+| `Branch` | `gh-pages` | The branch the in-app *Publish* force-pushes to. Never the remote's default branch, `main` or `master`. |
+| `WorkDir` | a folder in the system temp directory | The publisher's own clone, deleted and recreated on each publish. Give it a folder of its own, outside the repository. |
+| `ExportDirectory` | a folder in the system temp directory | Where the export is written, emptied before each export. Outside the repository, and not inside `WorkDir`. |
+| `PublicUrl` | `https://<owner>.github.io/<repo>/`, derived from a GitHub remote | The address shown on the page, and the canonical address in each page of the export. |
+| `AutoPublishMinutes` | `0` (off) | Publish every N minutes when the number of finished games has changed since the last publish. A restart does not publish by itself. |
 | `YouTubeUrl` | unset | The "Watch live" link. Not shown when empty or not an http(s) address. |
 | `SupportLinks` | none | Support links, each with a `Label` and a `Url`. Only http(s) links are shown. |
 | `FullLogGames` | `300` | The newest this many games keep their engine log on the site. Older games say so instead of showing a log. |
@@ -219,7 +237,7 @@ rate against your invoice.
   column says what it had: `reported` (the runtime reported every reply), `estimated` (the app priced at least one reply from
   token prices), `partial` (some replies had no cost), `unknown` (none had one), or `free` (the random side).
 - **Unverified conversion.** The runtime reports usage in nano-AI units. The app assumes 1 AI unit = 1 AI credit. The owner's live
-  run has not confirmed it yet; [`scripts/smoke-copilot.sh`](scripts/smoke-copilot.sh) prints the credits each request reports.
+  run has not confirmed it yet; [`scripts/smoke-copilot.sh`](scripts/smoke-copilot.sh) prints the credits each request reports and the game's usage from `GET /api/games/{id}/usage`.
 - **Estimates before you commit.** The tournament form, the benchmark page and the broadcast planner estimate the cost before
   anything is saved. The estimate is the expected moves per side (40) × the tokens per move × the model's prices. A model with
   stored moves uses its own average tokens per move; one without is assumed to use 700 input and 300 output tokens per move.
@@ -229,6 +247,7 @@ rate against your invoice.
 - **Cost never affects the ranking.** It is shown beside the score, and the rating formula leaves it out ([RATING.md §8](docs/RATING.md#8-what-is-deliberately-not-in-the-score)).
 - `random` players and the `fake` profile cost nothing.
 - `Arena:MaxConcurrentGames` (default 2) caps how many games run at once when they come from `POST /api/games` or a tournament. A broadcast plays one game at a time **outside** that cap, by decision (ADR-011). So a tournament running during a broadcast adds LLM requests on top of the broadcast's. Do not run both at once, or lower the tournament's concurrency.
+- A gateway error that leaves a move without any reply (the Copilot runtime failed or is not connected) aborts the game instead of rating a forfeit, and a tournament or benchmark then starts no new game for 15 s, doubling up to 2 minutes (`Arena:TechnicalCooldown`, `Arena:MaxTechnicalCooldown`). See [RATING.md §2](docs/RATING.md#2-outcome-of-a-game).
 - A game that reaches the 200-ply cap plays up to 100 moves a side, 2.5 times the estimate, because the estimate assumes a normal game length. Retries are billed too and are not in the estimate, so a real bill can be higher. The planning guide has the numbers: [docs/BROADCAST.md §2](docs/BROADCAST.md#2-cost).
 
 Check the USD estimate on the planner before you run a day.
@@ -238,7 +257,7 @@ Check the USD estimate on the planner before you run a day.
 Everything is in PostgreSQL: games, every move, every LLM attempt with its prompt and reply, tournaments and benchmark runs, the rating history (`rating_snapshots`), and broadcast schedules and slots.
 
 - The default profile keeps the data in the Docker named volume **`chess-arena-pg`**, so it survives restarts of the app and of the container.
-- The leaderboard is recomputed from the stored games on every read. Every number on screen can be reproduced from the games table.
+- The leaderboard is computed from the stored games, never stored. The API keeps the last computation in memory (not in the database) and replaces it as soon as a rated game finishes or a move gets its Stockfish annotation, so a read always shows the numbers of the games as they are now. Every number on screen can be reproduced from the games table. The rating history chart (`/api/ratings/history`) sends at most 200 points per model, thinned at a fixed stride and always including each model's first and latest snapshot.
 - The `fake` profile and the tests use an in-memory store. Its data is gone when the app stops.
 - To use an existing PostgreSQL instead of the container, set the AppHost connection string `ConnectionStrings:chess` in the AppHost user secrets. No container is started then.
 
@@ -256,16 +275,36 @@ curl -s http://127.0.0.1:5080/health
 | `copilot` | `Ready` (Healthy, *Signed in as …*) | LLM players are available. |
 | `copilot` | `Fake` (Healthy) | The `fake` profile is running. No Copilot is used. |
 | `copilot` | `NotAuthenticated` (Degraded, *Not authenticated*) | Run `copilot` in a terminal and log in, then restart the AppHost. Until then only `random` plays, and `/api/models` answers with a `Warning` header. |
+| `copilot` | `Unavailable` (Degraded, *Copilot runtime is starting*) | The runtime starts in the background, so the API answers at once. Wait until it reports Ready or says why it could not start. |
 | `copilot` | `Unavailable` (Degraded, *Copilot runtime unavailable: …*) | The runtime could not start. The detail names the cause. Check that the Copilot CLI is installed, or the path in `Copilot:CliPath`. A game with an LLM side is refused with a 503 that says to run `copilot` and log in. |
 | `database` | Healthy, *ready* | Migrations ran. |
 | `database` | Degraded, *migrating* | Wait a few seconds; the app is applying migrations on start. |
 | `database` | Unhealthy, with the error message | PostgreSQL is not reachable or the migration failed. Check that Docker is running (default profile) and read the error in the Aspire dashboard. |
 | `stockfish` | Healthy, *available* | Move quality is computed for finished games. `/api/status` reports `"stockfish": "available"`. |
+| `stockfish` | Degraded, *binary does not work — move quality disabled: …* | A binary is configured or on `PATH`, but it could not start or did not answer the UCI handshake in time. The detail names the cause. Check `Analysis:StockfishPath` points at a Stockfish (or another UCI engine). `/api/status` reports `"stockfish": "degraded"`. |
 | `stockfish` | Healthy, *absent — move quality disabled* | Normal without Stockfish. `/api/status` reports `"stockfish": "absent"`. Install it, or set `Analysis:StockfishPath`. |
 
 The Copilot check is never Unhealthy, and `/health` answers HTTP 200 even when a check is Degraded. Tell the states apart by the `status` field of each check, not by the HTTP code.
 
 **403 `Cross-origin request rejected`.** The API and the web app refuse any request whose `Origin` header names another site, or whose `Sec-Fetch-Site` is `cross-site` (ADR-006, amended). A browser sends those headers when a page on another site makes the call. A 403 therefore means a foreign page reached the app through your browser, not that the app is broken. Open the arena at <http://localhost:5070> or <http://127.0.0.1:5070>. To allow another origin of your own, add it to `Arena:AllowedOrigins` in the API's configuration. Requests with no `Origin` header, such as `curl`, are allowed.
+
+**403 `Host rejected`.** The same guard refuses a request whose `Host` header is not the arena's own: `localhost`, `127.0.0.1` or `[::1]` (on port 5070 for the web app, 5080 for the API), the API's service name `api`, or the host of an `Arena:AllowedOrigins` entry. This stops DNS rebinding, where a page on `attacker.example:5080` is pointed at 127.0.0.1 and reads the API as if it were its own site. If you reach the arena through another name (a hosts-file alias, a tunnel), add that origin to `Arena:AllowedOrigins`; its host is then accepted too.
+
+### Troubleshooting: what the web app shows when the API is away
+
+The web app (port 5070) asks the API (port 5080) for everything it shows. When the API stops, is restarting or hangs, the pages keep working and say so in plain words; none of this needs a reload.
+
+| You see | What it means and what to do |
+|---|---|
+| The status strip says *The arena API is not answering. Checking again shortly.* (or *…answered with an error…*) | The API did not answer the strip's last check. The strip asks again every 10 seconds and shows the three services again as soon as the API answers. Start the API, or check its log, if it stays. |
+| A page shows *Could not load …: The arena API is not answering right now. This page tries again on its own.* | The web app stopped calling the API for a while after repeated failures (a circuit breaker), and the page you opened asked during that time. Lists, tournaments, benchmarks and the request queue ask again every few seconds, keep the last figures they had, and clear the message by themselves once the API answers. The Games page and the replay load once: open them again. |
+| *The arena API took too long to answer.* | A call went unanswered for longer than the timeout (60 seconds a try, 150 seconds in all). The page keeps what it had and, where it polls, asks again. |
+| *The tournament was not created: …* (also for a benchmark) | The text after the colon is the reason the API gave, for example that the concurrency is above `Arena:MaxConcurrentGames`. Creating something is **not** retried automatically, so a late failure cannot create it several times: check the list before you press the button again. The concurrency starts on 1; raise it up to `Arena:MaxConcurrentGames` (2 by default). |
+| *Page not found* inside the normal layout, with a link to Results | The address does not exist (the HTTP status is 404). Use the navigation or the link. |
+| *Something went wrong on this page* with a *Reload the page* button | A page threw an unexpected error. The rest of the app is unaffected; pick another page, or reload. |
+| A bar at the bottom of the window: *The arena stopped responding on this page. Reload* | The browser lost its live connection to the web app, for example because the web app restarted. Reload the page. |
+
+Each page shows its own *Loading …* line first: the web app does not wait for the API before it sends a page. A live game that goes quiet for 45 seconds (the API sends a heartbeat every 15) reconnects on its own.
 
 ## Project layout
 
@@ -277,14 +316,16 @@ src/
   Chess.Llm/              ILlmGateway, CopilotLlmGateway, FakeLlmGateway (the only project that references the Copilot SDK)
   Chess.Analysis/         IMoveQualityAnalyzer, Stockfish (UCI) and no-op analyzers
   Chess.Rating/           pure rating mathematics (docs/RATING.md): no I/O, no clock, no EF
-  Chess.Api/              the one service: players, game runner, tournaments, benchmarks, results, broadcast, cost (usage), persistence, endpoints
-  Chess.Web/              Blazor Web App (interactive server rendering): the UI and the public site export; talks to the API over HTTP only
+  Chess.Api/              the one service: players, game runner, tournaments, benchmarks, results and the results archive, broadcast, viewer requests, cost (usage), persistence, endpoints
+  Chess.Web/              Blazor Web App (interactive server rendering): the UI, the public site export and its publishing; talks to the API over HTTP only
 tests/
   Chess.Engine.Tests/  Chess.Rating.Tests/  Chess.Llm.Tests/  Chess.Api.Tests/  Chess.Web.Tests/
   Chess.E2E/              Playwright journeys on the fake profile (see Tests and CI)
+results/                  the results archive: one JSON file per rated game; the public site is built from it
 docs/
-  RATING.md  BROADCAST.md  BENCHMARK.md  EVALS.md  architecture/
-scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh, broadcast-smoke.sh, benchmark.sh, benchmark.ps1
+  RATING.md  RESULTS-ARCHIVE.md  BROADCAST.md  REQUESTS.md  BENCHMARK.md  EVALS.md  architecture/
+scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh, broadcast-smoke.sh, youtube-smoke.sh, benchmark.sh, benchmark.ps1
+.github/workflows/        ci.yml, publish-site.yml, deploy-pages.yml
 ```
 
 The allowed project references and the dependency budget are in [03-TARGET-ARCHITECTURE §2](docs/architecture/03-TARGET-ARCHITECTURE.md).
@@ -296,30 +337,25 @@ dotnet build Chess.sln -warnaserror
 dotnet test Chess.sln
 ```
 
-`dotnet test Chess.sln` runs every test project, the browser journeys included. It needs a Chromium for the journeys (below). With one available, the run gives 1 451 tests: 1 448 pass and 3 are skipped.
+`dotnet test Chess.sln` runs every test project, the browser journeys included, so it needs a Chromium for the journeys (below). Read
+the result per project: each prints `Passed!` or `Failed!` with its Failed, Passed and Skipped counts, and any Failed above 0 is a
+failure. This README gives no totals, because they went stale with every pull request.
 
-| Project | Passed | Skipped |
-|---|---|---|
-| `Chess.Engine.Tests` | 136 | 0 |
-| `Chess.Rating.Tests` | 30 | 0 |
-| `Chess.Llm.Tests` | 74 | 0 |
-| `Chess.Api.Tests` | 519 | 3 |
-| `Chess.Web.Tests` | 684 | 0 |
-| `Chess.E2E` | 5 | 0 |
-
-The three skipped tests are the Stockfish integration tests; they run only when `STOCKFISH_PATH` names a Stockfish binary.
+Some tests are skipped on purpose. The Stockfish integration tests run only when `STOCKFISH_PATH` names a Stockfish binary (CI
+installs one, so they run there). The PostgreSQL tests (`Chess.Api.Tests.Postgres`) run only when `ARENA_TEST_POSTGRES` is set (see
+below). A skipped test is not a pass: a project that shows Skipped without those two variables is as expected.
 
 The unit tests and the browser journeys run separately:
 
 ```bash
-# Unit tests only: no browser. This is what the CI "build and test" job runs (1 542 pass, 3 skipped).
+# Unit tests only: no browser. This is what the CI "build and test" job runs.
 dotnet test Chess.sln --no-build --filter "FullyQualifiedName!~Chess.E2E"
 
 # The browser journeys only, with a Chromium you already have.
 E2E_CHROMIUM_PATH=/path/to/chromium dotnet test tests/Chess.E2E
 ```
 
-The five journeys in `tests/Chess.E2E` (live game, replay, the Results Big picture, a round-robin tournament, a tiny benchmark to its report) start the AppHost on the fake gateway and drive a real Chromium. They never download a browser. `ArenaFixture` uses `E2E_CHROMIUM_PATH` when it is set, then the Playwright cache. When neither holds a browser, the run fails and names the command to run.
+The six journeys in `tests/Chess.E2E` (live game, replay, the Results Big picture, a round-robin tournament, a tiny benchmark to its report, and a simulated viewer request that the stage names) start the AppHost on the fake gateway and drive a real Chromium. They never download a browser. `ArenaFixture` uses `E2E_CHROMIUM_PATH` when it is set, then the Playwright cache. When neither holds a browser, the run fails and names the command to run.
 
 The offline AI evals (30 scripted positions) are part of the unit run. To run only them:
 
@@ -329,14 +365,31 @@ dotnet test tests/Chess.Api.Tests --filter "FullyQualifiedName~Chess.Api.Tests.E
 
 Tests need no network and no Copilot login. They use the `FakeLlmGateway`, the in-memory store and fixtures.
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main`:
+The in-memory provider cannot show a query that Npgsql cannot translate, or a model that drifted from its migrations. The PostgreSQL tests (`tests/Chess.Api.Tests/Postgres`) run the real app on the fake gateway against a PostgreSQL server: the host applies every migration, a game, a tournament and a benchmark are played to their ends, every read endpoint answers 200, and the broadcast planner and the request queue run their PostgreSQL paths. Each test creates its own database on the server and drops it. They run only when `ARENA_TEST_POSTGRES` holds a connection string whose role may create databases:
 
-- **build and test**: `dotnet build Chess.sln -warnaserror`, then the unit tests (the `Chess.E2E` filter above), with the results uploaded. It needs no browser.
-- **end-to-end journeys**: builds `tests/Chess.E2E`, installs Chromium with its system dependencies, and runs the five journeys.
-- **secret scan**: gitleaks over the full history.
+```bash
+ARENA_TEST_POSTGRES='Host=localhost;Port=5432;Username=postgres;Password=<password>;Database=postgres' \
+  dotnet test tests/Chess.Api.Tests --filter "FullyQualifiedName~Chess.Api.Tests.Postgres"
+```
+
+The model and the migrations must agree. After a change to an entity or to `ArenaDbContext`, run this; it fails when a migration is missing (`dotnet tool restore` installs `dotnet-ef` once):
+
+```bash
+dotnet tool restore
+dotnet ef migrations has-pending-model-changes --project src/Chess.Api
+```
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main`. It has seven jobs; a run on a pull request is cancelled by a newer push, and every job has a timeout:
+
+- **build and test**: `dotnet build Chess.sln -warnaserror`, then the unit tests (the `Chess.E2E` filter above) with Stockfish installed, with the results uploaded. It needs no browser.
+- **secret scan (gitleaks)**: gitleaks over every commit reachable from `HEAD`.
 - **kernel size guard**: `Chess.ServiceDefaults` stays at or below 400 lines of C#.
 - **Copilot SDK only in Chess.Llm**: no other project may reference `GitHub.Copilot.SDK`, and no code outside `Chess.Llm` may use a `GitHub.Copilot` namespace.
 - **solution and AppHost**: every project is in `Chess.sln`, and every web project is registered in the AppHost.
+- **end-to-end journeys**: builds `tests/Chess.E2E`, installs Chromium with its system dependencies, and runs the six journeys.
+- **PostgreSQL tests and model drift**: a `postgres:17` service container, the model check above, and the PostgreSQL tests with `ARENA_TEST_POSTGRES` set.
+
+Two other workflows run on `main`, not on pull requests: [`publish-site.yml`](.github/workflows/publish-site.yml) builds and deploys the public site (see [Public results site](#public-results-site)), and [`deploy-pages.yml`](.github/workflows/deploy-pages.yml) only checks that the one-page description (`docs/index.html`) still assembles; it deploys nothing.
 
 The live Copilot check is a script for the owner, not a CI job, because every move is billed in AI credits: [`scripts/smoke-copilot.sh`](scripts/smoke-copilot.sh) plays one game against a model and refuses to run under CI.
 
@@ -344,8 +397,10 @@ The live Copilot check is a script for the owner, not a CI job, because every mo
 
 - [docs/RATING.md](docs/RATING.md): the published rating formula and its test vectors.
 - [docs/BROADCAST.md](docs/BROADCAST.md): the 24 h channel runbook.
+- [docs/REQUESTS.md](docs/REQUESTS.md): viewer-paid games: the owner's keys, spend limits, YouTube sign-in, menu and prices.
 - [docs/BENCHMARK.md](docs/BENCHMARK.md): benchmarking a model: options, cost, your own endpoint, and reading the report.
 - [docs/EVALS.md](docs/EVALS.md): the AI evals and the live smoke test.
+- [docs/RESULTS-ARCHIVE.md](docs/RESULTS-ARCHIVE.md): the results archive: the game file, the checks and how the public site is built from it.
 - [docs/architecture/](docs/architecture/): the architecture: current state, target architecture, migration plan, decisions and the atomic task list.
 - [CLAUDE.md](CLAUDE.md): the working rules and invariants for contributors and coding agents.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.

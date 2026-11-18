@@ -4,6 +4,7 @@
 @implements IDisposable
 @inject ArenaApiClient Api
 @inject IHttpClientFactory HttpClients
+@inject NavigationManager Navigation
 
 <PageTitle>Results · LLM Chess Arena</PageTitle>
 
@@ -163,7 +164,7 @@ else
                 White advantage: @ResultsModel.Number(_board!.WhiteAdvantage, "0") rating points over @_board.Games rated games.
                 @RankingOrder.TableNote(_order)
             </p>
-            <div class="table-wrap table-compact">
+            <div class="table-wrap table-compact" tabindex="0" role="region" aria-label="Leaderboard (scrollable table)">
                 <table class="results-table">
                     <thead>
                         <tr>
@@ -224,18 +225,42 @@ else
     private string? _style;
     private CancellationTokenSource? _cts;
 
-    protected override Task OnInitializedAsync()
+    /// <summary>
+    /// The scope, the order and the style filter live in the address (<c>?tournament=&amp;order=&amp;style=</c>), so a link, a
+    /// reload and Back show the same page.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "tournament")]
+    public Guid? TournamentQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "order")]
+    public string? OrderQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "style")]
+    public string? StyleQuery { get; set; }
+
+    private (Guid?, string)? _loadedScope;
+
+    protected override async Task OnParametersSetAsync()
     {
-        _ratings = new TournamentRatingsClient(HttpClients.CreateClient(TournamentRatingsClient.ClientName));
-        return LoadAsync(_tournamentId);
+        _ratings ??= new TournamentRatingsClient(HttpClients.CreateClient(TournamentRatingsClient.ClientName));
+        _style = string.IsNullOrEmpty(StyleQuery) ? null : StyleQuery;
+
+        // The style filter hides rows and never loads; a new scope or order does.
+        var order = OrderQuery == RankingOrder.Conservative ? RankingOrder.Conservative : RankingOrder.Score;
+        if (_loadedScope != (TournamentQuery, order))
+        {
+            _loadedScope = (TournamentQuery, order);
+            _tournamentId = TournamentQuery;
+            _order = order;
+            _showFolded = false;
+            await LoadAsync(_tournamentId);
+        }
     }
 
-    private Task OnScopeChanged(ChangeEventArgs args)
+    private void OnScopeChanged(ChangeEventArgs args)
     {
         Guid? selected = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
-        _tournamentId = selected;
-        _showFolded = false;
-        return LoadAsync(selected);
+        Show(selected, _order, _style);
     }
 
     /// <summary>The style filter: "All" (an empty value) or one style. It hides rows and never refits (03 §14.5).</summary>
@@ -243,7 +268,22 @@ else
     {
         var value = args.Value?.ToString();
         _style = string.IsNullOrEmpty(value) ? null : value;
+        Show(_tournamentId, _order, _style);
     }
+
+    private void OnOrderChanged(ChangeEventArgs args) =>
+        Show(_tournamentId, args.Value?.ToString() == RankingOrder.Conservative ? RankingOrder.Conservative : RankingOrder.Score, _style);
+
+    /// <summary>Writes the choices into the address (replacing the entry, so Back leaves the page); the defaults are left out.</summary>
+    private void Show(Guid? tournamentId, string order, string? style) =>
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+            {
+                ["tournament"] = tournamentId?.ToString("D"),
+                ["order"] = order == RankingOrder.Score ? null : order,
+                ["style"] = style,
+            }),
+            replace: true);
 
     private IEnumerable<(ModelRating Row, int Rank)> VisibleRows() =>
         _report!.Ranking
@@ -261,12 +301,6 @@ else
             .Where(cell => PromptStyles.Includes(cell.Row, _style) && PromptStyles.Includes(cell.Column, _style))
             .ToList();
 
-    private Task OnOrderChanged(ChangeEventArgs args)
-    {
-        _order = args.Value?.ToString() == RankingOrder.Conservative ? RankingOrder.Conservative : RankingOrder.Score;
-        return LoadAsync(_tournamentId);
-    }
-
     /// <summary>Loads one scope. A newer scope cancels the load still running, so a late answer never overwrites the page.</summary>
     private async Task LoadAsync(Guid? tournamentId)
     {
@@ -278,28 +312,29 @@ else
         _error = null;
         try
         {
+            // Every call is independent of the others except the history, which needs the model list. All start together.
             var boardTask = _ratings.GetLeaderboardAsync(tournamentId, _order, ct);
-            var allTask = Api.GetLeaderboardAsync(ct);
+            // The chart colours follow the ranking of all rated games by score. When that is the board being shown it is the
+            // same answer, so it is not asked for twice.
+            var allTask = tournamentId is null && _order == RankingOrder.Score ? boardTask : Api.GetLeaderboardAsync(ct);
+            var matrixTask = _ratings.GetRatingMatrixAsync(tournamentId, ct);
+            var breakdownTask = Api.GetResultsBreakdownAsync(tournamentId, ct);
             var tournamentsTask = Api.GetTournamentsAsync(ct);
-            await Task.WhenAll(boardTask, allTask, tournamentsTask);
+            var historyTask = LoadHistoriesAsync(allTask, ct);
+            await Task.WhenAll(boardTask, allTask, matrixTask, breakdownTask, tournamentsTask, historyTask);
+
             _tournaments = tournamentsTask.Result;
             var board = boardTask.Result;
-            var models = allTask.Result.Models.Select(m => m.Model).ToList();
-
-            var matrix = await _ratings.GetRatingMatrixAsync(tournamentId, ct);
-            var breakdown = await Api.GetResultsBreakdownAsync(tournamentId, ct);
-            PairwiseCoefficient? leaderVsSecond = board.Models.Count > 1
-                ? await _ratings.GetPairwiseAsync(board.Models[0].Model, board.Models[1].Model, tournamentId, ct)
-                : null;
-
-            // The history is not scoped by tournament, so only the models that get a palette colour are fetched.
-            var drawn = ChartPalette.AssignSlots(models).Keys.ToList();
-            var histories = await Task.WhenAll(drawn.Select(async model =>
-                (Model: model, Points: await Api.GetRatingHistoryAsync(model, ct))));
+            var matrix = matrixTask.Result;
+            var (models, histories) = historyTask.Result;
+            // The leader against #2 is a cell of the matrix. A matrix without it (not expected) falls back to the pairwise call.
+            var leaderVsSecond = ResultsModel.LeaderVsSecondIn(board, matrix)
+                ?? (board.Models.Count > 1
+                    ? await _ratings.GetPairwiseAsync(board.Models[0].Model, board.Models[1].Model, tournamentId, ct)
+                    : null);
 
             _board = board;
-            _report = ResultsModel.Build(new ResultsInputs(board, models, matrix, breakdown, leaderVsSecond,
-                histories.ToDictionary(h => h.Model, h => h.Points, StringComparer.Ordinal)));
+            _report = ResultsModel.Build(new ResultsInputs(board, models, matrix, breakdownTask.Result, leaderVsSecond, histories));
             // A scope that has no players of the chosen style shows All again, rather than an empty table.
             if (_style is not null && !_report.Styles.Contains(_style, StringComparer.Ordinal)) _style = null;
         }
@@ -309,9 +344,23 @@ else
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = ApiFailure.Describe(ex);
         }
         _loading = false;
+    }
+
+    /// <summary>
+    /// The history is not scoped by tournament, so only the models that get a palette colour are fetched, one request each,
+    /// together. Returns the model list the colours follow, with the histories.
+    /// </summary>
+    private async Task<(IReadOnlyList<string> Models, IReadOnlyDictionary<string, IReadOnlyList<RatingHistoryPointDto>> Histories)> LoadHistoriesAsync(
+        Task<LeaderboardDto> allTask, CancellationToken ct)
+    {
+        var models = (await allTask).Models.Select(m => m.Model).ToList();
+        var drawn = ChartPalette.AssignSlots(models).Keys.ToList();
+        var histories = await Task.WhenAll(drawn.Select(async model =>
+            (Model: model, Points: await Api.GetRatingHistoryAsync(model, ct))));
+        return (models, histories.ToDictionary(h => h.Model, h => h.Points, StringComparer.Ordinal));
     }
 
     private static string Percent(double fraction) => ResultsModel.Number(100 * fraction, "0") + "%";

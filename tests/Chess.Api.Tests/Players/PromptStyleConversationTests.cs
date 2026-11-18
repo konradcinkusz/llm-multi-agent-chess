@@ -43,8 +43,36 @@ internal sealed class RecordingGateway : ILlmGateway
     }
 }
 
+/// <summary>A gateway that takes its time to open a conversation, as a Copilot session start does.</summary>
+internal sealed class SlowOpeningGateway(TimeSpan opening, string reply) : ILlmGateway
+{
+    public LlmGatewayStatus Status { get; } = new(LlmGatewayState.Fake, "Slow opening gateway");
+
+    public Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<LlmModelInfo>>([]);
+
+    public async Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct)
+    {
+        await Task.Delay(opening, ct);
+        return new ScriptedConversation(ScriptedConversation.Reply(reply));
+    }
+}
+
 public class PromptStyleConversationTests
 {
+    [Fact]
+    public async Task ThePerMoveLatencyIncludesOpeningTheConversation()
+    {
+        var gateway = new SlowOpeningGateway(TimeSpan.FromMilliseconds(150), "e4");
+        var player = await Factory(gateway).CreateAsync(new PlayerDescriptor("llm", "fake-a~board"), Guid.NewGuid(), Side.White, default);
+
+        var move = await player.ChooseMoveAsync(PlayerTestData.StartRequest(), default);
+
+        // The scripted reply itself is instant, so what the attempt measured is the session start.
+        Assert.False(move.Forfeit);
+        Assert.True(move.Attempts[0].Latency >= TimeSpan.FromMilliseconds(140), $"latency was {move.Attempts[0].Latency}");
+    }
+
     private static ChessPlayerFactory Factory(ILlmGateway gateway) =>
         new(gateway, Options.Create(new PlayerOptions()));
 

@@ -1,10 +1,21 @@
 @using Chess.Web.Api
 
-<div class="move-table-scroll @(NewestFirst ? "move-table-fixed" : null)">
+@if (Paged && PageCount > 1)
+{
+    @* A long game is listed a page of rows at a time, and the page follows the selected move, so the move on the board is
+       always in the list on screen (a scroll box cannot follow it without a script). *@
+    <nav class="move-pages" aria-label="Pages of moves" data-testid="move-pages">
+        <button type="button" class="btn btn-sm" data-testid="moves-prev" disabled="@(CurrentPage <= 0)" @onclick="() => ShowPage(CurrentPage - 1)">Earlier moves</button>
+        <span class="move-pages-range muted" data-testid="moves-range" aria-live="polite">Moves @FirstMove–@LastMove of @TotalMoveNumbers</span>
+        <button type="button" class="btn btn-sm" data-testid="moves-next" disabled="@(CurrentPage >= PageCount - 1)" @onclick="() => ShowPage(CurrentPage + 1)">Later moves</button>
+    </nav>
+}
+
+<div class="move-table-scroll @(NewestFirst ? "move-table-fixed" : null) @(Paged ? "move-table-paged" : null)">
     <ol class="move-table" data-testid="move-list" aria-label="Moves">
-        @foreach (var row in NewestFirst ? Rows.Reverse() : Rows)
+        @foreach (var row in VisibleRows)
         {
-            <li class="move-row">
+            <li @key="row.Number" class="move-row">
                 <span class="move-number" aria-hidden="true">@row.Number.</span>
                 @foreach (var cell in new[] { row.White, row.Black })
                 {
@@ -16,7 +27,7 @@
                     else if (cell.Move is null)
                     {
                         <span class="move-cell move-pending" data-testid="move-pending" data-color="@cell.Color"
-                              aria-label="@cell.Color is thinking">…</span>
+                              role="img" aria-label="@cell.Color is thinking">…</span>
                     }
                     else
                     {
@@ -72,23 +83,66 @@
     [Parameter]
     public bool NewestFirst { get; set; }
 
+    /// <summary>
+    /// Rows to a page, or 0 to list every row. The replay pages a long game; the live game keeps its fixed-height box with the
+    /// newest move on top.
+    /// </summary>
+    [Parameter]
+    public int PageRows { get; set; }
+
+    private bool Paged => PageRows > 0 && !NewestFirst;
+
+    private int? _manualPage;
+    private int? _selectionSeen;
+
+    private IReadOnlyList<MoveRow> _rows = [];
+
+    protected override void OnParametersSet()
+    {
+        _rows = BuildRows();
+
+        // The page follows the selected move; a page the viewer turned by hand stays until the selection moves again.
+        if (_selectionSeen != SelectedPly)
+        {
+            _selectionSeen = SelectedPly;
+            _manualPage = null;
+        }
+    }
+
+    private int PageCount => Paged ? Math.Max(1, (Rows.Count + PageRows - 1) / PageRows) : 1;
+
+    private int CurrentPage => Math.Clamp(_manualPage ?? PageOf(SelectedPly), 0, PageCount - 1);
+
+    private int PageOf(int? ply) => ply is { } selected ? (selected - 1) / 2 / PageRows : 0;
+
+    private void ShowPage(int page) => _manualPage = Math.Clamp(page, 0, PageCount - 1);
+
+    private int FirstMove => CurrentPage * PageRows + 1;
+
+    private int LastMove => Math.Min(TotalMoveNumbers, (CurrentPage + 1) * PageRows);
+
+    private int TotalMoveNumbers => Rows.Count;
+
+    private IEnumerable<MoveRow> VisibleRows =>
+        NewestFirst ? Rows.Reverse() : Paged ? Rows.Skip(CurrentPage * PageRows).Take(PageRows) : Rows;
+
     private int LatestPly => Moves.Count == 0 ? 0 : Moves.Max(move => move.Ply);
 
     /// <summary>Two plies to a row: a numbered move as it is written, "1. e4 e5".</summary>
-    private IReadOnlyList<MoveRow> Rows
-    {
-        get
-        {
-            var played = Moves.ToDictionary(move => move.Ply);
-            var last = Math.Max(LatestPly, PendingPly ?? 0);
-            var rows = new List<MoveRow>();
-            for (var number = 1; (number - 1) * 2 < last; number++)
-            {
-                rows.Add(new MoveRow(number, CellAt(played, 2 * number - 1), CellAt(played, 2 * number)));
-            }
+    private IReadOnlyList<MoveRow> Rows => _rows;
 
-            return rows;
+
+    private IReadOnlyList<MoveRow> BuildRows()
+    {
+        var played = Moves.ToDictionary(move => move.Ply);
+        var last = Math.Max(LatestPly, PendingPly ?? 0);
+        var rows = new List<MoveRow>();
+        for (var number = 1; (number - 1) * 2 < last; number++)
+        {
+            rows.Add(new MoveRow(number, CellAt(played, 2 * number - 1), CellAt(played, 2 * number)));
         }
+
+        return rows;
     }
 
     private MoveCell? CellAt(Dictionary<int, MoveDto> played, int ply)

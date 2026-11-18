@@ -63,13 +63,16 @@ public sealed class LlmChessPlayer : IChessPlayer
             return await PlayMoveAsync(_gameConversation, request, ct);
         }
 
+        // Opening the conversation is part of the move: the session start shows in the latency (ADR-015).
+        var opening = Stopwatch.StartNew();
         await using var moveConversation = await _openMoveConversation!(ct);
-        return await PlayMoveAsync(moveConversation, request, ct);
+        return await PlayMoveAsync(moveConversation, request, ct, opening.Elapsed);
     }
 
     public ValueTask DisposeAsync() => _gameConversation?.DisposeAsync() ?? ValueTask.CompletedTask;
 
-    private async Task<PlayerMove> PlayMoveAsync(ILlmConversation conversation, MoveRequest request, CancellationToken ct)
+    private async Task<PlayerMove> PlayMoveAsync(ILlmConversation conversation, MoveRequest request, CancellationToken ct,
+        TimeSpan setup = default)
     {
         var board = new ChessBoard();
         board.LoadFen(request.Fen);
@@ -79,6 +82,11 @@ public sealed class LlmChessPlayer : IChessPlayer
         for (var number = 1; number <= _maxAttempts; number++)
         {
             var attempt = await AskOnceAsync(conversation, prompt, number, board, ct);
+            if (number == 1 && setup > TimeSpan.Zero)
+            {
+                attempt = attempt with { Latency = attempt.Latency + setup };
+            }
+
             attempts.Add(attempt);
             if (attempt.Legal)
             {

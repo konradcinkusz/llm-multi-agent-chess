@@ -35,6 +35,8 @@ public static class Extensions
                 o.AttemptTimeout.Timeout = TimeSpan.FromSeconds(60);
                 o.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(120);
                 o.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(150);
+                // A retried POST can create the same tournament, benchmark or plan several times: only safe methods retry.
+                o.Retry.DisableForUnsafeHttpMethods();
             });
             http.AddServiceDiscovery();
         });

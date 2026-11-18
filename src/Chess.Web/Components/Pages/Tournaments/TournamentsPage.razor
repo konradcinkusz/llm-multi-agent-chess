@@ -28,12 +28,12 @@
             <div class="field-row">
                 <label class="field">
                     Name
-                    <input id="tournament-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" />
+                    <input id="tournament-name" type="text" maxlength="120" @bind="_name" @bind:event="oninput" @bind:after="Touch" />
                 </label>
 
                 <label class="field">
                     Games per pair
-                    <select id="games-per-pair" @bind="_gamesPerPair">
+                    <select id="games-per-pair" @bind="_gamesPerPair" @bind:after="Touch">
                         @foreach (var games in GamesPerPairChoices)
                         {
                             <option value="@games">@games</option>
@@ -43,12 +43,13 @@
 
                 <label class="field">
                     Max concurrency
-                    <select id="max-concurrency" @bind="_maxConcurrency">
+                    <select id="max-concurrency" @bind="_maxConcurrency" @bind:after="Touch">
                         @for (var limit = 1; limit <= TournamentFormRules.MaxConcurrencyLimit; limit++)
                         {
                             <option value="@limit">@limit</option>
                         }
                     </select>
+                    <span class="field-hint">The server allows at most <code>Arena:MaxConcurrentGames</code> (2 by default) and says so if this is more.</span>
                 </label>
             </div>
 
@@ -102,7 +103,7 @@
                         so the premium figure is an upper bound, not a bill. AI credits and USD use the API's rate and the
                         tokens of past moves, as the saved tournament will.
                     </p>
-                    <div class="table-wrap">
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Estimated cost per model">
                         <table class="table-compact">
                             <thead>
                                 <tr><th>Model</th><th>Price</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
@@ -113,10 +114,10 @@
                                     var cost = CostOf(estimate.ModelId, gamesPerModel);
                                     <tr>
                                         <td>@PromptStyleChoices.Label(estimate.ModelId, _models, _styles)</td>
-                                        <td>@TournamentFormat.Price(Find(estimate.ModelId)?.Pricing)</td>
-                                        <td class="num">@TournamentFormat.Requests(estimate.Requests)</td>
-                                        <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
-                                        <td class="num">@TournamentFormat.Usd(cost?.Usd)</td>
+                                        <td>@TournamentFormat.Price(estimate.ModelId, Find(estimate.ModelId)?.Pricing)</td>
+                                        <td class="num">@TournamentFormat.Requests(estimate.ModelId, estimate.Requests)</td>
+                                        <td class="num">@TournamentFormat.Credits(estimate.ModelId, cost?.AiCredits)</td>
+                                        <td class="num">@TournamentFormat.Usd(estimate.ModelId, cost?.Usd)</td>
                                         <td>@TournamentFormat.Basis(cost?.Basis, cost?.SampleMoves)</td>
                                     </tr>
                                 }
@@ -137,9 +138,18 @@
                 </div>
             }
 
-            @foreach (var problem in Problems)
+            @* What is missing is said after the first interaction, not before the user has touched anything. Start stays
+               disabled until the form is valid either way. *@
+            @if (!_touched)
             {
-                <p class="tournament-problem error-text">@problem</p>
+                <p class="field-hint tournament-hint" data-testid="form-hint">Start is available once the form is complete.</p>
+            }
+            else
+            {
+                @foreach (var problem in Problems)
+                {
+                    <p class="tournament-problem error-text">@problem</p>
+                }
             }
 
             <div class="cluster">
@@ -165,8 +175,12 @@
                         @foreach (var estimate in created.EstimatedPremiumRequests)
                         {
                             <li>
-                                @estimate.ModelId: @TournamentFormat.Requests(estimate.EstimatedPremiumRequests)
-                                @if (estimate.EstimatedAiCredits is { } credits)
+                                @estimate.ModelId: @TournamentFormat.Requests(estimate.ModelId, estimate.EstimatedPremiumRequests)
+                                @if (TournamentFormat.IsFree(estimate.ModelId))
+                                {
+                                    @* The random player is free in every column: one word says so. *@
+                                }
+                                else if (estimate.EstimatedAiCredits is { } credits)
                                 {
                                     <span>· @TournamentFormat.Credits(credits) · @TournamentFormat.Usd(estimate.EstimatedUsd) (@TournamentFormat.Basis(estimate.TokenBasis, estimate.SampleMoves))</span>
                                 }
@@ -193,7 +207,10 @@
 
     @if (_tournaments is null)
     {
-        <p>Loading tournaments…</p>
+        @if (_listError is null)
+        {
+            <p>Loading tournaments…</p>
+        }
     }
     else if (_tournaments.Count == 0)
     {
@@ -201,7 +218,7 @@
     }
     else
     {
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Tournament list (scrollable table)">
             <table class="tournament-table">
                 <thead>
                     <tr>
@@ -252,15 +269,24 @@
     private readonly HashSet<string> _selectedStyles = [PlayerId.DefaultStyle];
 
     private IReadOnlyList<TournamentDto>? _tournaments;
+    /// <summary>How often the page asks again. Overridden by tests only.</summary>
+    [Parameter]
+    public TimeSpan PollInterval { get; set; } = TournamentFormat.RefreshInterval;
+
     private string? _listError;
 
     private string _name = "";
     private readonly HashSet<string> _selected = [];
     private int _gamesPerPair = 2;
-    private int _maxConcurrency = TournamentFormRules.MaxConcurrencyLimit;
+    private int _maxConcurrency = TournamentFormRules.DefaultConcurrency;
     private bool _submitting;
     private string? _createError;
     private TournamentCreatedDto? _created;
+
+    /// <summary>False until the user has changed something: the problems of the form are not shown on a form nobody has touched.</summary>
+    private bool _touched;
+
+    private void Touch() => _touched = true;
 
     /// <summary>The selected models, in the order the form lists them.</summary>
     private IReadOnlyList<string> SelectedModels =>
@@ -283,9 +309,9 @@
             _models = await Api.GetModelsAsync(_cts.Token);
             _choices = _models.Where(model => model.Enabled).ToArray();
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _modelsError = ex.Message;
+            _modelsError = ApiFailure.Describe(ex);
         }
 
         var styles = await PromptStyleChoices.LoadAsync(Api, _cts.Token);
@@ -300,21 +326,34 @@
     private async Task PollAsync()
     {
         var ct = _cts.Token;
-        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        using var timer = new PeriodicTimer(PollInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                // The fields change on a timer thread, outside any UI event: re-render explicitly.
-                await InvokeAsync(async () =>
+                try
                 {
-                    await LoadTournamentsAsync(ct);
-                    StateHasChanged();
-                });
+                    // The fields change on a timer thread, outside any UI event: re-render explicitly.
+                    await InvokeAsync(async () =>
+                    {
+                        await LoadTournamentsAsync(ct);
+                        StateHasChanged();
+                    });
+                }
+                catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
+                {
+                    // A timeout is a TaskCanceledException the page's token did not cause: show it and keep polling.
+                    await InvokeAsync(() =>
+                    {
+                        _listError = ApiFailure.Describe(ex);
+                        StateHasChanged();
+                    });
+                }
             }
         }
         catch (OperationCanceledException)
         {
+            // The page was left: the loop ends.
         }
     }
 
@@ -325,9 +364,10 @@
             _tournaments = await Api.GetTournamentsAsync(ct);
             _listError = null;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
         {
-            _listError = ex.Message;
+            // The list stays as it was; the message says why it is not current.
+            _listError = ApiFailure.Describe(ex);
         }
     }
 
@@ -335,6 +375,7 @@
 
     private void Toggle(string modelId, object? selected)
     {
+        _touched = true;
         if (selected is true)
         {
             _selected.Add(modelId);
@@ -347,6 +388,7 @@
 
     private void ToggleStyle(string styleId, object? selected)
     {
+        _touched = true;
         if (selected is true)
         {
             _selectedStyles.Add(styleId);
@@ -386,7 +428,7 @@
         {
             _costs = await Api.GetCostInputsAsync(_cts.Token);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
             _costs = null;
         }
@@ -402,12 +444,13 @@
             var request = new CreateTournamentRequest(_name.Trim(), Participants, _gamesPerPair, _maxConcurrency);
             _created = await Api.CreateTournamentAsync(request, _cts.Token);
             _name = "";
+            _touched = false;
             _selected.Clear();
             await LoadTournamentsAsync(_cts.Token);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _createError = $"The tournament was not created: {ex.Message}";
+            _createError = $"The tournament was not created: {ApiFailure.Describe(ex)}";
         }
         finally
         {

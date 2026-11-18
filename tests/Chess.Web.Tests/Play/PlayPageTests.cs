@@ -69,6 +69,25 @@ public class PlayPageTests
     }
 
     [Fact]
+    public async Task StartingWritesTheGameIntoTheAddressAndPointsTheFragmentAtTheBoard()
+    {
+        var server = new PlayServer { Status = PlayFixtures.NotReady };
+        using var ctx = new BunitContext();
+        Wire(ctx, server);
+        var cut = ctx.Render<PlayPage>();
+        var navigation = ctx.Services.GetRequiredService<NavigationManager>();
+        StartWhenReady(cut);
+
+        await PostedGame(server);
+
+        // ?game= is what the page reads on opening, so a reload or a shared link follows the same game. The fragment makes
+        // the router scroll to the board, which on a phone sits below the form.
+        cut.WaitForAssertion(() => Assert.EndsWith($"?game={PlayServer.GameId}#board", navigation.Uri, StringComparison.Ordinal));
+        Assert.Equal("board", cut.Find("section.play-board").Id);
+        server.EndStream();
+    }
+
+    [Fact]
     public async Task StartingSendsTheChosenPlayersAndRatedFlagAndLocksTheSetup()
     {
         var server = new PlayServer();

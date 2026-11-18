@@ -107,6 +107,44 @@ public sealed class ArenaFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Plans a broadcast day that begins an hour from now and starts it through the API, so the broadcast runner is active
+    /// (it takes paid requests only while a schedule is running or paused) but plays none of its own slots yet. Test setup
+    /// only. Returns the schedule id for <see cref="StopBroadcastAsync"/>.
+    /// </summary>
+    public async Task<Guid> StartBroadcastAsync()
+    {
+        using var client = _app!.CreateHttpClient("api");
+        using var planned = await client.PostAsJsonAsync(
+            "/api/broadcast/plan",
+            new
+            {
+                name = "E2E broadcast",
+                models = new[] { Players.FakeA, Players.FakeB, Players.Random },
+                startsAt = DateTimeOffset.UtcNow.AddHours(1),
+                durationHours = 1,
+                pacing = new { moveDelayMs = 200, gameGapSeconds = 1 },
+                seed = 7,
+                assumedPlies = 30,
+                assumedMoveLatencyMs = 100,
+            },
+            CancellationToken.None);
+        planned.EnsureSuccessStatusCode();
+
+        var id = (await planned.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("schedule").GetProperty("id").GetGuid();
+        using var started = await client.PostAsync($"/api/broadcast/schedules/{id}/start", content: null, CancellationToken.None);
+        started.EnsureSuccessStatusCode();
+        return id;
+    }
+
+    /// <summary>Stops a schedule started by <see cref="StartBroadcastAsync"/>, so no later journey meets a running broadcast.</summary>
+    public async Task StopBroadcastAsync(Guid scheduleId)
+    {
+        using var client = _app!.CreateHttpClient("api");
+        using var stopped = await client.PostAsync($"/api/broadcast/schedules/{scheduleId}/stop", content: null, CancellationToken.None);
+        stopped.EnsureSuccessStatusCode();
+    }
+
     private static object Player(string modelId) =>
         modelId == Players.Random ? new { kind = "random", modelId } : new { kind = "llm", modelId };
 

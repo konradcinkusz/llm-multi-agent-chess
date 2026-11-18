@@ -38,6 +38,10 @@ public class ResultsPageTests
           {"model":"beta","games":30,"wins":8,"draws":2,"losses":20,"forfeitLosses":0,"moves":400,"firstAttemptLegalRate":0.9,"avgLatencyMs":800,"avgInputTokens":null,"avgOutputTokens":null,"averageCentipawnLoss":null}]
         """;
 
+    // The page reads the leader against #2 from the matrix, so a test that sets that pair sets the alpha-beta cell.
+    private static string MatrixWithLeaderCell(string pair) =>
+        $$"""{"models":["alpha","beta"],"cells":[{{pair}},{"a":"beta","b":"alpha","expectedScore":0.4,"qualityShare":0.5,"rqc":0.4,"rqcLow":0.32,"rqcHigh":0.48,"eloEquivalent":-70,"headToHeadGames":5,"headToHeadScore":0.4}]}""";
+
     private static string Pair(double low, double high) =>
         $$"""{"a":"alpha","b":"beta","expectedScore":0.6,"qualityShare":0.5,"rqc":0.6,"rqcLow":{{low}},"rqcHigh":{{high}},"eloEquivalent":70,"headToHeadGames":5,"headToHeadScore":0.6}""";
 
@@ -151,6 +155,64 @@ public class ResultsPageTests
     }
 
     [Fact]
+    public void ALoadAsksForEachNumberOnceAndTheLeaderAgainstSecondComesFromTheMatrix()
+    {
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.52, 0.68));
+        var cut = Render(ctx, handler);
+
+        cut.WaitForAssertion(() => Assert.Contains("Significantly ahead of #2 (beta)", cut.Find(".verdict").TextContent));
+
+        var targets = handler.Requests.Select(r => r.Target).ToList();
+        Assert.Equal(1, targets.Count(t => t == "/api/ratings"));
+        Assert.Equal(1, targets.Count(t => t == "/api/ratings/matrix"));
+        Assert.Equal(1, targets.Count(t => t == "/api/results/breakdown"));
+        Assert.DoesNotContain(targets, t => t.StartsWith("/api/ratings/pairwise", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheVerdictReadsTheMatrixCellNotAPairwiseRequest()
+    {
+        // The matrix cell is significant and the (unused) pairwise stub is not: the verdict must follow the cell.
+        using var ctx = new BunitContext();
+        var cut = Render(ctx, Respond(board: TwoModels, pair: Pair(0.45, 0.70), matrix: MatrixWithLeaderCell(Pair(0.55, 0.82))));
+
+        cut.WaitForAssertion(() => Assert.Contains("Significantly ahead of #2 (beta)", cut.Find(".verdict").TextContent));
+    }
+
+    [Fact]
+    public void AScopedLoadAsksForTheUnscopedBoardToo()
+    {
+        var tournaments = $$"""[{"id":"{{TournamentId}}","name":"Spring cup","models":["alpha","beta"],"gamesPerPair":5,"status":"finished","gamesTotal":10,"gamesFinished":10,"createdAt":"2026-10-01T10:00:00Z","finishedAt":null}]""";
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.52, 0.68), tournaments: tournaments);
+        var cut = Render(ctx, handler);
+        cut.WaitForAssertion(() => Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent));
+        handler.Requests.Clear();
+
+        cut.Find("select").Change(TournamentId);
+
+        cut.WaitForAssertion(() =>
+        {
+            var targets = handler.Requests.Select(r => r.Target).ToList();
+            Assert.Equal(1, targets.Count(t => t == $"/api/ratings?tournamentId={TournamentId}"));
+            Assert.Equal(1, targets.Count(t => t == "/api/ratings"));
+            Assert.DoesNotContain(targets, t => t.StartsWith("/api/ratings/pairwise", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void WithoutALeaderCellInTheMatrixThePairwiseCallIsTheFallback()
+    {
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.55, 0.82), matrix: """{"models":["alpha","beta"],"cells":[]}""");
+        var cut = Render(ctx, handler);
+
+        cut.WaitForAssertion(() => Assert.Contains("Significantly ahead of #2 (beta)", cut.Find(".verdict").TextContent));
+        Assert.Contains(handler.Requests.Select(r => r.Target), t => t.StartsWith("/api/ratings/pairwise?a=alpha&b=beta", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void WithNoRatedGamesItExplainsAndLinksToTournaments()
     {
         using var ctx = new BunitContext();
@@ -198,6 +260,44 @@ public class ResultsPageTests
             Assert.Contains("Ranked by the lower bound of the arena score", cut.Find(".results-note").TextContent);
         });
         Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent);
+    }
+
+    [Fact]
+    public void TheOrderAndTheScopeAreWrittenIntoTheAddressAndReadBackFromIt()
+    {
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.52, 0.68), tournaments: $$"""[{"id":"{{TournamentId}}","name":"Cup","models":["alpha","beta"],"gamesPerPair":2,"status":"finished","gamesTotal":2,"gamesFinished":2,"createdAt":"2026-10-24T10:00:00Z","finishedAt":null}]""");
+        var cut = Render(ctx, handler);
+        var navigation = ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        cut.WaitForAssertion(() => Assert.Contains("Best overall: alpha", cut.Find(".headline").TextContent));
+
+        cut.Find("#results-order").Change("conservative");
+        cut.WaitForAssertion(() => Assert.Contains("(lower bound of the arena score)", cut.Find(".headline").TextContent));
+        Assert.Contains("order=conservative", navigation.Uri, StringComparison.Ordinal);
+
+        cut.Find("#results-scope").Change(TournamentId);
+        cut.WaitForAssertion(() => Assert.Contains($"tournamentId={TournamentId}", string.Join(' ', handler.Requests.Select(r => r.Target))));
+        Assert.Contains($"tournament={TournamentId}", navigation.Uri, StringComparison.Ordinal);
+        Assert.Contains("order=conservative", navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAddressWithAnOrderAndAScopeOpensOnThem()
+    {
+        using var ctx = new BunitContext();
+        var handler = Respond(board: TwoModels, pair: Pair(0.52, 0.68), tournaments: $$"""[{"id":"{{TournamentId}}","name":"Cup","models":["alpha","beta"],"gamesPerPair":2,"status":"finished","gamesTotal":2,"gamesFinished":2,"createdAt":"2026-10-24T10:00:00Z","finishedAt":null}]""");
+        ctx.Services.AddSingleton(new ArenaApiClient(Canned.Client(handler)));
+        ctx.Services.AddSingleton<IHttpClientFactory>(new FixedClientFactory(Canned.Client(handler)));
+        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>()
+            .NavigateTo($"/results?tournament={TournamentId}&order=conservative");
+
+        var cut = ctx.Render<ResultsPage>();
+
+        cut.WaitForAssertion(() => Assert.Contains("(lower bound of the arena score)", cut.Find(".headline").TextContent));
+        Assert.Contains(handler.Requests, r => r.Target.StartsWith("/api/ratings?", StringComparison.Ordinal)
+            && r.Target.Contains("order=conservative", StringComparison.Ordinal) && r.Target.Contains(TournamentId, StringComparison.Ordinal));
+        Assert.Equal("conservative", cut.Find("#results-order").GetAttribute("value") ?? cut.Find("#results-order option[selected]").GetAttribute("value"));
+        Assert.Equal("Cup", cut.Find("#results-scope option[selected]").TextContent);
     }
 
     [Fact]
@@ -343,7 +443,7 @@ public class ResultsPageTests
         {
             ["/api/tournaments"] = tournaments,
             ["/api/ratings"] = board,
-            ["/api/ratings/matrix"] = matrix ?? Matrix,
+            ["/api/ratings/matrix"] = matrix ?? MatrixWithLeaderCell(pair),
             ["/api/ratings/pairwise"] = pair,
             ["/api/ratings/history"] = "[]",
             ["/api/results/breakdown"] = breakdown ?? Breakdown,

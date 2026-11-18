@@ -13,7 +13,12 @@ internal sealed class FakeHandler(Func<RecordedRequest, HttpResponseMessage> res
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
         var recorded = new RecordedRequest(request.Method.Method, request.RequestUri!.PathAndQuery, body,
             string.Join(",", request.Headers.Accept));
-        Requests.Add(recorded);
+        // A page may send several requests at once; a plain List is not safe to add to from two threads.
+        lock (Requests)
+        {
+            Requests.Add(recorded);
+        }
+
         return respond(recorded);
     }
 }

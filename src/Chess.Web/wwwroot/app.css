@@ -112,13 +112,16 @@ body {
     font-size: var(--text-lg);
 }
 
+/* Links are underlined: a link inside a sentence must not rest on its colour alone (WCAG 1.4.1). The nav pills, buttons
+   and chips switch the underline off again below, because their shape marks them as controls. */
 :where(.app-shell) a {
     color: var(--accent);
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
 
 :where(.app-shell) a:hover {
-    text-decoration: underline;
+    text-decoration-thickness: 2px;
 }
 
 :where(.app-shell) code {
@@ -296,11 +299,13 @@ body {
     line-height: 1;
 }
 
-/* A horizontal strip on a phone, so the nav never wraps onto several lines. */
+/* A horizontal strip on a phone, so the nav never wraps onto several lines. The pills are tight enough for the eight main
+   items and "More" to fit the header at 1366 px; narrower than that the strip scrolls. */
 .nav {
     display: flex;
     flex: 1 1 100%;
-    gap: var(--space-1);
+    align-items: center;
+    gap: 2px;
     min-width: 0;
     overflow-x: auto;
     white-space: nowrap;
@@ -312,27 +317,78 @@ body {
     }
 }
 
-.nav a {
+.nav a,
+.nav-more > summary {
     display: inline-flex;
     align-items: center;
     flex: none;
     min-height: 32px;
-    padding: 0 var(--space-3);
+    padding: 0 10px;
     border-radius: 999px;
     color: var(--text-2);
+    font-size: var(--text-sm);
     font-weight: 500;
+    text-decoration: none;
 }
 
-.nav a:hover {
+.nav a:hover,
+.nav-more > summary:hover {
     background: var(--surface-2);
     color: var(--text);
     text-decoration: none;
 }
 
-.nav a.active {
+.nav a.active,
+.nav-more:has(a.active) > summary {
     background: var(--accent-soft);
     color: var(--accent);
     font-weight: 600;
+}
+
+/* "More" is a details disclosure, so it needs no script. Its panel is fixed to the viewport, so the horizontal scroll of
+   the strip cannot clip it; with top left unset it opens right under the summary. */
+.nav-more {
+    flex: none;
+}
+
+.nav-more > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.nav-more > summary::-webkit-details-marker {
+    display: none;
+}
+
+.nav-more > summary::after {
+    content: "\25BE";
+    content: "\25BE" / "";
+    margin-left: var(--space-1);
+}
+
+.nav-more[open] > summary {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.nav-more-panel {
+    position: fixed;
+    right: max(var(--gutter), calc((100vw - var(--content-max)) / 2));
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+    margin-top: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-1);
+}
+
+.nav-more-panel a {
+    border-radius: var(--radius-sm);
 }
 
 .app-main {
@@ -476,6 +532,11 @@ body {
     text-decoration: none;
 }
 
+a.btn,
+a.chip {
+    text-decoration: none;
+}
+
 .btn-primary {
     border-color: var(--accent);
     background: var(--accent);
@@ -557,7 +618,10 @@ body {
     background: var(--accent-soft);
 }
 
+/* Every .table-wrap is a keyboard-focusable region (tabindex 0, role region, a name), because it can scroll. It is also the
+   containing block of a visually hidden header label, so the label stays inside the scroll box. */
 .table-wrap {
+    position: relative;
     overflow-x: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -681,6 +745,23 @@ body {
     color: var(--text-3);
 }
 
+/* Read by screen readers, not seen. The one definition for every page. It is pinned to the top left, so it never widens
+   the page or the scroll box it sits in. */
+.visually-hidden {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .error-text,
 .status-error {
     color: var(--danger);
@@ -743,4 +824,199 @@ body {
     .status-detail {
         display: inline;
     }
+}
+
+/* The framework's unhandled-error bar (shown by blazor.web.js when the circuit ends) in the style contract's tokens. */
+#blazor-error-ui {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1000;
+    display: none;
+    box-sizing: border-box;
+    padding: var(--space-3) var(--gutter);
+    border-top: 1px solid var(--danger);
+    background: var(--danger-soft);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+}
+
+#blazor-error-ui .reload {
+    margin-left: var(--space-2);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+#blazor-error-ui .dismiss {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--gutter);
+    cursor: pointer;
+}
+
+/* The /broadcast stage is an OBS source: the framework's reconnect dialog must never cover the picture. The page shows
+   its own "Reconnecting to the arena" line. The dialog is appended to the body, outside the stage, hence :has(). */
+body:has(.broadcast-layout) #components-reconnect-modal {
+    display: none !important;
+}
+
+/* ==========================================================================
+   Public static site (03 §11). Owned by the site export; keep it as one block at the end.
+   The pages under Components/Site/ do not carry the scope attribute of the interactive pages, so the rules those pages
+   keep in their scoped CSS (Results, Head-to-head, Tournament, Games) never reached the static pages. The rules the
+   static pages use are repeated here, unscoped. The interactive pages keep their own copies.
+   ========================================================================== */
+
+/* The screen-reader-only caption (.visually-hidden) is defined once, earlier in this file. */
+
+.back {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+}
+
+/* Results: the Big Picture hero and its sections. */
+.results-card .chart-frame {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.headline {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 var(--space-4);
+}
+
+.hero-label {
+    color: var(--text-3);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.hero-leader {
+    font-size: var(--text-3xl);
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-2);
+    font-size: var(--text-base);
+}
+
+.verdict {
+    margin: 0 0 var(--space-5);
+    color: var(--text);
+}
+
+.results-note {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
+}
+
+.results-folded {
+    margin: 0;
+    font-size: var(--text-sm);
+}
+
+.move-quality {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+    gap: var(--space-4);
+}
+
+.results-table {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Head-to-head pair page. The table is the containing block of its visually hidden header, so that label stays inside the scroll box. */
+.h2h-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+    margin: var(--space-1) 0 var(--space-3);
+    font-size: var(--text-lg);
+    color: var(--text-2);
+}
+
+.h2h-rqc {
+    color: var(--text);
+    font-size: var(--text-3xl);
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.h2h-figures {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-6);
+    margin: 0;
+}
+
+.h2h-figures dt {
+    color: var(--text-2);
+    font-weight: 600;
+}
+
+.h2h-figures dd {
+    margin: 0;
+}
+
+.h2h-games {
+    position: relative;
+    font-size: var(--text-sm);
+}
+
+/* Tournament page facts. */
+.tournament-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+}
+
+.tournament-facts dt {
+    color: var(--text-2);
+    font-weight: 500;
+}
+
+.tournament-facts dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Games list and its pager. */
+.games-table {
+    width: 100%;
+}
+
+.games-pager {
+    margin-top: var(--space-4);
+}
+
+.games-pager span {
+    color: var(--text-2);
+    font-size: var(--text-sm);
+}
+
+/* A link inside a line of text is told apart by more than its colour (WCAG 1.4.1, axe link-in-text-block). */
+.static-site .app-main p a:not(.btn),
+.static-site .app-main li a:not(.btn):not(.move-cell),
+.static-site .app-main dd a,
+.static-site .site-footer p a,
+.static-site .site-strip a {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
 }

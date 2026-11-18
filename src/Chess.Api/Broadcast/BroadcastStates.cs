@@ -4,6 +4,8 @@ namespace Chess.Api.Broadcast;
 public static class ScheduleStatus
 {
     public const string Draft = "draft";
+
+    /// <summary>Never set by the app today (a started day goes straight to Running); kept because persisted values and the contract name it.</summary>
     public const string Scheduled = "scheduled";
     public const string Running = "running";
     public const string Paused = "paused";

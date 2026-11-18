@@ -3,7 +3,8 @@
 @using Chess.Web.Components.Pages.Games
 @using Chess.Web.Site
 
-<SiteLayout Title="Tournaments" Frame="Frame" Active="tournaments">
+<SiteLayout Title="Tournaments" Frame="Frame" Active="tournaments" Path="@SitePaths.Tournaments"
+            Description="The tournaments the arena has played, with their status and progress.">
     <div class="page-header">
         <h1>Tournaments</h1>
         <p class="page-lede">Every tournament, newest first, with its own leaderboard and games.</p>
@@ -15,7 +16,7 @@
     }
     else
     {
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Tournaments (scrollable table)">
             <table class="table-compact" data-section="tournaments">
                 <thead>
                     <tr>

@@ -62,7 +62,9 @@ public static class BenchmarkEstimate
     {
         var moves = games * CostPreview.MovesPerSidePerGame;
         var cost = costs is null ? null : CostPreview.For(model, costs, moves);
-        var premium = model.PremiumMultiplier is { } multiplier ? games * PremiumEstimate.RequestsPerGame * multiplier : (double?)null;
+        // The random player calls no model, so it costs nothing whatever multiplier the catalogue lists for it.
+        double? multiplierOf = TournamentFormat.IsFree(model.Id) ? 0 : model.PremiumMultiplier;
+        var premium = multiplierOf is { } multiplier ? games * PremiumEstimate.RequestsPerGame * multiplier : (double?)null;
         return new Row(model.Id, role, games, premium, cost?.AiCredits, cost?.Usd, cost?.Basis ?? "unknown", cost?.SampleMoves);
     }
 }

@@ -46,9 +46,9 @@ else
             _armed = false;
             await Cancelled.InvokeAsync();
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex)
         {
-            _error = $"Could not cancel the benchmark: {ex.Message}";
+            _error = $"Could not cancel the benchmark: {ApiFailure.Describe(ex)}";
         }
         finally
         {

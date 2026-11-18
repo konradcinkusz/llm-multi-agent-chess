@@ -68,6 +68,37 @@ public class NavigationTests
     }
 
     [Fact]
+    public void TheTwoAdminPagesSitUnderANoScriptMoreDisclosure()
+    {
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<NavMenu>();
+
+        var more = cut.Find("details.nav-more");
+        Assert.Equal("More", more.QuerySelector("summary")!.TextContent);
+        Assert.Equal(new[] { "/admin/attempts", "/admin/site" },
+            more.QuerySelectorAll("a").Select(a => a.GetAttribute("href")!).ToArray());
+        // Results and the other main items stay outside it, in the strip itself.
+        var outside = cut.FindAll("a").Select(a => a.GetAttribute("href")!).Except(["/admin/attempts", "/admin/site"]).ToArray();
+        Assert.Equal(8, outside.Length);
+        Assert.Empty(more.QuerySelectorAll("script"));
+        Assert.False(more.HasAttribute("open"));
+    }
+
+    [Fact]
+    public void TheMoreDisclosureClosesAgainWhenTheUserNavigates()
+    {
+        using var ctx = new BunitContext();
+        var cut = ctx.Render<NavMenu>();
+        var before = cut.Find("details.nav-more");
+
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo("/admin/site");
+
+        // A new element replaces the old one (@key), so an open menu does not stay open on the page it led to.
+        cut.WaitForAssertion(() => Assert.NotSame(before, cut.Find("details.nav-more")));
+    }
+
+    [Fact]
     public void TheShellWrapsHeaderStatusStripAndMainInThatOrder()
     {
         var handler = new FakeHandler(_ => Canned.Json("""{"copilot":"Ready","copilotDetail":"signed in","database":"healthy","stockfish":"healthy"}"""));

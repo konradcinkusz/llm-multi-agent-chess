@@ -30,9 +30,11 @@ public sealed class BenchmarkService(
         var pairings = GauntletSchedule.Pairings(request.Candidate, opponents, request.GamesPerOpponent);
         var run = tournaments.NewTournament(request.Name, models, request.GamesPerOpponent, request.MaxConcurrency,
             TournamentKind.Benchmark, request.Candidate);
-        await tournaments.StartAsync(run, pairings, ct);
+        BenchmarkFingerprint.Stamp(run);
 
+        // The estimate comes first: a failure after the games were saved would leave a run behind that a retry duplicates.
         var estimate = await tournaments.EstimateAsync(models, pairings, ct);
+        await tournaments.StartAsync(run, pairings, ct);
         return new BenchmarkCreatedDto(ToDto(run, (pairings.Count, 0)), estimate);
     }
 
@@ -90,8 +92,12 @@ public sealed class BenchmarkService(
         var games = await LoadGamesAsync(benchmark, listing, ct);
         var rated = await RatedGameLoader.LoadAsync(factory, tournamentId: null, ct);
         var rating = RatingCalculator.Compute(rated.Outcomes, rated.MoveStats, new RatingOptions());
+
+        // The versions that played the run, as stored when it was created; the build that renders the report only stamps its time.
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var run = await db.Tournaments.AsNoTracking().FirstAsync(t => t.Id == id, ct);
         return BenchmarkReportBuilder.Build(benchmark, games, rating, rated.Outcomes,
-            BenchmarkFingerprint.Create(clock.GetUtcNow(), benchmark.Candidate));
+            BenchmarkFingerprint.Of(run, clock.GetUtcNow()));
     }
 
     private async Task<List<BenchmarkGame>> LoadGamesAsync(BenchmarkDto benchmark, ModelListing listing, CancellationToken ct)

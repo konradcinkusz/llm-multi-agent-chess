@@ -28,7 +28,7 @@ public static class ResultsExtensions
         endpoints.MapGet("/ratings/history", RatingHistoryHandler);
         endpoints.MapGet("/results/breakdown", ResultsBreakdownHandler);
         endpoints.MapPost("/results/archive/export", ArchiveExportHandler);
-        endpoints.MapGet("/results/archive/status", (ArchiveImportStatus status) => TypedResults.Ok(new { status.State, status.Added }));
+        endpoints.MapGet("/results/archive/status", (ArchiveImportStatus status) => TypedResults.Ok(new { status.State, status.Added, status.SnapshotBatches }));
         return endpoints;
     }
 

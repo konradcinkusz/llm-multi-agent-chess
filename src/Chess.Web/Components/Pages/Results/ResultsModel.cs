@@ -64,7 +64,16 @@ public static class ResultsModel
     public const int LossesSlot = 7;
     public const int ForfeitsSlot = 4;
 
-    public static string Number(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
+    public static string Number(double value, string format) => NumberText.Fixed(value, format);
+
+    /// <summary>
+    /// The cell of the matrix for the leader against the runner-up: the same numbers <c>/api/ratings/pairwise</c> answers, so
+    /// the page needs no request for it. Null with fewer than two models, or when the matrix lacks the pair.
+    /// </summary>
+    public static PairwiseCoefficient? LeaderVsSecondIn(LeaderboardDto board, MatrixDto matrix) =>
+        board.Models.Count < 2
+            ? null
+            : matrix.Cells.FirstOrDefault(c => c.A == board.Models[0].Model && c.B == board.Models[1].Model);
 
     /// <summary>Half the width of a 95 % interval: the "±" printed next to a rating.</summary>
     public static double HalfWidth(double low, double high) => (high - low) / 2;

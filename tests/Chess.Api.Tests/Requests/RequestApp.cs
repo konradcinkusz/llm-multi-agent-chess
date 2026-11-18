@@ -46,6 +46,12 @@ internal sealed class RequestApp(string mode = "Mock") : WebApplicationFactory<P
             {
                 services.Remove(hosted);
             }
+
+            // The queue hands out nothing until the recovery has opened its gate (RequestRecoveryGate), and the recovery is
+            // removed above, so the gate is open from the start here.
+            var gate = new RequestRecoveryGate();
+            gate.Open();
+            services.AddSingleton(gate);
         });
     }
 

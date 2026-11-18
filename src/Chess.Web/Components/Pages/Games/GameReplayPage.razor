@@ -33,7 +33,7 @@ else
             @summary.PlyCount plies · @GameFormat.When(summary.CreatedAt)
             @if (summary.TournamentId is { } tournamentId)
             {
-                <span> · <a href="/tournaments/@tournamentId">Tournament</a></span>
+                <span> · <a href="@(_isBenchmark ? $"/benchmark/{tournamentId}" : $"/tournaments/{tournamentId}")">@(_isBenchmark ? "Benchmark" : "Tournament")</a></span>
             }
         </p>
     </header>
@@ -62,6 +62,16 @@ else
                 </div>
                 <span class="replay-ply" data-testid="replay-ply" aria-live="polite">Ply @_ply of @lastPly</span>
             </div>
+            @if (lastPly > 0)
+            {
+                @* A slider steps through the game with the arrow keys, Home and End without scrolling the page, which the
+                   board cannot promise: a page cannot tell Blazor which keys to keep from the browser. *@
+                <label class="replay-scrub">
+                    <span class="visually-hidden">Ply</span>
+                    <input type="range" min="0" max="@lastPly" step="1" value="@_ply" data-testid="replay-scrub"
+                           aria-valuetext="Ply @_ply of @lastPly" @oninput="Scrub" />
+                </label>
+            }
             <p class="muted">Click the board, then use the arrow keys, Home and End to step through the moves.</p>
 
             @if (_pgnHref is { } href)
@@ -85,7 +95,7 @@ else
 
             <section class="card stack" aria-labelledby="replay-moves-heading">
                 <h2 id="replay-moves-heading" class="card-title">Moves</h2>
-                <MoveTable Moves="@game.Moves" SelectedPly="@SelectedPly" OnSelect="@SelectMove" />
+                <MoveTable Moves="@game.Moves" SelectedPly="@SelectedPly" OnSelect="@SelectMove" PageRows="@MovePageRows" />
             </section>
         </aside>
     </div>
@@ -126,6 +136,7 @@ else
     private GameUsageDto? _usage;
     private string? _usageMessage;
     private int _ply;
+    private bool _isBenchmark;
 
     /// <summary>The game to replay, from the route.</summary>
     [Parameter]
@@ -140,7 +151,7 @@ else
         {
             _models = await Api.GetModelsAsync(_cts.Token);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
             // The names are a nicety: without the models the log and the summary show the model ids.
         }
@@ -168,6 +179,7 @@ else
         _usage = null;
         _usageMessage = null;
         _ply = 0;
+        _isBenchmark = false;
 
         try
         {
@@ -178,13 +190,14 @@ else
             _error = "No game has this id.";
             return;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _error = $"Could not load the game: {ex.Message}";
+            _error = $"Could not load the game: {ApiFailure.Describe(ex)}";
             return;
         }
 
         await LoadAttemptsAsync(id);
+        await LoadBenchmarkAsync(_game.Summary.TournamentId);
 
         // The PGN is written when the game ends, and so is the usage summary: only a finished game has them.
         if (_game.Summary.State == "finished")
@@ -216,9 +229,28 @@ else
 
             _attempts = entries;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _attemptsError = ex.Message;
+            _attemptsError = ApiFailure.Describe(ex);
+        }
+    }
+
+    /// <summary>A game of a benchmark run has a tournament id too, but its page is /benchmark/{id}, not /tournaments/{id}.</summary>
+    private async Task LoadBenchmarkAsync(Guid? tournamentId)
+    {
+        if (tournamentId is not { } id)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.GetBenchmarkAsync(id, _cts.Token);
+            _isBenchmark = true;
+        }
+        catch (HttpRequestException)
+        {
+            // Not a benchmark (a 404), or the lookup failed: the link stays the tournament's.
         }
     }
 
@@ -228,9 +260,9 @@ else
         {
             _pgnHref = PgnDownload.Href(await Api.GetGamePgnAsync(id, _cts.Token));
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _pgnError = ex.Message;
+            _pgnError = ApiFailure.Describe(ex);
         }
     }
 
@@ -240,9 +272,9 @@ else
         {
             _usage = await Api.GetGameUsageAsync(id, _cts.Token);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _usageMessage = $"Could not load the usage of this game: {ex.Message}";
+            _usageMessage = $"Could not load the usage of this game: {ApiFailure.Describe(ex)}";
         }
     }
 
@@ -256,6 +288,17 @@ else
         if (ply is { } chosen)
         {
             GoTo(chosen);
+        }
+    }
+
+    /// <summary>Rows (move numbers) of the move list on a page: the list pages a long game and follows the move on the board.</summary>
+    private const int MovePageRows = 15;
+
+    private void Scrub(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var ply))
+        {
+            GoTo(ply);
         }
     }
 

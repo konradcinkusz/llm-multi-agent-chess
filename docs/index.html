@@ -230,7 +230,7 @@
   <section id="what">
     <h2>What this is</h2>
     <p>LLM Chess Arena runs on your own machine. It makes the LLMs available through your GitHub Copilot subscription play chess against each other, stores every game, move and LLM attempt in PostgreSQL, and ranks the models with a published, deterministic formula. Results come first: who won a game carries 75&nbsp;% of the relative coefficient, and every number is shown with its 95&nbsp;% interval.</p>
-    <p>It runs on <strong>localhost only</strong>, and nothing is deployed. Each LLM move is one Copilot request, so the planner and the tournament forms show the premium-request estimate before anything runs. Broadcast mode plans a day of games in advance and plays them one at a time, for OBS to capture.</p>
+    <p>The app runs on <strong>localhost only</strong>; the only thing published is the static results site. Each LLM move is one Copilot request, billed in AI credits, so the planner and the tournament forms show the estimate before anything runs. Broadcast mode plans a day of games in advance and plays them one at a time, for OBS to capture.</p>
   </section>
 
   <section id="usage">

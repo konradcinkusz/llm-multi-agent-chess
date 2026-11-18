@@ -39,17 +39,6 @@ public readonly record struct Piece(PieceType Type, Side Color)
         'q' => new(PieceType.Queen, Side.Black), 'k' => new(PieceType.King, Side.Black),
         _ => Empty
     };
-
-    public static string GetSymbol(Piece p) => (p.Type, p.Color) switch
-    {
-        (PieceType.King, Side.White) => "♔", (PieceType.Queen, Side.White) => "♕",
-        (PieceType.Rook, Side.White) => "♖", (PieceType.Bishop, Side.White) => "♗",
-        (PieceType.Knight, Side.White) => "♘", (PieceType.Pawn, Side.White) => "♙",
-        (PieceType.King, Side.Black) => "♚", (PieceType.Queen, Side.Black) => "♛",
-        (PieceType.Rook, Side.Black) => "♜", (PieceType.Bishop, Side.Black) => "♝",
-        (PieceType.Knight, Side.Black) => "♞", (PieceType.Pawn, Side.Black) => "♟",
-        _ => ""
-    };
 }
 
 public record struct ChessMove(int From, int To, PieceType Promotion = PieceType.None)
@@ -88,34 +77,137 @@ public class ChessBoard
         return b;
     }
 
+    /// <summary>
+    /// Sets the position from a FEN string. The text must be a position that can occur in a game: six fields (the two
+    /// clocks may be left out, as in an EPD-style record, and default to 0 and 1), eight ranks of eight squares, known
+    /// piece letters, exactly one king per side, no pawn on the first or last rank, the side not to move not in check,
+    /// a side of <c>w</c> or <c>b</c>, castling of <c>-</c> or letters from <c>KQkq</c>, an en passant square that is
+    /// empty and on the third rank (Black to move) or sixth rank (White to move), a clock of 0 or more and a move
+    /// number of 1 or more. Anything else throws a <see cref="FormatException"/> that names the first problem, and the
+    /// board is left as it was. Use <see cref="TryLoadFen"/> to test a text without an exception.
+    /// </summary>
+    /// <exception cref="FormatException">The text is not a valid FEN position.</exception>
     public void LoadFen(string fen)
     {
-        Array.Fill(_squares, Piece.Empty);
-        var parts = fen.Trim().Split(' ');
+        if (!TryLoadFen(fen, out var error))
+            throw new FormatException(error);
+    }
 
-        // Piece placement: FEN goes rank8→rank1, left to right
-        int sq = 56; // start at a8
-        foreach (char c in parts[0])
-        {
-            if (c == '/') { sq -= 16; }
-            else if (char.IsDigit(c)) { sq += c - '0'; }
-            else { _squares[sq++] = Piece.FromFenChar(c); }
-        }
+    /// <summary>Like <see cref="LoadFen"/>, but returns false with the reason in <paramref name="error"/> instead of throwing.</summary>
+    public bool TryLoadFen(string? fen, out string? error)
+    {
+        error = ParseFen(fen, out var parsed);
+        if (error is not null) return false;
 
-        _sideToMove = parts.Length > 1 && parts[1] == "b" ? Side.Black : Side.White;
-
-        string cr = parts.Length > 2 ? parts[2] : "-";
-        _wKingside = cr.Contains('K'); _wQueenside = cr.Contains('Q');
-        _bKingside = cr.Contains('k'); _bQueenside = cr.Contains('q');
-
-        string ep = parts.Length > 3 ? parts[3] : "-";
-        _epSquare = ep == "-" ? -1 : FromAlgebraic(ep);
-
-        _halfMoveClock = parts.Length > 4 ? int.Parse(parts[4]) : 0;
-        _fullMoveNumber = parts.Length > 5 ? int.Parse(parts[5]) : 1;
+        Array.Copy(parsed!.Squares, _squares, 64);
+        _sideToMove = parsed.SideToMove;
+        _wKingside = parsed.WKingside; _wQueenside = parsed.WQueenside;
+        _bKingside = parsed.BKingside; _bQueenside = parsed.BQueenside;
+        _epSquare = parsed.EpSquare;
+        _halfMoveClock = parsed.HalfMoveClock;
+        _fullMoveNumber = parsed.FullMoveNumber;
 
         _positionHistory.Clear();
         _positionHistory.Add(PositionKey());
+        return true;
+    }
+
+    private sealed record ParsedFen(
+        Piece[] Squares, Side SideToMove, bool WKingside, bool WQueenside, bool BKingside, bool BQueenside,
+        int EpSquare, int HalfMoveClock, int FullMoveNumber);
+
+    // Returns the first problem as text, or null with the position in `parsed`.
+    private static string? ParseFen(string? fen, out ParsedFen? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(fen)) return "FEN is empty.";
+        var parts = fen.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 4 || parts.Length > 6)
+            return $"FEN needs 4 to 6 space-separated fields (placement, side, castling, en passant, clocks), found {parts.Length}.";
+
+        var squares = new Piece[64];
+        Array.Fill(squares, Piece.Empty);
+        var ranks = parts[0].Split('/');
+        if (ranks.Length != 8) return $"FEN placement needs 8 ranks separated by '/', found {ranks.Length}.";
+
+        int whiteKings = 0, blackKings = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            int rank = 7 - i, file = 0;
+            bool lastWasDigit = false;
+            foreach (char c in ranks[i])
+            {
+                if (c is >= '1' and <= '8')
+                {
+                    if (lastWasDigit) return $"FEN rank {rank + 1} has two digits in a row.";
+                    file += c - '0';
+                    lastWasDigit = true;
+                    if (file > 8) return $"FEN rank {rank + 1} has more than 8 squares.";
+                    continue;
+                }
+                lastWasDigit = false;
+                var piece = Piece.FromFenChar(c);
+                if (piece.IsEmpty) return $"FEN rank {rank + 1} has an unknown character '{c}'.";
+                if (file >= 8) return $"FEN rank {rank + 1} has more than 8 squares.";
+                if (piece.Type == PieceType.Pawn && (rank == 0 || rank == 7)) return "FEN has a pawn on the first or last rank.";
+                if (piece.Type == PieceType.King) { if (piece.Color == Side.White) whiteKings++; else blackKings++; }
+                squares[rank * 8 + file++] = piece;
+            }
+            if (file != 8) return $"FEN rank {rank + 1} has {file} squares, not 8.";
+        }
+        if (whiteKings != 1 || blackKings != 1)
+            return $"FEN needs exactly one king per side, found {whiteKings} white and {blackKings} black.";
+
+        if (parts[1] is not ("w" or "b")) return $"FEN side to move must be 'w' or 'b', found '{parts[1]}'.";
+        var side = parts[1] == "w" ? Side.White : Side.Black;
+
+        string cr = parts[2];
+        bool wk = false, wq = false, bk = false, bq = false;
+        if (cr != "-")
+        {
+            foreach (char c in cr)
+            {
+                bool repeated;
+                switch (c)
+                {
+                    case 'K': repeated = wk; wk = true; break;
+                    case 'Q': repeated = wq; wq = true; break;
+                    case 'k': repeated = bk; bk = true; break;
+                    case 'q': repeated = bq; bq = true; break;
+                    default: return $"FEN castling field '{cr}' may only hold K, Q, k, q or be '-'.";
+                }
+                if (repeated) return $"FEN castling field '{cr}' repeats '{c}'.";
+            }
+        }
+
+        int ep = -1;
+        if (parts[3] != "-")
+        {
+            var e = parts[3];
+            if (e.Length != 2 || e[0] is < 'a' or > 'h' || e[1] is not ('3' or '6'))
+                return $"FEN en passant field '{e}' must be '-' or a square on the 3rd or 6th rank.";
+            ep = FromAlgebraic(e);
+            if (Rank(ep) != (side == Side.White ? 5 : 2))
+                return $"FEN en passant square '{e}' is on the wrong rank for {(side == Side.White ? "White" : "Black")} to move.";
+            if (!squares[ep].IsEmpty) return $"FEN en passant square '{e}' is not empty.";
+        }
+
+        int half = 0, full = 1;
+        if (parts.Length > 4 && (!int.TryParse(parts[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out half)))
+            return $"FEN halfmove clock '{parts[4]}' must be a number of 0 or more.";
+        if (parts.Length > 5 && (!int.TryParse(parts[5], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out full) || full < 1))
+            return $"FEN move number '{parts[5]}' must be a number of 1 or more.";
+
+        var candidate = new ParsedFen(squares, side, wk, wq, bk, bq, ep, half, full);
+
+        // The side that just moved cannot have left its king attacked: the position could not have arisen.
+        var probe = new ChessBoard();
+        Array.Copy(squares, probe._squares, 64);
+        if (probe.IsInCheck(Opponent(side)))
+            return $"FEN has the {(side == Side.White ? "black" : "white")} king in check with {(side == Side.White ? "White" : "Black")} to move.";
+
+        parsed = candidate;
+        return null;
     }
 
     public string ToFen()
@@ -591,89 +683,6 @@ public class ChessBoard
         return (w, b);
     }
 
-    public (int white, int black) SquareControl()
-    {
-        int w = GeneratePseudo(Side.White).Select(m => m.To).Distinct().Count();
-        int b = GeneratePseudo(Side.Black).Select(m => m.To).Distinct().Count();
-        return (w, b);
-    }
-
-    public (float white, float black) KingSafety()
-    {
-        float Eval(Side side)
-        {
-            int ks = -1;
-            for (int i = 0; i < 64; i++)
-                if (_squares[i].Type == PieceType.King && _squares[i].Color == side) { ks = i; break; }
-            if (ks < 0) return 0;
-            int pawns = 0;
-            for (int df = -1; df <= 1; df++)
-            for (int dr = -1; dr <= 1; dr++)
-            {
-                int nf = File(ks) + df, nr = Rank(ks) + dr;
-                if (nf < 0 || nf > 7 || nr < 0 || nr > 7) continue;
-                var p = _squares[Square(nf, nr)];
-                if (!p.IsEmpty && p.Color == side && p.Type == PieceType.Pawn) pawns++;
-            }
-            return pawns;
-        }
-        return (Eval(Side.White), Eval(Side.Black));
-    }
-
-    public (int white, int black) Development()
-    {
-        int w = 0, b = 0;
-        for (int i = 0; i < 64; i++)
-        {
-            var p = _squares[i];
-            if (p.IsEmpty || p.Type is not (PieceType.Knight or PieceType.Bishop)) continue;
-            bool onStart = p.Color == Side.White
-                ? i is 1 or 2 or 5 or 6   // b1,c1,f1,g1
-                : i is 57 or 58 or 61 or 62; // b8,c8,f8,g8
-            if (!onStart) { if (p.Color == Side.White) w++; else b++; }
-        }
-        return (w, b);
-    }
-
-    public float SimpleEval()
-    {
-        var (wm, bm) = MaterialCounts();
-        var (wc, bc) = SquareControl();
-        return (wm - bm) + (wc - bc) * 0.1f;
-    }
-
-    // ── SVG board generation ─────────────────────────────────────────────────
-    public string ToSvg()
-    {
-        const int S = 60, B = S * 8;
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {B} {B}\" width=\"{B}\" height=\"{B}\">");
-        for (int rank = 7; rank >= 0; rank--)
-        for (int file = 0; file < 8; file++)
-        {
-            int x = file * S, y = (7 - rank) * S;
-            string color = (rank + file) % 2 == 1 ? "#F0D9B5" : "#B58863";
-            sb.Append($"<rect x=\"{x}\" y=\"{y}\" width=\"{S}\" height=\"{S}\" fill=\"{color}\"/>");
-            var p = _squares[Square(file, rank)];
-            if (!p.IsEmpty)
-            {
-                string sym = Piece.GetSymbol(p);
-                string fill = p.Color == Side.White ? "#fff" : "#222";
-                string stroke = p.Color == Side.White ? "#333" : "#eee";
-                sb.Append($"<text x=\"{x + S / 2}\" y=\"{y + S / 2 + 14}\" font-size=\"44\" text-anchor=\"middle\" "
-                        + $"fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"0.5\" paint-order=\"stroke\">{sym}</text>");
-            }
-        }
-        // Coordinate labels
-        for (int i = 0; i < 8; i++)
-        {
-            sb.Append($"<text x=\"2\" y=\"{(7 - i) * S + 13}\" font-size=\"10\" fill=\"#888\">{i + 1}</text>");
-            sb.Append($"<text x=\"{i * S + S - 10}\" y=\"{B - 2}\" font-size=\"10\" fill=\"#888\">{(char)('a' + i)}</text>");
-        }
-        sb.AppendLine("</svg>");
-        return sb.ToString();
-    }
-
     // ── Utility ───────────────────────────────────────────────────────────────
     private static Side Opponent(Side s) => s == Side.White ? Side.Black : Side.White;
 
@@ -684,8 +693,28 @@ public class ChessBoard
         sb.Append(_sideToMove == Side.White ? 'w' : 'b');
         if (_wKingside) sb.Append('K'); if (_wQueenside) sb.Append('Q');
         if (_bKingside) sb.Append('k'); if (_bQueenside) sb.Append('q');
-        sb.Append(_epSquare >= 0 ? ToAlgebraic(_epSquare) : "-");
+        // FIDE 9.2: positions are the same when the same moves are possible, so the en passant square counts
+        // only when a pawn can really capture there (a pinned pawn cannot).
+        sb.Append(EnPassantCaptureIsLegal() ? ToAlgebraic(_epSquare) : "-");
         return sb.ToString();
+    }
+
+    private bool EnPassantCaptureIsLegal()
+    {
+        if (_epSquare < 0) return false;
+        // The capturing pawn stands beside the pushed pawn: one rank behind the target square, from the mover's side.
+        int fromRank = Rank(_epSquare) + (_sideToMove == Side.White ? -1 : 1);
+        foreach (int df in new[] { -1, 1 })
+        {
+            int file = File(_epSquare) + df;
+            if (file < 0 || file > 7) continue;
+            int from = Square(file, fromRank);
+            var p = _squares[from];
+            if (p.Type != PieceType.Pawn || p.Color != _sideToMove) continue;
+            var nb = Clone(); nb.ApplyInternal(new ChessMove(from, _epSquare));
+            if (!nb.IsInCheck(_sideToMove)) return true;
+        }
+        return false;
     }
 
     private ChessBoard Clone()

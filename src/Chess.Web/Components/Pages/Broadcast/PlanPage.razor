@@ -1,5 +1,6 @@
 @page "/broadcast/plan"
 @using Chess.Web.Api
+@using Chess.Web.Components.Pages.Play
 @using Chess.Web.Components.Pages.Tournaments
 @implements IDisposable
 @inject ArenaApiClient Api
@@ -107,7 +108,7 @@
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Games in the broadcast (scrollable table)">
                 <table class="plan-slots">
                     <thead>
                         <tr>
@@ -146,7 +147,7 @@
                 <p class="plan-total" data-testid="plan-total">
                     Estimated total for @_slots.Count game@(_slots.Count == 1 ? "" : "s"):
                     @TournamentFormat.Requests(Known(models.Select(RequestsFor))) premium requests ·
-                    @TournamentFormat.Credits(Known(models.Select(model => CostOf(model)?.AiCredits))) AI credits ·
+                    @TournamentFormat.Credits(Known(models.Select(model => CostOf(model)?.AiCredits))) ·
                     @TournamentFormat.Usd(Known(models.Select(model => CostOf(model)?.Usd)))
                     @if (UnknownCount(models) > 0)
                     {
@@ -157,7 +158,7 @@
                     Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
                     AI credits and USD use the API's rate and the tokens of past moves.
                 </p>
-                <div class="table-wrap">
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Estimated cost per model (scrollable table)">
                     <table class="table-compact">
                         <thead>
                             <tr><th>Model</th><th>Price</th><th class="num">Games</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
@@ -168,7 +169,7 @@
                                 var cost = CostOf(model);
                                 <tr>
                                     <td>@NameOf(model)</td>
-                                    <td>@TournamentFormat.Price(Find(model)?.Pricing)</td>
+                                    <td>@PriceOf(model)</td>
                                     <td class="num">@_slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model)</td>
                                     <td class="num">@TournamentFormat.Requests(RequestsFor(model))</td>
                                     <td class="num">@TournamentFormat.Credits(cost?.AiCredits)</td>
@@ -216,7 +217,7 @@
     }
     else
     {
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Broadcasts (scrollable table)">
             <table class="plan-schedules">
                 <thead>
                     <tr>
@@ -246,6 +247,11 @@
                                             disabled="@(_busy || ChannelBusy(schedule.Id))"
                                             @onclick="() => CommandAsync(schedule.Id, StartFailure, _broadcast.StartAsync)">Start</button>
                                 }
+                                @if (schedule.Status == ScheduleStatuses.Draft)
+                                {
+                                    <button data-testid="schedule-delete" type="button" class="btn-sm btn-danger" disabled="@_busy"
+                                            @onclick="() => CommandAsync(schedule.Id, DeleteFailure, _broadcast.DeleteScheduleAsync)">Delete</button>
+                                }
                                 @if (schedule.Status == ScheduleStatuses.Running)
                                 {
                                     <button data-testid="schedule-pause" type="button" class="btn-sm" disabled="@_busy"
@@ -258,8 +264,22 @@
                                 }
                                 @if (schedule.Status is ScheduleStatuses.Scheduled or ScheduleStatuses.Running or ScheduleStatuses.Paused)
                                 {
-                                    <button data-testid="schedule-stop" type="button" class="btn-sm btn-danger" disabled="@_busy"
-                                            @onclick="() => CommandAsync(schedule.Id, StopFailure, _broadcast.StopAsync)">Stop</button>
+                                    // A stop cancels the day and aborts the game in play, so it takes a second click; the first only asks.
+                                    if (_confirmStop == schedule.Id)
+                                    {
+                                        <span class="cancel-confirm" role="group" aria-label="Confirm stop">
+                                            <span>Stop this broadcast? The game in play is aborted and the day cannot be resumed.</span>
+                                            <button data-testid="schedule-stop-confirm" type="button" class="btn-sm btn-danger" disabled="@_busy"
+                                                    @onclick="() => ConfirmStopAsync(schedule.Id)">Yes, stop</button>
+                                            <button data-testid="schedule-stop-keep" type="button" class="btn-sm" disabled="@_busy"
+                                                    @onclick="() => _confirmStop = null">Keep playing</button>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <button data-testid="schedule-stop" type="button" class="btn-sm btn-danger" disabled="@_busy"
+                                                @onclick="() => _confirmStop = schedule.Id">Stop</button>
+                                    }
                                 }
                             </td>
                         </tr>
@@ -295,6 +315,11 @@
     private const string PauseFailure = "Could not pause:";
     private const string ResumeFailure = "Could not resume:";
     private const string StopFailure = "Could not stop:";
+    private const string DeleteFailure = "Could not delete:";
+
+    /// <summary>How often the list of broadcasts reloads while one is running or paused. Tests set a short one.</summary>
+    [Parameter]
+    public TimeSpan RefreshInterval { get; set; } = TournamentFormat.RefreshInterval;
 
     private readonly CancellationTokenSource _cts = new();
     private BroadcastApiClient _broadcast = null!;
@@ -311,8 +336,11 @@
     private int _moveDelayMs = DefaultMoveDelayMs;
     private int _gameGapMinutes = DefaultGameGapMinutes;
 
-    // The games in play order. Their times are filled in when Start is pressed, so only the players matter here.
-    private readonly List<SlotEdit> _slots = [];
+    // The games in play order. The API lays out their times when Start is pressed, so only the players matter here.
+    private readonly List<ScheduleGame> _slots = [];
+
+    // The schedule whose Stop was pressed once and awaits its confirmation.
+    private Guid? _confirmStop;
 
     private IReadOnlyList<ScheduleDto>? _schedules;
     private string? _scheduleError;
@@ -342,6 +370,51 @@
 
         await LoadCostInputsAsync();
         await ReloadSchedulesAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Only once the page is interactive: a prerender is disposed before it would ever tick.
+        if (firstRender)
+        {
+            _ = PollAsync(_cts.Token);
+        }
+    }
+
+    /// <summary>
+    /// Reloads the schedules while one is running or paused, so that a day that finishes (or is stopped elsewhere) frees
+    /// Start without a page reload. Stops when the page is disposed.
+    /// </summary>
+    private async Task PollAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(RefreshInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (_busy || _schedules?.Any(schedule => schedule.Status is ScheduleStatuses.Running or ScheduleStatuses.Paused) != true)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await ReloadSchedulesAsync();
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    // Keep polling: the next tick retries, and the page says why the list is stale.
+                    _scheduleError = ex.Message;
+                }
+
+                // The timer thread is outside any UI event, so the render has to be asked for.
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposed.
+        }
     }
 
     /// <summary>The API's rate and tokens. Null when they could not be loaded: the estimate then shows premium requests only.</summary>
@@ -384,7 +457,11 @@
             {
                 problems.Add("Pacing values must not be negative.");
             }
-            else if (_slots.Count > 0 && Hours(Window(DateTimeOffset.UtcNow)) > PlanPlanner.MaxDurationHours)
+            else if (_slots.Count > PlanPlanner.MaxGames)
+            {
+                problems.Add($"A broadcast holds at most {PlanPlanner.MaxGames} games. Remove a game.");
+            }
+            else if (_slots.Count > 0 && TotalHours > PlanPlanner.MaxDurationHours)
             {
                 problems.Add($"The games would run past {PlanPlanner.MaxDurationHours} hours. Remove a game or shorten the pacing.");
             }
@@ -398,7 +475,19 @@
     private bool CanAddGame => !_busy && _pickWhite is not null && _pickBlack is not null
         && _pickWhite != _pickBlack && Players.Contains(_pickWhite) && Players.Contains(_pickBlack);
 
-    private TimeSpan GameLength => TimeSpan.FromMilliseconds(AssumedPlies * (AssumedMoveLatencyMs + _moveDelayMs));
+    /// <summary>
+    /// The hours the games take laid end to end, each after the previous one plus the gap: what the API lays out on Start.
+    /// In doubles, because a huge pacing value would overflow a TimeSpan.
+    /// </summary>
+    private double TotalHours
+    {
+        get
+        {
+            var gameMs = AssumedPlies * (AssumedMoveLatencyMs + _moveDelayMs);
+            var gapMs = _gameGapMinutes * 60_000d;
+            return (_slots.Count * gameMs + Math.Max(0, _slots.Count - 1) * gapMs) / 3_600_000d;
+        }
+    }
 
     /// <summary>True while another schedule is running or paused: the API runs one channel at a time.</summary>
     private bool ChannelBusy(Guid scheduleId) =>
@@ -415,6 +504,11 @@
     /// <summary>A model's estimate over the games on screen: the same moves as the planner's (games × plies ÷ 2 a side).</summary>
     private CostPreview.Estimate? CostOf(string model)
     {
+        if (IsRandom(model))
+        {
+            return new CostPreview.Estimate(0, 0, "free", null);
+        }
+
         if (_costs is not { } costs || Find(model) is not { } entry)
         {
             return null;
@@ -423,6 +517,12 @@
         var games = _slots.Count(slot => slot.White.ModelId == model || slot.Black.ModelId == model);
         return CostPreview.For(entry, costs, games * (AssumedPlies / 2));
     }
+
+    private static bool IsRandom(string playerId) => PromptStyleChoices.ModelOf(playerId) == PlanPlanner.RandomModelId;
+
+    /// <summary>A model's price column: its token prices, or "free" for the random player, as the last column says.</summary>
+    private string PriceOf(string playerId) =>
+        IsRandom(playerId) ? "free" : TournamentFormat.Price(Find(playerId)?.Pricing);
 
     /// <summary>The sum of the known figures, or null when none is known.</summary>
     private static double? Known(IEnumerable<double?> values)
@@ -447,10 +547,11 @@
         var premium = estimate.EstimatedPremiumRequests is { } requests
             ? $"{TournamentFormat.Requests(requests)} premium requests · "
             : "";
-        var cost = estimate.EstimatedAiCredits is { } credits
-            ? $"{TournamentFormat.Credits(credits)} ({TournamentFormat.Usd(estimate.EstimatedUsd)})"
-            : "price unknown";
-        return $"{NameOf(estimate.ModelId)}: {premium}{cost}";
+        var cost = IsRandom(estimate.ModelId) ? "free"
+            : estimate.EstimatedAiCredits is { } credits
+                ? $"{TournamentFormat.Credits(credits)} ({TournamentFormat.Usd(estimate.EstimatedUsd)})"
+                : "price unknown";
+        return $"{NameOf(estimate.ModelId)}: {(IsRandom(estimate.ModelId) ? "" : premium)}{cost}";
     }
 
     private void ToggleStyle(string styleId, object? selected)
@@ -473,8 +574,8 @@
             return;
         }
 
-        _slots.Add(new SlotEdit(new PlayerSpec("llm", _pickWhite!), new PlayerSpec("llm", _pickBlack!),
-            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch));
+        // The random player is kind random with the model id random; every other player is an llm (the API checks both).
+        _slots.Add(new ScheduleGame(PlayChoices.Player(_pickWhite!), PlayChoices.Player(_pickBlack!)));
         _actionError = null;
     }
 
@@ -483,27 +584,10 @@
 
     private void Delete(int index) => _slots.RemoveAt(index);
 
-    /// <summary>The games laid end to end from <paramref name="start"/>, each after the previous one plus the gap.</summary>
-    private List<SlotEdit> Window(DateTimeOffset start)
-    {
-        var timed = new List<SlotEdit>();
-        var next = start;
-        foreach (var slot in _slots)
-        {
-            var end = next + GameLength;
-            timed.Add(slot with { PlannedStart = next, PlannedEnd = end });
-            next = end + TimeSpan.FromMinutes(_gameGapMinutes);
-        }
-
-        return timed;
-    }
-
-    private static int Hours(IReadOnlyList<SlotEdit> timed) =>
-        timed.Count == 0 ? 1 : Math.Max(1, (int)Math.Ceiling((timed[^1].PlannedEnd - timed[0].PlannedStart).TotalHours));
-
     /// <summary>
-    /// Saves the games as a schedule that begins now, then starts it. The schedule window is the span of the games, so
-    /// the API accepts every game. On success the list is emptied for the next broadcast.
+    /// Saves the games as a schedule that begins now and starts it, in one API call: the API validates the games, lays them
+    /// end to end and starts the schedule, or refuses and saves nothing, so a failed start never leaves a draft in the list.
+    /// On success the list is emptied for the next broadcast.
     /// </summary>
     private Task StartAsync()
     {
@@ -514,27 +598,29 @@
 
         return RunAsync(StartFailure, async ct =>
         {
-            var timed = Window(DateTimeOffset.UtcNow);
-            var players = timed.SelectMany(slot => new[] { slot.White.ModelId, slot.Black.ModelId }).Distinct().ToList();
-            var request = new PlanRequest(_name.Trim(), players, timed[0].PlannedStart, Hours(timed),
-                new PacingProfile(_moveDelayMs, _gameGapMinutes * 60), Seed, AssumedPlies, AssumedMoveLatencyMs);
-
-            var saved = await _broadcast.PlanAsync(request, ct);
-            await _broadcast.ReplaceSlotsAsync(saved.Schedule.Id, timed, ct);
-            await _broadcast.StartAsync(saved.Schedule.Id, ct);
+            var request = new CreateScheduleRequest(_name.Trim(), new PacingProfile(_moveDelayMs, _gameGapMinutes * 60),
+                [.. _slots], Start: true, StartsAt: null, AssumedPlies, AssumedMoveLatencyMs, Seed);
+            await _broadcast.CreateScheduleAsync(request, ct);
             _slots.Clear();
         });
     }
 
     /// <summary>Runs a schedule command from the list of broadcasts.</summary>
-    private Task CommandAsync(Guid scheduleId, string failure, Func<Guid, CancellationToken, Task<ScheduleDetailDto>> command)
+    private Task CommandAsync(Guid scheduleId, string failure, Func<Guid, CancellationToken, Task> command)
     {
         if (_busy)
         {
             return Task.CompletedTask;
         }
 
-        return RunAsync(failure, async ct => await command(scheduleId, ct));
+        return RunAsync(failure, ct => command(scheduleId, ct));
+    }
+
+    /// <summary>The second click of a Stop: runs it and closes the question whatever the answer.</summary>
+    private async Task ConfirmStopAsync(Guid scheduleId)
+    {
+        _confirmStop = null;
+        await CommandAsync(scheduleId, StopFailure, _broadcast.StopAsync);
     }
 
     /// <summary>
@@ -579,5 +665,8 @@
         }
     }
 
-    public void Dispose() => _cts.Cancel();
+    public void Dispose()
+    {
+        _cts.Cancel();
+    }
 }

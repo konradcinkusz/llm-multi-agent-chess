@@ -1,8 +1,10 @@
 @page "/games"
 @using Chess.Web.Api
 @using Chess.Web.Components.Shared.Game
+@using Chess.Web.Components.Pages.Shared
 @implements IDisposable
 @inject ArenaApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>Games · LLM Chess Arena</PageTitle>
 
@@ -13,19 +15,19 @@
 
 <div class="field-row games-filters">
     <label class="field">
-        Model
-        <select id="games-filter-model" data-testid="games-filter-model" @bind="_model" @bind:after="ApplyFilterAsync">
-            <option value="">Any model</option>
-            @foreach (var model in _models)
+        Player
+        <select id="games-filter-model" data-testid="games-filter-model" @bind="_model" @bind:after="ApplyFilter">
+            <option value="">Any player</option>
+            @foreach (var player in Players)
             {
-                <option value="@model.Id">@model.DisplayName</option>
+                <option value="@player.Id">@player.Label</option>
             }
         </select>
     </label>
 
     <label class="field">
         Status
-        <select id="games-filter-status" data-testid="games-filter-status" @bind="_status" @bind:after="ApplyFilterAsync">
+        <select id="games-filter-status" data-testid="games-filter-status" @bind="_status" @bind:after="ApplyFilter">
             <option value="">Any status</option>
             <option value="queued">Queued</option>
             <option value="running">Running</option>
@@ -36,12 +38,17 @@
 
 @if (_modelsError is not null)
 {
-    <p class="callout callout-danger" role="alert">Could not load the models for the filter: @_modelsError</p>
+    <p class="callout callout-danger" role="alert">Could not load the players for the filter: @_modelsError</p>
 }
 
 @if (_listError is not null)
 {
     <p class="callout callout-danger" role="alert" data-testid="games-error">Could not load the games: @_listError</p>
+}
+
+@if (_loading && _page is not null)
+{
+    <p class="muted" role="status" data-testid="games-loading">Loading games…</p>
 }
 
 @if (_page is null)
@@ -61,7 +68,7 @@ else
 {
     var pageCount = GameArchive.PageCount(_page.Total);
 
-    <div class="table-wrap">
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Games (scrollable table)">
         <table class="table-compact games-table" data-testid="games-table">
             <thead>
                 <tr>
@@ -78,7 +85,7 @@ else
             <tbody>
                 @foreach (var game in _page.Items)
                 {
-                    <tr data-testid="game-row" data-game-id="@game.Id">
+                    <tr @key="game.Id" data-testid="game-row" data-game-id="@game.Id">
                         <td><a href="/games/@game.Id" title="@GameFormat.When(game.CreatedAt)">@GameFormat.Compact(game.CreatedAt)</a></td>
                         <td>@game.White.ModelId</td>
                         <td>@game.Black.ModelId</td>
@@ -94,71 +101,134 @@ else
     </div>
 
     <nav class="cluster games-pager" aria-label="Pages of games">
-        <button id="games-prev" class="btn btn-sm" data-testid="games-prev" type="button" disabled="@(_pageNumber <= 1)" @onclick="PreviousPageAsync">Previous</button>
+        <button id="games-prev" class="btn btn-sm" data-testid="games-prev" type="button" disabled="@(_loading || _pageNumber <= 1)" @onclick="PreviousPageAsync">Previous</button>
         <span data-testid="games-page">Page @_pageNumber of @pageCount · @_page.Total @(_page.Total == 1 ? "game" : "games")</span>
-        <button id="games-next" class="btn btn-sm" data-testid="games-next" type="button" disabled="@(_pageNumber >= pageCount)" @onclick="NextPageAsync">Next</button>
+        <button id="games-next" class="btn btn-sm" data-testid="games-next" type="button" disabled="@(_loading || _pageNumber >= pageCount)" @onclick="NextPageAsync">Next</button>
     </nav>
 }
 
 @code {
     private readonly CancellationTokenSource _cts = new();
 
-    private IReadOnlyList<ModelDto> _models = [];
+    private IReadOnlyList<PlayerOption> _players = [];
     private string? _modelsError;
     private PageDto<GameSummaryDto>? _page;
     private Dictionary<Guid, double?> _costs = [];
     private string? _listError;
+    private bool _loading;
     private string _model = "";
     private string _status = "";
     private int _pageNumber = 1;
+    private (string Model, string Status, int Page)? _loaded;
+    private int _loadId;
+    private int _shownPage = 1;
+
+    /// <summary>The filters and the page live in the address, so a link, a reload and Back all show the same list.</summary>
+    [SupplyParameterFromQuery(Name = "model")]
+    public string? ModelQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? StatusQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? PageQuery { get; set; }
 
     private bool Filtered => _model.Length > 0 || _status.Length > 0;
+
+    /// <summary>The players to pick from. A player the address names that no list knows is kept, so the picker can show it.</summary>
+    private IReadOnlyList<PlayerOption> Players =>
+        _model.Length == 0 || _players.Any(player => player.Id == _model)
+            ? _players
+            : [.. _players, new PlayerOption(_model, _model)];
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _models = await Api.GetModelsAsync(_cts.Token);
+            _players = await PlayerOptions.LoadAsync(Api, includeCatalogue: true, _cts.Token);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
-            _modelsError = ex.Message;
+            _modelsError = ApiFailure.Describe(ex);
         }
+    }
 
-        await LoadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        _model = ModelQuery ?? "";
+        _status = StatusQuery ?? "";
+        _pageNumber = Math.Max(1, PageQuery ?? 1);
+
+        // The address is the state: the list is loaded again only when what it names has changed.
+        var wanted = (_model, _status, _pageNumber);
+        if (_loaded != wanted)
+        {
+            _loaded = wanted;
+            await LoadAsync();
+        }
     }
 
     /// <summary>A new filter starts the archive again from its first page.</summary>
-    private async Task ApplyFilterAsync()
-    {
-        _pageNumber = 1;
-        await LoadAsync();
-    }
+    private void ApplyFilter() => Show(_model, _status, 1);
 
     private Task PreviousPageAsync() => GoToPageAsync(_pageNumber - 1);
 
     private Task NextPageAsync() => GoToPageAsync(_pageNumber + 1);
 
-    private async Task GoToPageAsync(int page)
+    private Task GoToPageAsync(int page)
     {
-        _pageNumber = page;
-        await LoadAsync();
+        Show(_model, _status, page);
+        return Task.CompletedTask;
     }
+
+    /// <summary>Writes the filters into the address (replacing the entry, so Back leaves the list) and so loads them.</summary>
+    private void Show(string model, string status, int page) =>
+        Navigation.NavigateTo(
+            Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+            {
+                ["model"] = Filter(model),
+                ["status"] = Filter(status),
+                ["page"] = page > 1 ? page : null,
+            }),
+            replace: true);
 
     private async Task LoadAsync()
     {
+        // A newer load supersedes one still in flight, so a slow answer cannot overwrite the filters on screen.
+        var loadId = ++_loadId;
+        var wantedPage = _pageNumber;
+        // The user sees at once that a request is out: with the API slow, a click otherwise shows nothing for a minute.
+        _loading = true;
         try
         {
-            _page = await Api.GetGamesAsync(_pageNumber, GameArchive.PageSize, Filter(_model), Filter(_status), _cts.Token);
-            _listError = null;
-        }
-        catch (HttpRequestException ex)
-        {
-            _listError = ex.Message;
-            return;
-        }
+            var page = await Api.GetGamesAsync(wantedPage, GameArchive.PageSize, Filter(_model), Filter(_status), _cts.Token);
+            var costs = await LoadCostsAsync(page.Items);
+            if (loadId != _loadId)
+            {
+                return;
+            }
 
-        _costs = await LoadCostsAsync(_page.Items);
+            _page = page;
+            _costs = costs;
+            _listError = null;
+            _shownPage = wantedPage;
+        }
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
+        {
+            if (loadId == _loadId)
+            {
+                _listError = ApiFailure.Describe(ex);
+                // The list that is still on screen is the one the pager names.
+                _pageNumber = _shownPage;
+            }
+        }
+        finally
+        {
+            if (loadId == _loadId)
+            {
+                _loading = false;
+            }
+        }
     }
 
     /// <summary>Each game's estimated USD from its usage (03 §10.2). A game whose usage cannot be read shows a dash.</summary>
@@ -174,7 +244,7 @@ else
         {
             return (await Api.GetGameUsageAsync(id, _cts.Token)).TotalEstimatedUsd;
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, _cts.Token))
         {
             return null;
         }

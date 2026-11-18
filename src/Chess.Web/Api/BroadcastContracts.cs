@@ -17,3 +17,9 @@ public sealed record NowNextDto(string Status, SlotDto? Current, IReadOnlyList<S
 
 // The body of PUT /api/broadcast/schedules/{id}/slots (Chess.Api.Broadcast.SlotEdit). The array order is the play order.
 public sealed record SlotEdit(PlayerSpec White, PlayerSpec Black, DateTimeOffset PlannedStart, DateTimeOffset PlannedEnd);
+
+// Additive copies of the records of POST /api/broadcast/schedules (Chess.Api.Broadcast.CreateScheduleRequest): one call that
+// validates, saves and optionally starts a schedule from the games a person picked. The server lays out the times.
+public sealed record ScheduleGame(PlayerSpec White, PlayerSpec Black);
+public sealed record CreateScheduleRequest(string Name, PacingProfile Pacing, IReadOnlyList<ScheduleGame> Games, bool Start,
+    DateTimeOffset? StartsAt = null, double AssumedPlies = 80, double AssumedMoveLatencyMs = 40_000, int Seed = 1);

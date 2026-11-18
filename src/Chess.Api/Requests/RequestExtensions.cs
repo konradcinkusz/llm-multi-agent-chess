@@ -17,9 +17,11 @@ public static class RequestExtensions
         builder.Services.AddSingleton<IValidateOptions<RequestOptions>, RequestOptionsValidator>();
 
         builder.Services.AddSingleton<RequestMenu>();
+        builder.Services.AddSingleton<RequestRecoveryGate>();
         builder.Services.AddSingleton<GameRequestQueue>();
         builder.Services.AddSingleton<IGameRequestQueue>(services => services.GetRequiredService<GameRequestQueue>());
         builder.Services.AddSingleton<IChatIntake, ChatIntake>();
+        builder.Services.AddHostedService<CustomModelClashCheck>();
         builder.Services.AddHostedService<RequestRecovery>();
         return builder;
     }

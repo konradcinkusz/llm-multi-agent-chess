@@ -1,6 +1,7 @@
 using System.Reflection;
 using Chess.Api.Catalog;
 using Chess.Api.Contracts;
+using Chess.Api.Persistence.Entities;
 using Chess.Api.Players.Prompts;
 using Chess.Api.Results;
 
@@ -15,6 +16,22 @@ public static class BenchmarkFingerprint
 {
     public static BenchmarkFingerprintDto Create(DateTimeOffset generatedAt, string? candidate = null) =>
         new(AppVersion(), RatingSnapshotWriter.FormulaVersion, PromptVersion(candidate), generatedAt);
+
+    /// <summary>
+    /// The fingerprint of the build that played a run: the versions stored on the run when it was created. A value the run does
+    /// not have (a benchmark that predates them) is the current build's.
+    /// </summary>
+    public static BenchmarkFingerprintDto Of(TournamentEntity run, DateTimeOffset generatedAt) =>
+        new(run.AppVersion ?? AppVersion(), run.FormulaVersion ?? RatingSnapshotWriter.FormulaVersion,
+            run.PromptVersion ?? PromptVersion(run.Candidate), generatedAt);
+
+    /// <summary>Stores the versions of this build on a run that is about to be created.</summary>
+    public static void Stamp(TournamentEntity run)
+    {
+        run.AppVersion = AppVersion();
+        run.FormulaVersion = RatingSnapshotWriter.FormulaVersion;
+        run.PromptVersion = PromptVersion(run.Candidate);
+    }
 
     /// <summary>The informational version of this build, which carries the git commit when the build knew it.</summary>
     public static string AppVersion() =>

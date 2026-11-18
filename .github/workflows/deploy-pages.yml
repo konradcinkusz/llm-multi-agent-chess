@@ -2,9 +2,9 @@ name: deploy-pages
 
 # Checks that the one-page site (docs/index.html) still assembles. It deploys nothing.
 #
-# Since ADR-013 the public results site is the static export that the app publishes to the gh-pages branch
-# (README: "Public results site"). The one-pager moves into that export as about/, so this job only proves the
-# page and its assets still collect into a folder that holds nothing but the page.
+# Since ADR-013 (amended) the public results site is deployed by publish-site.yml from the results archive
+# (README: "Public results site"). This job only proves the one-page description and its assets still collect into a
+# folder that holds nothing but the page.
 #
 # docs/ holds the standards as markdown as well as the page, and serving those raw would put unrendered .md files
 # on a public URL. So the job collects a _site/ that contains only the page and its assets rather than copying docs/.

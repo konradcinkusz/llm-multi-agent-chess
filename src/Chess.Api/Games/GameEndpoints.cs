@@ -101,6 +101,11 @@ public static class GameEndpoints
                         $"{listing.Warning}. Run `copilot` and log in, then try again.");
                 }
 
+                if (string.IsNullOrWhiteSpace(player.ModelId))
+                {
+                    return Problem(StatusCodes.Status400BadRequest, "Invalid game", $"The {side} player needs a model id.");
+                }
+
                 // A player id may be model@effort (03 §12.1): the effort must be one the model offers, checked by ModelVariant.
                 var baseModel = ModelVariant.BaseOf(player.ModelId);
                 var model = listing.Models.FirstOrDefault(m => m.Id == baseModel);

@@ -33,6 +33,7 @@
 .replay-board ::deep .chess-board {
     display: block;
     width: 100%;
+    max-width: none;
     height: auto;
 }
 
@@ -66,6 +67,11 @@
 .replay-buttons .btn:focus-visible {
     position: relative;
     z-index: 1;
+}
+
+.replay-scrub input {
+    width: 100%;
+    accent-color: var(--accent);
 }
 
 .replay-ply {

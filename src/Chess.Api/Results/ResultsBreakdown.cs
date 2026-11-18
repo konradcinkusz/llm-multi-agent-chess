@@ -26,11 +26,10 @@ public static class ResultsBreakdown
         }
 
         var scored = await games.Select(ResultsGames.Project).ToListAsync(ct);
-        var moves = await ResultsGames.MovesOf(db, games).ToListAsync(ct);
+        var moves = await ResultsGames.MoveTotalsOf(db, games).ToListAsync(ct);
         var replies = (await ResultsGames.RepliesOf(db, games).ToListAsync(ct))
             .GroupBy(r => r.GameId)
             .ToDictionary(group => group.Key, group => group.ToList());
-        var byId = scored.ToDictionary(g => g.Id);
 
         var totals = new Dictionary<string, Totals>(StringComparer.Ordinal);
         foreach (var game in scored)
@@ -48,14 +47,11 @@ public static class ResultsBreakdown
 
         foreach (var move in moves)
         {
-            // A move whose game was decided after the game query ran is left for the next read.
-            if (!byId.TryGetValue(move.GameId, out var game))
+            // Moves of a game decided after the game query ran have no model here yet: they are left for the next read.
+            if (totals.TryGetValue(SideModel(move), out var entry))
             {
-                continue;
+                entry.AddMoves(move);
             }
-
-            var (_, model) = ResultsGames.Mover(game, move.FenAfter);
-            Of(totals, model).AddMove(move);
         }
 
         return totals
@@ -63,6 +59,14 @@ public static class ResultsBreakdown
             .Select(entry => entry.Value.ToDto(entry.Key))
             .ToList();
     }
+
+    // The model that moved: the colour of the move names the side. An unknown colour is a bug upstream, not a side.
+    private static string SideModel(MoveTotal move) => move.Color switch
+    {
+        "white" => move.WhiteModel,
+        "black" => move.BlackModel,
+        _ => throw new InvalidOperationException($"Move has unexpected colour '{move.Color}'."),
+    };
 
     private static void Credit(Dictionary<string, Totals> totals, string model, double score, bool forfeited)
     {
@@ -137,32 +141,17 @@ public static class ResultsBreakdown
         public double CostUsdSum;
         public int CostUsdCount;
 
-        public void AddMove(MoveRow move)
+        public void AddMoves(MoveTotal move)
         {
-            Moves++;
-            if (move.Attempts == 1)
-            {
-                FirstAttemptLegal++;
-            }
-
-            LatencyMsSum += move.LatencyMs;
-            if (move.InputTokens is { } input)
-            {
-                InputTokensSum += input;
-                InputTokensCount++;
-            }
-
-            if (move.OutputTokens is { } output)
-            {
-                OutputTokensSum += output;
-                OutputTokensCount++;
-            }
-
-            if (move.CentipawnLoss is { } loss)
-            {
-                CentipawnLossSum += loss;
-                CentipawnLossCount++;
-            }
+            Moves += move.Moves;
+            FirstAttemptLegal += move.FirstAttemptLegal;
+            LatencyMsSum += move.LatencyMsSum;
+            InputTokensSum += move.InputTokensSum;
+            InputTokensCount += move.InputTokensCount;
+            OutputTokensSum += move.OutputTokensSum;
+            OutputTokensCount += move.OutputTokensCount;
+            CentipawnLossSum += move.CentipawnLossSum;
+            CentipawnLossCount += move.CentipawnLossCount;
         }
 
         public void AddCost(double usd)

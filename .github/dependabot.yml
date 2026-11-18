@@ -4,8 +4,27 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      aspire:
+        patterns:
+          - "Aspire.*"
+      entity-framework:
+        patterns:
+          - "Microsoft.EntityFrameworkCore*"
+      opentelemetry:
+        patterns:
+          - "OpenTelemetry*"
 
   - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: dotnet-sdk
     directory: "/"
     schedule:
       interval: weekly

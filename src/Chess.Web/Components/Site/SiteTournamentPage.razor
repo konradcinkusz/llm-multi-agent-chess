@@ -4,7 +4,8 @@
 @using Chess.Web.Components.Pages.Tournaments
 @using Chess.Web.Site
 
-<SiteLayout Title="@Tournament.Name" Frame="Frame" Active="tournaments">
+<SiteLayout Title="@Tournament.Name" Frame="Frame" Active="tournaments" Path="@SitePaths.Tournament(Tournament.Id)"
+            Description="@($"Tournament {Tournament.Name}: its leaderboard and its games.")">
     <p class="back"><a href="@Frame.Link(SitePaths.Tournaments)">← All tournaments</a></p>
 
     <div class="page-header">
@@ -40,7 +41,7 @@
         }
         else
         {
-            <div class="table-wrap table-compact">
+            <div class="table-wrap table-compact" tabindex="0" role="region" aria-label="Tournament leaderboard">
                 <table>
                     <thead>
                         <tr>
@@ -85,7 +86,7 @@
         }
         else
         {
-            <div class="table-wrap table-compact">
+            <div class="table-wrap table-compact" tabindex="0" role="region" aria-label="Tournament games">
                 <table>
                     <thead>
                         <tr>

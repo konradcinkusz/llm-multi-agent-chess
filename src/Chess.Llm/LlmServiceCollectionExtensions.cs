@@ -26,6 +26,7 @@ public static class LlmServiceCollectionExtensions
                 builder.Services.AddOptions<CopilotOptions>().BindConfiguration("Copilot");
                 builder.Services.AddSingleton<CopilotLlmGateway>();
                 builder.Services.AddSingleton<ILlmGateway>(sp => sp.GetRequiredService<CopilotLlmGateway>());
+                builder.Services.AddSingleton<ICopilotRuntime>(sp => sp.GetRequiredService<CopilotLlmGateway>());
                 builder.Services.AddHostedService<CopilotClientHostedService>();
                 break;
 

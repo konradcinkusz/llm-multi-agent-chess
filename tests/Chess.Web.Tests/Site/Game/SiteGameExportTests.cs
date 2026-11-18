@@ -36,16 +36,70 @@ public class SiteGameExportTests(SiteGameFixture site) : IClassFixture<SiteGameF
         Assert.Equal(SiteDataSet.FinishedGames, expected.Length);
         Assert.Equal(expected, folders);
         Assert.DoesNotContain(SiteDataSet.OpenGame.ToString("D"), folders);
-        foreach (var game in Games)
+        foreach (var game in Games.Where(game => game.Id != SiteDataSet.NoPgnGame))
         {
             Assert.True(File.Exists(Path.Combine(site.Directory, "games", game.Id.ToString("D"), "game.pgn")), $"{game.Id} has no PGN.");
         }
     }
 
     [Fact]
+    public void A_game_the_api_has_no_pgn_for_gets_its_page_without_a_pgn_file_and_without_the_download_link()
+    {
+        var folder = Path.Combine(site.Directory, "games", SiteDataSet.NoPgnGame.ToString("D"));
+
+        Assert.True(File.Exists(Path.Combine(folder, "index.html")));
+        Assert.False(File.Exists(Path.Combine(folder, "game.pgn")));
+        var html = site.Pages[SitePaths.Game(SiteDataSet.NoPgnGame)];
+        Assert.DoesNotContain("data-section=\"pgn\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("game.pgn", html, StringComparison.Ordinal);
+        Assert.Contains("data-section=\"pgn\"", site.Pages[SitePaths.Game(SiteDataSet.GameId(0))], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_game_that_finished_undecided_is_not_on_the_site_at_all()
+    {
+        foreach (var aborted in new[] { SiteDataSet.AbortedGame, SiteDataSet.RestartedGame })
+        {
+            Assert.False(Directory.Exists(Path.Combine(site.Directory, "games", aborted.ToString("D"))));
+            Assert.DoesNotContain(Games, game => game.Id == aborted);
+            Assert.All(site.Pages.Values, html => Assert.DoesNotContain(aborted.ToString("D"), html, StringComparison.Ordinal));
+        }
+
+        Assert.DoesNotContain(Games, game => game.Result == "*");
+        Assert.DoesNotContain("aborted", site.Pages["games/index.html"], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_game_of_a_benchmark_run_links_to_no_tournament_page_and_every_link_still_resolves()
+    {
+        var html = site.Pages[SitePaths.Game(SiteDataSet.BenchmarkGame)];
+
+        Assert.DoesNotContain($"tournaments/{SiteDataSet.BenchmarkRun:D}", html, StringComparison.Ordinal);
+        Assert.DoesNotMatch("(?s)data-section=\"summary\".*?>Tournament</a>", html);
+        Assert.DoesNotContain(SiteDataSet.BenchmarkRun.ToString("D"), site.Pages["games/index.html"] + site.Pages["tournaments/index.html"], StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(site.Directory, "tournaments", SiteDataSet.BenchmarkRun.ToString("D"))));
+    }
+
+    [Fact]
+    public void Text_a_model_sent_is_shown_as_text_and_never_as_markup()
+    {
+        var withLog = GamePages.Values.First(page => page.Contains("data-section=\"log-entries\"", StringComparison.Ordinal));
+
+        Assert.Contains("&lt;script&gt;alert(1)&lt;/script&gt;", withLog, StringComparison.Ordinal);
+        Assert.False(withLog.Contains("<script", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("<img src=x", withLog, StringComparison.Ordinal);
+        Assert.DoesNotContain("<a href=\"https://evil.example/\"", withLog, StringComparison.Ordinal);
+        foreach (var (path, html) in site.Pages)
+        {
+            Assert.False(html.Contains("<script", StringComparison.OrdinalIgnoreCase), $"{path} has a script element.");
+            Assert.DoesNotMatch("(?i)<[^>]+ on\\w+=", html);
+        }
+    }
+
+    [Fact]
     public void The_pgn_file_is_the_pgn_the_api_gives_for_the_game()
     {
-        foreach (var game in Games)
+        foreach (var game in Games.Where(game => game.Id != SiteDataSet.NoPgnGame))
         {
             var file = File.ReadAllText(Path.Combine(site.Directory, "games", game.Id.ToString("D"), "game.pgn"));
 
@@ -136,7 +190,7 @@ public class SiteGameExportTests(SiteGameFixture site) : IClassFixture<SiteGameF
 
             Assert.Contains("data-testid=\"usage-total\"", html, StringComparison.Ordinal);
             Assert.Contains("Snapshot taken 2026-10-25 12:00 UTC", html, StringComparison.Ordinal);
-            if (game.TournamentId is { } tournament)
+            if (game.TournamentId is { } tournament && tournament == SiteDataSet.Tournament)
             {
                 Assert.Contains($"../../tournaments/{tournament:D}/index.html", html, StringComparison.Ordinal);
             }

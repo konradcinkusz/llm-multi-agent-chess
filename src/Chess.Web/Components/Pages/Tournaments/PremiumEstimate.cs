@@ -29,7 +29,10 @@ public static class PremiumEstimate
     /// <summary>The sum of the known estimates. Unknown ones are not counted; the page says how many there are.</summary>
     public static double Known(IEnumerable<ModelEstimate> estimates) => estimates.Sum(estimate => estimate.Requests ?? 0);
 
-    // A styled player is billed as its model (03 §14.4), so the multiplier is the model's.
+    // A styled player is billed as its model (03 §14.4), so the multiplier is the model's. The random player calls no model:
+    // it costs nothing whatever the catalogue lists for it, so it is never counted as billed by token.
     private static double? Multiplier(IReadOnlyList<ModelDto> catalog, string playerId) =>
-        catalog.FirstOrDefault(model => model.Id == PromptStyleChoices.ModelOf(playerId))?.PremiumMultiplier;
+        TournamentFormat.IsFree(playerId)
+            ? 0
+            : catalog.FirstOrDefault(model => model.Id == PromptStyleChoices.ModelOf(playerId))?.PremiumMultiplier;
 }

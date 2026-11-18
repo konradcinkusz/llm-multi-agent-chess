@@ -219,4 +219,68 @@ public class PlannerTests
         Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Plan(
             Request(["fake-a", "fake-b"], durationHours: 1, assumedMoveLatencyMs: 3_000_000), NoInputs, Costs));
     }
+
+    [Fact]
+    public void Tiny_assumptions_that_would_fill_a_week_with_slots_are_refused_at_the_slot_cap()
+    {
+        // Half a ply at 1 ms is 0.5 ms a game: a week holds about 10^9 of them.
+        var request = Request(["fake-a", "fake-b"], durationHours: BroadcastEndpoints.MaxDurationHours,
+            pacing: new PacingProfile(0, 0), assumedMoveLatencyMs: 1) with { AssumedPlies = 0.5 };
+
+        var error = Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Plan(request, NoInputs, Costs));
+
+        Assert.Contains(BroadcastPlanner.MaxSlots.ToString(), error.Message);
+    }
+
+    [Fact]
+    public void A_plan_of_exactly_the_slot_cap_is_still_allowed()
+    {
+        // 72 s games, no gap: 500 games fill a 10-hour window exactly.
+        var request = Request(["fake-a", "fake-b"], durationHours: 10, pacing: new PacingProfile(0, 0), assumedMoveLatencyMs: 900)
+            with { AssumedPlies = 80 };
+
+        var plan = BroadcastPlanner.Plan(request, NoInputs, Costs);
+
+        Assert.Equal(500, plan.Slots.Count);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(1e300)]
+    public void AssumedPlies_must_be_positive_and_finite(double plies)
+    {
+        Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Plan(
+            Request(["fake-a", "fake-b"]) with { AssumedPlies = plies }, NoInputs, Costs));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(1e300)]
+    public void AssumedMoveLatency_must_be_finite_and_not_negative(double latency)
+    {
+        Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Plan(
+            Request(["fake-a", "fake-b"], assumedMoveLatencyMs: latency), NoInputs, Costs));
+    }
+
+    [Fact]
+    public void Layout_lays_games_end_to_end_with_the_gap_and_refuses_a_span_past_the_longest_window()
+    {
+        var windows = BroadcastPlanner.Layout(3, Start, 80, 3000, DefaultPacing);
+
+        Assert.Equal(3, windows.Count);
+        Assert.Equal(Start, windows[0].Start);
+        Assert.Equal(GameLength, windows[0].End - windows[0].Start);
+        Assert.Equal(Gap, windows[1].Start - windows[0].End);
+
+        Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Layout(500, Start, 80, 3_000_000, DefaultPacing));
+        Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Layout(0, Start, 80, 3000, DefaultPacing));
+        Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Layout(BroadcastPlanner.MaxSlots + 1, Start, 80, 3000, DefaultPacing));
+        Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Layout(1, Start, double.NaN, 3000, DefaultPacing));
+        Assert.Throws<InvalidPlanException>(() => BroadcastPlanner.Layout(2, Start, 80, 3000, new PacingProfile(4000, int.MaxValue)));
+    }
 }

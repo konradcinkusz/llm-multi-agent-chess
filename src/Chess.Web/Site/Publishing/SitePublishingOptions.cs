@@ -11,7 +11,10 @@ public sealed class SitePublishingOptions
     /// <summary>Where to push. Null: the origin of the repository the app runs from.</summary>
     public string? Remote { get; set; }
 
-    /// <summary>The branch GitHub Pages serves.</summary>
+    /// <summary>
+    /// The branch the in-app Publish force-pushes to. GitHub Pages is deployed from the publish-site workflow, so this branch does
+    /// not serve the public URL. Never the remote's default branch, <c>main</c> or <c>master</c>.
+    /// </summary>
     public string Branch { get; set; } = "gh-pages";
 
     /// <summary>The publisher's own clone. It is deleted and recreated on every publish; never point it at a folder you keep.</summary>

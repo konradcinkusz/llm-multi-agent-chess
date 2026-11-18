@@ -36,6 +36,13 @@ the model's default effort and the `classic` prompt style.
 
 A model that cannot produce legal moves therefore **loses** — it never gets a free move.
 
+**A gateway error is not a forfeit.** A move whose every attempt ended in a gateway error (the Copilot runtime failed, was not
+connected or refused the request; the attempt's kind is `error`) got no reply from the model at all. The game is then
+**aborted**, termination `aborted`, and the rating leaves it out, as it leaves out any aborted game. This holds for every
+game, not only a broadcast's. A timeout, an illegal reply or an unparseable reply is still the model's own failure and still
+a forfeit, and so is a move whose attempts mix errors with those. The formula and the table above are unchanged. After such
+an abort a tournament or benchmark starts no new game for a while (15 s, doubling to 2 min while it keeps failing; ADR-017).
+
 ## 3. Strength — `R` (Bradley–Terry, Elo scale, with first-move advantage)
 
 For a game between White *w* and Black *b*:
@@ -104,6 +111,9 @@ Properties (each one is a unit test):
 - **Elo-equivalent:** `Δ* = 400 · log10(RQC / (1 − RQC))` — the rating gap that would give the
   same expected score, for readers who think in Elo.
 - **Interval:** the 2.5th and 97.5th percentiles of RQC over the bootstrap (§6).
+- **Computation:** `RatingCalculator.Matrix` derives every ordered pair of a report from one bootstrap instead of one per pair;
+  each cell is exactly the number `Pairwise` gives for that pair (a test compares every cell), so the matrix and the pairwise
+  endpoint show the same figures.
 
 Reading guide shown in the UI: 0.50 – 0.55 *indistinguishable*, 0.55 – 0.65 *slightly better*,
 0.65 – 0.80 *clearly better*, > 0.80 *dominant* — and *not significant* whenever the interval

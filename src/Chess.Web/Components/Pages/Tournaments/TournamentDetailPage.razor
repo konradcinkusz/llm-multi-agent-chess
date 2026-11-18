@@ -32,6 +32,12 @@ else
         <h1>@_tournament.Name</h1>
     </div>
 
+    @if (_tournamentError is not null)
+    {
+        @* A refresh failed: the last figures stay, and the page asks again on its own. *@
+        <p class="status-error" role="alert" data-testid="tournament-refresh-error">Could not refresh the tournament: @_tournamentError</p>
+    }
+
     <section class="card tournament-summary" aria-label="Tournament details">
         <dl class="tournament-facts">
             <dt>Status</dt>
@@ -76,7 +82,7 @@ else
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Tournament leaderboard">
                 <table id="tournament-leaderboard">
                     <thead>
                         <tr>
@@ -88,7 +94,7 @@ else
                             <th class="num">Games</th>
                             <th class="num">Legal first try</th>
                             <th class="num">Quality</th>
-                            <th></th>
+                            <th><span class="visually-hidden">Status</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,7 +140,7 @@ else
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Tournament games">
                 <table id="tournament-games">
                     <thead>
                         <tr>
@@ -145,7 +151,7 @@ else
                             <th>Result</th>
                             <th>Termination</th>
                             <th class="num">Plies</th>
-                            <th></th>
+                            <th><span class="visually-hidden">Game</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -173,6 +179,10 @@ else
 @code {
     [Parameter]
     public Guid Id { get; set; }
+
+    /// <summary>How often the page asks again. Overridden by tests only.</summary>
+    [Parameter]
+    public TimeSpan PollInterval { get; set; } = TournamentFormat.RefreshInterval;
 
     private readonly CancellationTokenSource _cts = new();
     private TournamentRatingsClient _ratings = null!;
@@ -222,9 +232,9 @@ else
             _notFound = true;
             return;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
         {
-            _tournamentError = ex.Message;
+            _tournamentError = ApiFailure.Describe(ex);
             return;
         }
 
@@ -233,9 +243,9 @@ else
             _games = await TournamentGames.LoadAsync(Api, Id, ct);
             _gamesError = null;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
         {
-            _gamesError = ex.Message;
+            _gamesError = ApiFailure.Describe(ex);
         }
 
         try
@@ -243,9 +253,9 @@ else
             _board = await _ratings.GetLeaderboardAsync(Id, ct);
             _boardError = null;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
         {
-            _boardError = ex.Message;
+            _boardError = ApiFailure.Describe(ex);
         }
     }
 
@@ -253,18 +263,32 @@ else
     private async Task PollAsync()
     {
         var ct = _cts.Token;
-        using var timer = new PeriodicTimer(TournamentFormat.RefreshInterval);
+        using var timer = new PeriodicTimer(PollInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                // The fields change on a timer thread, outside any UI event: re-render explicitly.
-                await InvokeAsync(async () =>
+                try
                 {
-                    await ReloadAsync();
-                    StateHasChanged();
-                });
-                if (_tournament is not { } tournament || !TournamentFormat.IsRunning(tournament.Status))
+                    // The fields change on a timer thread, outside any UI event: re-render explicitly.
+                    await InvokeAsync(async () =>
+                    {
+                        await ReloadAsync();
+                        StateHasChanged();
+                    });
+                }
+                catch (Exception ex) when (ApiFailure.IsFailure(ex, ct))
+                {
+                    // A timeout is a TaskCanceledException the page's token did not cause: show it and keep polling.
+                    await InvokeAsync(() =>
+                    {
+                        _tournamentError = ApiFailure.Describe(ex);
+                        StateHasChanged();
+                    });
+                }
+
+                // Stop when the tournament is over or gone. One that has not loaded yet (the API was down) is polled on.
+                if (_notFound || _tournament is { } tournament && !TournamentFormat.IsRunning(tournament.Status))
                 {
                     return;
                 }
@@ -272,6 +296,7 @@ else
         }
         catch (OperationCanceledException)
         {
+            // The page was left: the loop ends.
         }
     }
 

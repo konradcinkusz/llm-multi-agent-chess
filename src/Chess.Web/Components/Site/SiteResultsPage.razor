@@ -4,7 +4,8 @@
 @using Chess.Web.Site
 
 @* The Results page as a snapshot (03 §6.1): the same sections in the same order as /results, without its filter. *@
-<SiteLayout Title="Results" Frame="Frame" Active="results">
+<SiteLayout Title="Results" Frame="Frame" Active="results" Path="@SitePaths.Results"
+            Description="@($"How large language models rank at chess across {Frame.RatedGames} rated games: ratings, charts, move quality and cost.")">
     <div class="page-header">
         <h1>Results</h1>
         <p class="page-lede">How the models rank across every rated game, with the charts and the table behind the ranking.</p>
@@ -102,7 +103,7 @@
                     White advantage: @ResultsModel.Number(Board.WhiteAdvantage, "0") rating points over @Board.Games rated games.
                     Ranked by arena score, then rating; provisional models sort after the others.
                 </p>
-                <div class="table-wrap table-compact">
+                <div class="table-wrap table-compact" tabindex="0" role="region" aria-label="Leaderboard (scrollable table)">
                     <table class="results-table">
                         <thead>
                             <tr>

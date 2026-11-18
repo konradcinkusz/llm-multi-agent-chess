@@ -1,5 +1,6 @@
 using System.Globalization;
 using Chess.Web.Api;
+using Chess.Web.Components.Pages.Shared;
 
 namespace Chess.Web.Components.Pages.Tournaments;
 
@@ -33,6 +34,20 @@ public static class TournamentFormat
     /// </summary>
     public static string Requests(double? value) =>
         value is { } requests ? requests.ToString("#,##0.#", CultureInfo.InvariantCulture) : "by token";
+
+    /// <summary>What an estimate table says of the random player's price and cost: it plays no model, so it costs nothing.</summary>
+    public const string Free = "free";
+
+    /// <summary>True for the random player, whatever its id carries (it has no effort or style, but the check does not rely on it).</summary>
+    public static bool IsFree(string playerId) => PlayerId.Parse(playerId).Model == RandomModelId;
+
+    public static string Price(string playerId, ModelPricingDto? pricing) => IsFree(playerId) ? Free : Price(pricing);
+
+    public static string Requests(string playerId, double? value) => IsFree(playerId) ? Free : Requests(value);
+
+    public static string Credits(string playerId, double? value) => IsFree(playerId) ? Free : Credits(value);
+
+    public static string Usd(string playerId, double? value) => IsFree(playerId) ? Free : Usd(value);
 
     /// <summary>A model's token prices as the forms show them (03 §10): "$3.00 / $15.00 per 1M tokens", or "price unknown".</summary>
     public static string Price(ModelPricingDto? pricing) =>
@@ -88,9 +103,9 @@ public static class TournamentFormat
     public static string Multiplier(double? value) =>
         value is { } multiplier ? "×" + multiplier.ToString("0.##", CultureInfo.InvariantCulture) : "multiplier unknown";
 
-    public static string Fixed(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
+    public static string Fixed(double value, string format) => NumberText.Fixed(value, format);
 
-    public static string Percent(double value) => value.ToString("P0", CultureInfo.InvariantCulture);
+    public static string Percent(double value) => NumberText.Fixed(value, "P0");
 
     public static string When(DateTimeOffset at) =>
         at.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);

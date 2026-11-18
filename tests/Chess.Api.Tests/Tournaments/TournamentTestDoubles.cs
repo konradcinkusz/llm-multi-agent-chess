@@ -66,7 +66,9 @@ internal sealed class TournamentHarness : IAsyncDisposable
 
     public TournamentHarness(
         IReadOnlyList<LlmModelInfo>? models = null,
-        LlmGatewayState state = LlmGatewayState.Ready)
+        LlmGatewayState state = LlmGatewayState.Ready,
+        Func<TimeProvider, TechnicalFailureCooldown>? cooldown = null,
+        Exception? listFailure = null)
     {
         var services = new ServiceCollection();
         services.AddDbContextFactory<ArenaDbContext>(o => o.UseInMemoryDatabase(Guid.NewGuid().ToString()));
@@ -76,11 +78,15 @@ internal sealed class TournamentHarness : IAsyncDisposable
         Events = new InMemoryGameEventStream();
         Runner = new RecordingGameRunner();
         Clock = new ManualClock();
-        var gateway = new StubGateway(new LlmGatewayStatus(state, "test"), models);
+        var gateway = new StubGateway(new LlmGatewayStatus(state, "test"), models, listFailure);
         Catalog = new ModelCatalog(gateway, new MemoryCache(new MemoryCacheOptions()), Options.Create(new CatalogOptions()));
         Costs = new CostInputs(Factory, Options.Create(new CatalogOptions()));
-        Tournaments = new TournamentService(Factory, Runner, Events, Catalog, Costs, Clock);
+        Cooldown = cooldown?.Invoke(Clock);
+        Tournaments = new TournamentService(Factory, Runner, Events, Catalog, Costs, Clock, Cooldown);
     }
+
+    /// <summary>The technical-failure cooldown the service was given, or null when the test gave none.</summary>
+    public TechnicalFailureCooldown? Cooldown { get; }
 
     public IDbContextFactory<ArenaDbContext> Factory { get; }
 

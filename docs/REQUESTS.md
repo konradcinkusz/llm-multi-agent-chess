@@ -5,6 +5,15 @@ the keys, the spend limits, the YouTube sign-in, the prices, what viewers are to
 what to check before going live. The design is [03 §15](architecture/03-TARGET-ARCHITECTURE.md) and
 [ADR-016](architecture/05-DECISIONS.md). The broadcast side is [BROADCAST.md §8](BROADCAST.md#8-viewer-paid-requests-on-the-stream).
 
+**Status of viewer-paid games.** The intake, the price check, the payer ledger, the queue, the budget stop and the admin page
+(`/admin/requests`) are in the app and work as this page describes. The stage panels (the "Next requests", menu and
+"Recent rejections" panels on `/broadcast`) and the public price page of the static site (the menu and its price matrix) were
+removed (commit `0d1056b`), and nothing replaced them. What a viewer can still see in the app is the payer's name in the stage's
+status line while a requested game is on the board. A viewer therefore has no page that shows the menu, the prices or the queue:
+you tell them in the stream description or the chat (section 5), and `GET /api/requests/menu` and `GET /api/requests/queue` are
+the only places the app lists them. The owner is deferring the decision to bring those views back in some form or to retire
+viewer-paid games, so treat the feature as owner-run, not as a finished viewer-facing product.
+
 **Read this first.** A paid game costs real money on your provider accounts. Set a spend limit on each key (section 2) before you
 turn the intake on. The app's own budget stop is the second line of defence, not the first.
 
@@ -51,7 +60,12 @@ Rules the code enforces:
 - A model priced in **neither** `UsdPerMillionInput` / `UsdPerMillionOutput` **nor** `CreditsPerMillionInput` /
   `CreditsPerMillionOutput` cannot be quoted, so it is left out of the menu.
 - With `Arena:Requests:RequireApiKeyModels` on (the default), every menu model must be one of these entries. Startup fails
-  otherwise, and the request never runs on the Copilot subscription.
+  otherwise, and the request never runs on the Copilot subscription. The same holds when a menu model's `Id` is also the id of a
+  Copilot model: the Copilot gateway drops the custom entry and the id would play on the subscription, so the API stops with a
+  message that names the id. The Copilot runtime starts in the background, so the check waits for it to list its models (it asks
+  every 2 s, for up to 5 minutes) and the stop comes a few seconds after the API starts listening; with no Copilot login there is
+  nothing to compare, the check ends with a warning, and the request is refused at play time instead. A model is quoted and played for a viewer only when the
+  model listing marks it `custom`, so a clashing id is never quoted and a request that names one is refused and credited.
 
 ### The menu, tiers and rates: the API's configuration
 
@@ -188,7 +202,9 @@ rate, that payment stays unvalued in the `payer_ledger` table. The rates are con
 
 ## 5. What viewers are told
 
-Put this on the stream, in the chat, or in the stream description. It is what the broadcast shows the viewer, in words the app uses.
+Put this on the stream, in the chat, or in the stream description. The stage and the public site no longer show the menu or the
+prices (see the status above), so this text, with your menu codes and per-side prices filled in from `GET /api/requests/menu`,
+is the only place a viewer learns them.
 
 > **Pay to choose a game.** Send a Super Chat whose message is `!g <white> vs <black> [style]`, for example `!g an vs oa think`.
 > Each side is a code from the price menu. The style is optional: `classic`, `board` or `think`.
@@ -205,8 +221,8 @@ Put this on the stream, in the chat, or in the stream description. It is what th
 > **Budget.** A game stops when the money it has used reaches the share of your payment that the owner receives. The game then ends
 > as a decided game, and it counts in the ranking.
 >
-> **What is shown.** Only the command you sent, parsed into the two codes and the style, and your display name are shown on the
-> stream. The text of your message is never shown.
+> **What is shown.** While your game is on the board, the stream's status line shows your display name. The text of your message is
+> never shown.
 
 ## 6. A recorded run on the fake profile
 
@@ -313,7 +329,7 @@ Playing (about 10 s after; the request now has its game):
 
 The game `dc13822c-b9e9-48db-b01c-599059fabb4e` is an ordinary rated game. Its moves are at `GET /api/games/<gameId>`. While it plays, the
 broadcast paces it at 4 s a move (the running schedule's pace). The game was still running at ply 171 when this section was
-written; its result and the `played` state are added below once it ends.
+written; its result and its `played` state were not recorded.
 
 ## 7. Before going live
 
@@ -329,9 +345,12 @@ written; its result and the `played` state are added below once it ends.
 
 - **The simulate form is visible until the API refuses it.** The form on `/admin/requests` shows at first. The API answers 403 outside
   Mock mode (`Arena:Requests:Mode` is `Off` or `YouTube`), and the form then goes away.
+- **No viewer-facing menu, price or queue view.** The stage panels and the public price page were removed (status at the top of
+  this page). Only `/admin/requests` and the API list the queue and the menu.
 - **`/admin/requests` has no navigation link.** Open it by its address, `http://localhost:5070/admin/requests`.
 - **There is no requeue endpoint.** `POST /api/requests/{id}/cancel` exists, and it works only on a queued request. A request that fails
-  is requeued once by the app. A request left playing by a restart is requeued or closed at startup.
+  is requeued once by the app. A request that is taken while the model catalog is not ready (the Copilot runtime is still starting after a
+  restart) is put back in the queue at once and tried again after 5 s; that wait does not count as an attempt. A request left playing by a restart is requeued or closed at startup, before the broadcast runner takes any request: it is closed as played only when its game finished with a result, and a finished game with no result (aborted) is requeued once, then credited.
 - **A payer's balance is not shown anywhere.** There is no balance endpoint and no balance on the admin page. A balance is the sum of
   the payer's rows in the `payer_ledger` table. The rejection reason names it when a command is refused for lack of credit.
 - **Exchange rates are configuration, not live data.** They are the table in section 4, and they go stale until you update them.

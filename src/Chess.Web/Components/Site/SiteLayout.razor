@@ -8,11 +8,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@Title · LLM Chess Arena</title>
+    <meta name="description" content="@Description" />
+    <meta property="og:site_name" content="LLM Chess Arena" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="@Title · LLM Chess Arena" />
+    <meta property="og:description" content="@Description" />
+    @if (Frame.Canonical(Path) is { } canonical)
+    {
+        <link rel="canonical" href="@canonical" />
+        <meta property="og:url" content="@canonical" />
+    }
     <link rel="icon" type="image/png" href="@Frame.Link("assets/favicon.png")" />
     <link rel="stylesheet" href="@Frame.Link("assets/app.css")" />
     <link rel="stylesheet" href="@Frame.Link("assets/Chess.Web.styles.css")" />
 </head>
-<body>
+<body class="static-site">
     <div class="app-shell">
         <header class="app-header">
             <a class="brand" href="@Frame.Link(SitePaths.Results)"><span class="brand-mark" aria-hidden="true">♞</span>LLM Chess Arena</a>
@@ -25,14 +35,14 @@
             </nav>
         </header>
 
-        <div class="site-strip" data-section="snapshot">
+        <section class="site-strip" data-section="snapshot" aria-label="Snapshot">
             <span>Snapshot taken @GameFormat.When(Frame.TakenAt)</span>
             <span>@RatedText</span>
             @if (Frame.WatchLiveUrl is { } live)
             {
                 <a class="site-live" href="@live" rel="noopener noreferrer">Watch live</a>
             }
-        </div>
+        </section>
 
         <main class="app-main">
             @ChildContent
@@ -64,6 +74,14 @@
 
     [Parameter, EditorRequired]
     public SiteFrame Frame { get; set; } = null!;
+
+    /// <summary>One sentence for the meta description and the Open Graph description: what this page shows.</summary>
+    [Parameter]
+    public string Description { get; set; } = "Ratings of large language models that play chess against each other.";
+
+    /// <summary>Where the page lives, from the export root (<c>SitePaths</c>); with <c>Arena:Site:PublicUrl</c> it gives the canonical address.</summary>
+    [Parameter]
+    public string Path { get; set; } = SitePaths.Results;
 
     /// <summary>Which navigation item is the current page: results, head-to-head, tournaments, games or about.</summary>
     [Parameter]

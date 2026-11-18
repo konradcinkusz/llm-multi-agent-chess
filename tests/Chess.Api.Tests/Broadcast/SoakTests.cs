@@ -80,9 +80,10 @@ public class SoakTests
         Assert.Equal("*", cutGame.Result);
 
         // The outage happened: a slot planned inside it was retried and then skipped, and a flaky slot had to retry and played on.
-        Assert.Contains(slots, s => s.State == SlotState.Skipped
+        Assert.True(slots.Any(s => s.State == SlotState.Skipped
             && s.PlannedStart >= SoakHarness.OutageFrom && s.PlannedStart < SoakHarness.OutageUntil
-            && s.Attempts == BroadcastRunner.MaxAttempts);
+            && s.Attempts == BroadcastRunner.MaxAttempts),
+            "slots: " + string.Join(" | ", slots.Select(s => $"{s.Index}:{s.State}:{s.PlannedStart:HH:mm}:a{s.Attempts}:{s.Note}")));
         Assert.Contains(slots, s => s.State == SlotState.Finished && s.Attempts > 1);
 
         // The ratings still compute from the stored games. Finished games are rated; the cut-off and the aborted ones are not.
