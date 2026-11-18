@@ -131,7 +131,7 @@ jobs:
           # Fail before the deploy does: 90% of the 1 GB limit of a GitHub Pages site.
           test "$size" -lt 966367641
 
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
