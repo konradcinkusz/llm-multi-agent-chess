@@ -57,6 +57,19 @@ public class CopilotRuntimeLifecycleTests
     }
 
     [Fact]
+    public async Task Stopping_twice_stops_the_runtime_once_and_does_not_throw()
+    {
+        var runtime = new FakeRuntime(_ => Task.CompletedTask);
+        var service = new CopilotClientHostedService(runtime, NullLogger<CopilotClientHostedService>.Instance);
+
+        await service.StartAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.Equal(1, runtime.Stops);
+    }
+
+    [Fact]
     public async Task A_session_is_deleted_by_its_id()
     {
         var deleted = new List<string>();

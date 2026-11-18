@@ -21,6 +21,7 @@ internal sealed class CopilotClientHostedService(ICopilotRuntime runtime, ILogge
 {
     private readonly CancellationTokenSource _stopping = new();
     private Task _start = Task.CompletedTask;
+    private int _stopped;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -30,6 +31,13 @@ internal sealed class CopilotClientHostedService(ICopilotRuntime runtime, ILogge
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        // A host can be stopped twice (a test host is stopped by its factory after a test stopped it). The second call has
+        // nothing left to do, and must not touch the cancellation source, which is not disposed for that reason.
+        if (Interlocked.Exchange(ref _stopped, 1) == 1)
+        {
+            return;
+        }
+
         await _stopping.CancelAsync();
         try
         {
@@ -41,7 +49,6 @@ internal sealed class CopilotClientHostedService(ICopilotRuntime runtime, ILogge
         }
 
         await runtime.StopAsync();
-        _stopping.Dispose();
     }
 
     private async Task RunAsync(CancellationToken ct)
