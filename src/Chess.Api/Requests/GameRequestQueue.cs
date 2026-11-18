@@ -8,7 +8,8 @@ namespace Chess.Api.Requests;
 
 /// <summary>
 /// The FIFO of paid game requests (03 §15.1, §15.4). The broadcast runner takes one at a time with <see cref="TakeNextAsync"/>.
-/// A request is played at most twice: a failure requeues it once, then credits the payer. Nothing is taken until the start-up
+/// A request is played at most twice: a failure requeues it once, then credits the payer. A request that could not start only
+/// because the model catalog was not ready is released, which does not count as a play. Nothing is taken until the start-up
 /// recovery has closed the requests a previous process left playing (<see cref="RequestRecoveryGate"/>).
 /// </summary>
 public sealed class GameRequestQueue(IDbContextFactory<ArenaDbContext> factory, IOptions<RequestOptions> options, TimeProvider clock,
@@ -75,6 +76,23 @@ public sealed class GameRequestQueue(IDbContextFactory<ArenaDbContext> factory, 
 
         request.Status = RequestStatus.Played;
         request.FinishedAt = clock.GetUtcNow();
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task ReleaseAsync(Guid requestId, string reason, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var request = await db.GameRequests.FirstAsync(r => r.Id == requestId, ct);
+        if (request.Status != RequestStatus.Playing || request.GameId is not null)
+        {
+            return;
+        }
+
+        // The take counted an attempt that never played; give it back, so the request keeps both of its attempts.
+        request.Status = RequestStatus.Queued;
+        request.StartedAt = null;
+        request.Attempts = Math.Max(0, request.Attempts - 1);
+        request.Reason = reason;
         await db.SaveChangesAsync(ct);
     }
 

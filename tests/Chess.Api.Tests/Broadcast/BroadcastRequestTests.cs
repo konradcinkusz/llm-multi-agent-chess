@@ -182,4 +182,43 @@ public class BroadcastRequestTests
         Assert.NotEqual("*", slotGame.Result);
         Assert.True(games[1].CreatedAt >= slotGame.FinishedAt!.Value, "the request's game waits for the slot's game to finish");
     }
+
+    [Fact]
+    public async Task A_request_waits_without_spending_an_attempt_while_the_model_catalog_is_not_ready_then_plays()
+    {
+        await using var h = NewHarness();
+        h.CatalogGateway.Override = LlmGatewayState.Unavailable;
+        var requestId = await QueueAsync(h, CustomA, CustomB, 1000);
+        await h.SeedScheduleAsync(ScheduleStatus.Running, MoveDelayMs, GapSeconds);
+        await h.StartRunnerAsync();
+
+        // Far more takes than the two attempts a request has; the catalog is still not ready the whole time.
+        var released = 0;
+        await h.Clock.RunUntilAsync(async () =>
+        {
+            var request = await RequestAsync(h, requestId);
+            Assert.NotEqual(RequestStatus.Failed, request.Status);
+            if (request.Status == RequestStatus.Queued && request.Reason == "waiting for the model catalog")
+            {
+                released++;
+            }
+
+            return released >= 5;
+        }, "the request to wait");
+
+        var waiting = await RequestAsync(h, requestId);
+        Assert.True(waiting.Attempts <= 1, $"a wait spends no attempt, but {waiting.Attempts} were counted");
+        Assert.Null(waiting.GameId);
+        Assert.Equal(0, await CreditAsync(h, requestId));
+        Assert.Empty(await h.GamesAsync());
+
+        h.CatalogGateway.Override = null;
+        await h.Clock.RunUntilAsync(async () => (await RequestAsync(h, requestId)).Status == RequestStatus.Played,
+            "the request to be played");
+
+        var played = await RequestAsync(h, requestId);
+        Assert.Equal(1, played.Attempts);
+        Assert.NotNull(played.GameId);
+        Assert.Equal(0, await CreditAsync(h, requestId));
+    }
 }

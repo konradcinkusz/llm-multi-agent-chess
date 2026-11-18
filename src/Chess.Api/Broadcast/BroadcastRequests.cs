@@ -11,6 +11,12 @@ using Microsoft.Extensions.Options;
 
 namespace Chess.Api.Broadcast;
 
+/// <summary>
+/// The model catalog cannot tell the models apart yet (the Copilot runtime is still starting, or it could not list). It says
+/// nothing about the request, so the runner releases the request and waits instead of failing it.
+/// </summary>
+public sealed class CatalogNotReadyException(string message) : InvalidOperationException(message);
+
 /// <summary>A paid request that has its game: the game to play, and the budget that stops it.</summary>
 public sealed record RequestGame(Guid GameId, IGameBudget Budget);
 
@@ -36,6 +42,9 @@ public sealed class BroadcastRequests(
     public Task PlayedAsync(Guid requestId, CancellationToken ct) => queue.PlayedAsync(requestId, ct);
 
     public Task FailedAsync(Guid requestId, string reason, CancellationToken ct) => queue.FailedAsync(requestId, reason, ct);
+
+    /// <summary>Puts the request back in the queue without spending an attempt (see <see cref="CatalogNotReadyException"/>).</summary>
+    public Task ReleaseAsync(Guid requestId, string reason, CancellationToken ct) => queue.ReleaseAsync(requestId, reason, ct);
 
     /// <summary>
     /// Creates the request's game, linked to the request, or refuses the request and credits it. Returns null when refused.
@@ -85,7 +94,7 @@ public sealed class BroadcastRequests(
     /// gateway drops a custom model whose id a Copilot model already uses, and that id then plays on the Copilot subscription,
     /// so a configured id alone does not prove it.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The catalog is not ready, so no model can be told apart yet; the request is requeued.</exception>
+    /// <exception cref="CatalogNotReadyException">The catalog is not ready, so no model can be told apart yet; the runner releases the request.</exception>
     private bool AllCustom(QueuedRequest request, ModelListing listing)
     {
         if (!requests.Value.RequireApiKeyModels)
@@ -95,7 +104,7 @@ public sealed class BroadcastRequests(
 
         if (listing.Warning is not null)
         {
-            throw new InvalidOperationException($"The model catalog is not ready: {listing.Warning}");
+            throw new CatalogNotReadyException($"The model catalog is not ready: {listing.Warning}");
         }
 
         var configured = arena.Value.CustomModels.Select(m => m.Id).ToHashSet(StringComparer.Ordinal);

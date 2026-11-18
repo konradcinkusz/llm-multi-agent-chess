@@ -43,6 +43,12 @@ public interface IGameRequestQueue
 
     /// <summary>The game could not be played for a reason on the arena's side: requeued once, then credited.</summary>
     Task FailedAsync(Guid requestId, string reason, CancellationToken ct);
+
+    /// <summary>
+    /// Puts a request that is playing back in the queue, in its place, without counting the take as an attempt. For a wait that
+    /// is nobody's fault (the model catalog is not ready yet), where a failure would spend one of the two attempts.
+    /// </summary>
+    Task ReleaseAsync(Guid requestId, string reason, CancellationToken ct);
 }
 
 /// <summary>The status vocabulary of a request (03 §15.4).</summary>

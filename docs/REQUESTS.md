@@ -335,7 +335,8 @@ written; its result and the `played` state are added below once it ends.
   Mock mode (`Arena:Requests:Mode` is `Off` or `YouTube`), and the form then goes away.
 - **`/admin/requests` has no navigation link.** Open it by its address, `http://localhost:5070/admin/requests`.
 - **There is no requeue endpoint.** `POST /api/requests/{id}/cancel` exists, and it works only on a queued request. A request that fails
-  is requeued once by the app. A request left playing by a restart is requeued or closed at startup, before the broadcast runner takes any request: it is closed as played only when its game finished with a result, and a finished game with no result (aborted) is requeued once, then credited.
+  is requeued once by the app. A request that is taken while the model catalog is not ready (the Copilot runtime is still starting after a
+  restart) is put back in the queue at once and tried again after 5 s; that wait does not count as an attempt. A request left playing by a restart is requeued or closed at startup, before the broadcast runner takes any request: it is closed as played only when its game finished with a result, and a finished game with no result (aborted) is requeued once, then credited.
 - **A payer's balance is not shown anywhere.** There is no balance endpoint and no balance on the admin page. A balance is the sum of
   the payer's rows in the `payer_ledger` table. The rejection reason names it when a command is refused for lack of credit.
 - **Exchange rates are configuration, not live data.** They are the table in section 4, and they go stale until you update them.

@@ -171,7 +171,40 @@ public class CustomModelClashTests
         var broadcast = new BroadcastRequests(factory, queue, CatalogOf(new ClashGateway(LlmGatewayState.Unavailable)),
             Options.Create(ArenaWith(Own)), requestOptions, Options.Create(new CatalogOptions()), TimeProvider.System);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<CatalogNotReadyException>(() =>
             broadcast.StartAsync(new QueuedRequest(Guid.NewGuid(), Own, Own, 1, 0.7, "Viewer"), default));
+    }
+
+    [Fact]
+    public async Task Releasing_a_request_gives_the_attempt_back_and_keeps_its_place()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContextFactory<ArenaDbContext>(o => o.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        await using var provider = services.BuildServiceProvider();
+        var factory = provider.GetRequiredService<IDbContextFactory<ArenaDbContext>>();
+        var queue = new GameRequestQueue(factory, Options.Create(new RequestOptions()), TimeProvider.System);
+        var id = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.GameRequests.Add(new GameRequestEntity
+            {
+                Id = id, Source = "mock", ExternalId = $"mock:{id:N}", PayerId = "viewer", PayerDisplay = "Viewer",
+                White = Own, Black = Own, PriceMicros = Money.FromUnits(5), Status = RequestStatus.Queued,
+                ReceivedAt = DateTimeOffset.UnixEpoch,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        for (var i = 0; i < 4; i++)
+        {
+            Assert.NotNull(await queue.TakeNextAsync(default));
+            await queue.ReleaseAsync(id, "waiting", default);
+        }
+
+        await using var check = await factory.CreateDbContextAsync();
+        var stored = await check.GameRequests.AsNoTracking().SingleAsync(r => r.Id == id);
+        Assert.Equal(RequestStatus.Queued, stored.Status);
+        Assert.Equal(0, stored.Attempts);
+        Assert.Empty(check.PayerLedger);
     }
 }

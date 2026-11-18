@@ -39,6 +39,9 @@ public sealed class BroadcastRunner(
     /// <summary>The longest the runner sleeps without re-reading the schedule, so that a missed signal costs little.</summary>
     private static readonly TimeSpan MaxWait = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long the runner waits before it takes a paid request again that waits for the model catalog.</summary>
+    private static readonly TimeSpan CatalogRetryWait = TimeSpan.FromSeconds(5);
+
     private static readonly TimeSpan ErrorPause = TimeSpan.FromSeconds(10);
 
     private const string InterruptedNote = "interrupted by a restart";
@@ -152,6 +155,16 @@ public sealed class BroadcastRunner(
         try
         {
             game = await requests.StartAsync(request, ct);
+        }
+        catch (CatalogNotReadyException ex) when (!ct.IsCancellationRequested)
+        {
+            // Not the request's fault, and it must not spend one of its two attempts: back in the queue, then look again soon.
+            logger.LogWarning("Request {RequestId} waits: {Reason}", request.Id, ex.Message);
+            await requests.ReleaseAsync(request.Id, "waiting for the model catalog", ct);
+            signals.Notice = "A paid game is waiting for the model catalog to be ready.";
+            signals.Publish();
+            await WaitAsync(clock.GetUtcNow() + CatalogRetryWait, ct);
+            return;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
