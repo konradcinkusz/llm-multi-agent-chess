@@ -33,6 +33,7 @@
 .replay-board ::deep .chess-board {
     display: block;
     width: 100%;
+    max-width: none;
     height: auto;
 }
 

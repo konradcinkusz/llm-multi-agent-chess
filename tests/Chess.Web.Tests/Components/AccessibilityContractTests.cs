@@ -42,6 +42,37 @@ public class AccessibilityContractTests
     }
 
     [Fact]
+    public void ATableRegionIsNotNamedLikeTheHeadingOfItsSection()
+    {
+        // axe "landmark-unique": a section labelled by its heading and a scroll region inside it with the same text are
+        // two landmarks of the same name (found in the live survey of the merged streams).
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(WebRoot, "Components"), "*.razor", SearchOption.AllDirectories))
+        {
+            var source = File.ReadAllText(file);
+            var headings = Regex.Matches(source, @"<h[1-6][^>]*>([^<@]+)</h[1-6]>").Select(m => m.Groups[1].Value.Trim()).ToHashSet();
+            foreach (Match tag in Regex.Matches(source, @"<div class=""[^""]*\btable-wrap\b[^""]*""[^>]*aria-label=""([^""]+)"""))
+            {
+                if (headings.Contains(tag.Groups[1].Value))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}: {tag.Groups[1].Value}");
+                }
+            }
+        }
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void TheModelMapQuadrantNamesAreStyledThroughTheScopeBoundary()
+    {
+        // ChartText renders the <text> from code, so a scoped rule without ::deep never matches it and the name fell back to
+        // black text on the dark background (found in the dark-theme survey of the merged streams).
+        var css = File.ReadAllText(Path.Combine(WebRoot, "Components", "Charts", "ModelMap.razor.css"));
+        Assert.Contains("::deep .model-map-quadrant", css);
+    }
+
+    [Fact]
     public void TheVisuallyHiddenUtilityIsDefinedOnceInTheSharedStylesheet()
     {
         var css = File.ReadAllText(Path.Combine(WebRoot, "wwwroot", "app.css"));

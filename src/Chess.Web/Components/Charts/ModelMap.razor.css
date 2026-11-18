@@ -23,7 +23,7 @@
     opacity: 0.6;
 }
 
-.model-map-quadrant {
+.model-map-svg ::deep .model-map-quadrant {
     fill: var(--chart-muted);
     font-size: 12px;
     font-style: italic;
