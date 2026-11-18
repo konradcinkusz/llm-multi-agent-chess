@@ -52,9 +52,10 @@ Rules the code enforces:
   `CreditsPerMillionOutput` cannot be quoted, so it is left out of the menu.
 - With `Arena:Requests:RequireApiKeyModels` on (the default), every menu model must be one of these entries. Startup fails
   otherwise, and the request never runs on the Copilot subscription. The same holds when a menu model's `Id` is also the id of a
-  Copilot model: the Copilot gateway drops the custom entry and the id would play on the subscription, so startup fails with a
-  message that names the id (the check runs once the Copilot runtime has listed its models; with no Copilot login there is
-  nothing to compare, and the request is refused at play time instead). A model is quoted and played for a viewer only when the
+  Copilot model: the Copilot gateway drops the custom entry and the id would play on the subscription, so the API stops with a
+  message that names the id. The Copilot runtime starts in the background, so the check waits for it to list its models (it asks
+  every 2 s, for up to 5 minutes) and the stop comes a few seconds after the API starts listening; with no Copilot login there is
+  nothing to compare, the check ends with a warning, and the request is refused at play time instead. A model is quoted and played for a viewer only when the
   model listing marks it `custom`, so a clashing id is never quoted and a request that names one is refused and credited.
 
 ### The menu, tiers and rates: the API's configuration

@@ -27,7 +27,9 @@ public class CustomModelClashTests
     /// <summary>A gateway whose listing has the Copilot model <see cref="Clash"/> (not custom) and the custom <see cref="Own"/>.</summary>
     private sealed class ClashGateway(LlmGatewayState state = LlmGatewayState.Ready) : ILlmGateway
     {
-        public LlmGatewayStatus Status { get; } = new(state, "test");
+        public LlmGatewayState State { get; set; } = state;
+
+        public LlmGatewayStatus Status => new(State, "test");
 
         public Task<IReadOnlyList<LlmModelInfo>> ListModelsAsync(CancellationToken ct)
         {
@@ -43,6 +45,28 @@ public class CustomModelClashTests
         public Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct) =>
             throw new NotSupportedException();
     }
+
+    /// <summary>Runs the check as the host does, and returns the error it stops the host with, or null when it ends quietly.</summary>
+    private static async Task<Exception?> RunAsync(CustomModelClashCheck check)
+    {
+        try
+        {
+            await check.StartAsync(default);
+            await check.ExecuteTask!;
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex;
+        }
+    }
+
+    private static CustomModelClashCheck CheckOf(ModelCatalog catalog, RequestOptions requests, ArenaOptions arena) =>
+        new(catalog, Options.Create(requests), Options.Create(arena))
+        {
+            PollInterval = TimeSpan.FromMilliseconds(10),
+            GiveUpAfter = TimeSpan.FromMilliseconds(100),
+        };
 
     private static ArenaOptions ArenaWith(params string[] ids) =>
         new() { CustomModels = ids.Select(id => new CustomModelOptions { Id = id }).ToList() };
@@ -87,9 +111,9 @@ public class CustomModelClashTests
     [Fact]
     public async Task Start_up_fails_with_a_clear_message_when_a_menu_model_clashes()
     {
-        var check = new CustomModelClashCheck(CatalogOf(new ClashGateway()), Options.Create(MenuOf(Clash)), Options.Create(ArenaWith(Clash)));
+        var check = CheckOf(CatalogOf(new ClashGateway()), MenuOf(Clash), ArenaWith(Clash));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => check.StartAsync(default));
+        var error = Assert.IsType<InvalidOperationException>(await RunAsync(check));
 
         Assert.Contains($"'{Clash}'", error.Message);
         Assert.Contains("Copilot subscription", error.Message);
@@ -100,24 +124,43 @@ public class CustomModelClashTests
     {
         var gateway = new ClashGateway();
 
-        await new CustomModelClashCheck(CatalogOf(gateway), Options.Create(MenuOf(Own)), Options.Create(ArenaWith(Own, Clash)))
-            .StartAsync(default);
+        Assert.Null(await RunAsync(CheckOf(CatalogOf(gateway), MenuOf(Own), ArenaWith(Own, Clash))));
 
         var notRequired = MenuOf(Clash);
         notRequired.RequireApiKeyModels = false;
-        await new CustomModelClashCheck(CatalogOf(gateway), Options.Create(notRequired), Options.Create(ArenaWith(Clash))).StartAsync(default);
+        Assert.Null(await RunAsync(CheckOf(CatalogOf(gateway), notRequired, ArenaWith(Clash))));
 
         var off = MenuOf(Clash);
         off.Mode = RequestMode.Off;
-        await new CustomModelClashCheck(CatalogOf(gateway), Options.Create(off), Options.Create(ArenaWith(Clash))).StartAsync(default);
+        Assert.Null(await RunAsync(CheckOf(CatalogOf(gateway), off, ArenaWith(Clash))));
     }
 
     [Fact]
-    public async Task Start_up_passes_when_the_gateway_is_not_ready_because_nothing_can_be_told_apart()
+    public async Task The_check_ends_quietly_when_the_gateway_never_becomes_ready()
     {
         var gateway = new ClashGateway(LlmGatewayState.Unavailable);
 
-        await new CustomModelClashCheck(CatalogOf(gateway), Options.Create(MenuOf(Clash)), Options.Create(ArenaWith(Clash))).StartAsync(default);
+        Assert.Null(await RunAsync(CheckOf(CatalogOf(gateway), MenuOf(Clash), ArenaWith(Clash))));
+    }
+
+    [Fact]
+    public async Task A_clash_is_found_when_the_gateway_becomes_ready_after_the_host_has_started()
+    {
+        // The real gateway is Unavailable ("starting") when the host starts and Ready some seconds later.
+        var gateway = new ClashGateway(LlmGatewayState.Unavailable);
+        var check = new CustomModelClashCheck(CatalogOf(gateway), Options.Create(MenuOf(Clash)), Options.Create(ArenaWith(Clash)))
+        {
+            PollInterval = TimeSpan.FromMilliseconds(10),
+            GiveUpAfter = TimeSpan.FromSeconds(30),
+        };
+
+        await check.StartAsync(default);
+        await Task.Delay(50);
+        Assert.False(check.ExecuteTask!.IsCompleted, "the check waits while the gateway is starting");
+
+        gateway.State = LlmGatewayState.Ready;
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => check.ExecuteTask);
+        Assert.Contains($"'{Clash}'", error.Message);
     }
 
     [Fact]
