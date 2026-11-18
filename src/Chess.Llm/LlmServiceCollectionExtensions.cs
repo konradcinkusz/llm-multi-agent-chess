@@ -19,6 +19,7 @@ public static class LlmServiceCollectionExtensions
         builder.Services.AddHealthChecks().AddCheck<LlmGatewayHealthCheck>("copilot");
         builder.Services.AddOptions<ArenaOptions>().BindConfiguration("Arena").ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<ArenaOptions>, ArenaOptionsValidator>();
+        builder.Services.AddSingleton<RuntimeCustomModels>();
 
         switch (provider.ToLowerInvariant())
         {
@@ -36,7 +37,8 @@ public static class LlmServiceCollectionExtensions
                 builder.Services.AddSingleton<ILlmGateway>(sp =>
                 {
                     var arena = sp.GetRequiredService<IOptions<ArenaOptions>>().Value;
-                    return new FakeLlmGateway(seed, latency, arena.CustomModels, arena.Cost.UsdPerAiCredit);
+                    return new FakeLlmGateway(seed, latency, arena.CustomModels, arena.Cost.UsdPerAiCredit,
+                        sp.GetRequiredService<RuntimeCustomModels>());
                 });
                 break;
 

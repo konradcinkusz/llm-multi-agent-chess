@@ -14,7 +14,7 @@ namespace Chess.Llm;
 /// <param name="customModels">Custom models to list and serve next to the two fake models.</param>
 /// <param name="usdPerAiCredit">The dollar value of one AI credit, to price the custom models given in US dollars.</param>
 public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnumerable<CustomModelOptions>? customModels = null,
-    double usdPerAiCredit = ArenaCostOptions.DefaultUsdPerAiCredit) : ILlmGateway
+    double usdPerAiCredit = ArenaCostOptions.DefaultUsdPerAiCredit, RuntimeCustomModels? runtimeModels = null) : ILlmGateway
 {
     private const string LegalMovesPrefix = "Legal moves:";
     private const string MoveLinePrefix = "Move:";
@@ -58,7 +58,7 @@ public sealed class FakeLlmGateway(int seed = 1, TimeSpan? latency = null, IEnum
         [
             new LlmModelInfo(FakeAId, "Fake A", 0, true, FakePrices, FakeEfforts, DefaultEffort),
             new LlmModelInfo(FakeBId, "Fake B", 0, true, FakePrices, FakeEfforts, DefaultEffort),
-            .. _customModels.Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true,
+            .. _customModels.Concat(runtimeModels?.Current ?? []).Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true,
                 CustomModelPricing.TokenPrices(c, usdPerAiCredit), Custom: true)),
         ];
         return Task.FromResult(models);

@@ -81,3 +81,8 @@ public sealed record BenchmarkSummaryDto(int Games, double Score, double? Rating
 public sealed record BenchmarkFingerprintDto(string AppVersion, string FormulaVersion, string PromptVersion, DateTimeOffset GeneratedAt);
 public sealed record BenchmarkReportDto(BenchmarkDto Benchmark, IReadOnlyList<BenchmarkOpponentDto> Opponents,
     BenchmarkSummaryDto Summary, BenchmarkFingerprintDto Fingerprint);
+
+/// <summary>Whether an Anthropic API key is saved and how many models it lists. The key itself is never sent back.</summary>
+public sealed record AnthropicStatusDto(bool Configured, int ModelCount, DateTimeOffset? RefreshedAt, string? Error);
+
+public sealed record SaveAnthropicKeyRequest(string ApiKey);

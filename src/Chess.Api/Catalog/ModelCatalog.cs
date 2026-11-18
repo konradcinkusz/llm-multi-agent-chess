@@ -19,6 +19,9 @@ public sealed class ModelCatalog(ILlmGateway gateway, IMemoryCache cache, IOptio
     private const string CacheKey = "catalog:models";
     private static readonly ModelDto Random = new(RandomModelId, "Random", 0, true);
 
+    /// <summary>Forgets the cached listing, so the next request asks the gateway again (a key was saved or removed).</summary>
+    public void Invalidate() => cache.Remove(CacheKey);
+
     public async Task<ModelListing> GetModelsAsync(CancellationToken ct)
     {
         var state = gateway.Status.State;

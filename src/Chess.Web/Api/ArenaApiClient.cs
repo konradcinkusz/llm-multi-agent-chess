@@ -129,6 +129,19 @@ public sealed class ArenaApiClient(HttpClient http)
     public Task CancelRequestAsync(Guid id, CancellationToken ct = default) =>
         EnsureSuccessAsync(http.PostAsync($"/api/requests/{id:D}/cancel", null, ct), ct);
 
+    public Task<AnthropicStatusDto> GetAnthropicAsync(CancellationToken ct = default) =>
+        GetJsonAsync<AnthropicStatusDto>("/api/anthropic", ct);
+
+    /// <summary>Saves the key after the API has checked it with Anthropic, and lists the models it unlocks.</summary>
+    public async Task<AnthropicStatusDto> SaveAnthropicKeyAsync(string apiKey, CancellationToken ct = default) =>
+        await ReadJsonAsync<AnthropicStatusDto>(await http.PutAsJsonAsync("/api/anthropic", new SaveAnthropicKeyRequest(apiKey), JsonOptions, ct), ct);
+
+    public async Task<AnthropicStatusDto> RefreshAnthropicModelsAsync(CancellationToken ct = default) =>
+        await ReadJsonAsync<AnthropicStatusDto>(await http.PostAsync("/api/anthropic/refresh", null, ct), ct);
+
+    public Task RemoveAnthropicKeyAsync(CancellationToken ct = default) =>
+        EnsureSuccessAsync(http.DeleteAsync("/api/anthropic", ct), ct);
+
     private async Task<T> GetJsonAsync<T>(string url, CancellationToken ct) =>
         await ReadJsonAsync<T>(await http.GetAsync(url, ct), ct);
 

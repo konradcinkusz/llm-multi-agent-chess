@@ -21,6 +21,8 @@ public class NavigationTests
         "/admin/site",
         // Not in 03 §6: the viewer-request admin (03 §15.6), reached by its address like the site admin.
         "/admin/requests",
+        // Not in 03 §6: the API keys of other providers (Anthropic), under the More menu.
+        "/admin/providers",
     ];
 
     // "/broadcast" is the chrome-less OBS page (03 §9.4). It is also linked from the navigation (the viewer's way in), so it is in NavHrefs too.
@@ -28,7 +30,7 @@ public class NavigationTests
 
     // The navigation shows the top-level routes, Results first; the detail routes are reached from their lists.
     private static readonly string[] NavHrefs =
-        ["/results", "/", "/head-to-head", "/tournaments", "/benchmark", "/broadcast", "/broadcast/plan", "/games", "/admin/attempts", "/admin/site"];
+        ["/results", "/", "/head-to-head", "/tournaments", "/benchmark", "/broadcast", "/broadcast/plan", "/games", "/admin/attempts", "/admin/site", "/admin/providers"];
 
     [Fact]
     public void EveryRouteOfSection6IsServedByAPlaceholderPage()
@@ -68,7 +70,7 @@ public class NavigationTests
     }
 
     [Fact]
-    public void TheTwoAdminPagesSitUnderANoScriptMoreDisclosure()
+    public void TheAdminPagesSitUnderANoScriptMoreDisclosure()
     {
         using var ctx = new BunitContext();
 
@@ -76,10 +78,10 @@ public class NavigationTests
 
         var more = cut.Find("details.nav-more");
         Assert.Equal("More", more.QuerySelector("summary")!.TextContent);
-        Assert.Equal(new[] { "/admin/attempts", "/admin/site" },
+        Assert.Equal(new[] { "/admin/attempts", "/admin/site", "/admin/providers" },
             more.QuerySelectorAll("a").Select(a => a.GetAttribute("href")!).ToArray());
         // Results and the other main items stay outside it, in the strip itself.
-        var outside = cut.FindAll("a").Select(a => a.GetAttribute("href")!).Except(["/admin/attempts", "/admin/site"]).ToArray();
+        var outside = cut.FindAll("a").Select(a => a.GetAttribute("href")!).Except(["/admin/attempts", "/admin/site", "/admin/providers"]).ToArray();
         Assert.Equal(8, outside.Length);
         Assert.Empty(more.QuerySelectorAll("script"));
         Assert.False(more.HasAttribute("open"));

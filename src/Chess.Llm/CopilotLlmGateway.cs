@@ -12,7 +12,8 @@ namespace Chess.Llm;
 /// <see cref="StartAsync"/> (called from the hosted service) and never throws out of it: a runtime that
 /// cannot start, is not signed in or lists no models is reported through <see cref="Status"/>.
 /// </summary>
-public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions<ArenaOptions> arena, ILogger<CopilotLlmGateway> logger)
+public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions<ArenaOptions> arena, ILogger<CopilotLlmGateway> logger,
+    RuntimeCustomModels? runtimeModels = null)
     : ILlmGateway, ICopilotRuntime
 {
     private static readonly ActivitySource ActivitySource = new("Chess.Llm");
@@ -22,8 +23,9 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private volatile LlmGatewayStatus _status = new(LlmGatewayState.Unavailable, "Copilot runtime not started");
     private CopilotClient? _client;
-    // The custom models that may be listed and served. Set once the runtime has listed the Copilot models (ADR-014).
-    private IReadOnlyList<CustomModelOptions> _customModels = [];
+    // The ids of the Copilot models, known once the runtime has listed them. A custom model with one of these ids is refused (ADR-014).
+    private HashSet<string> _copilotIds = [];
+    private readonly HashSet<string> _clashLogged = new(StringComparer.Ordinal);
 
     public LlmGatewayStatus Status => _status;
 
@@ -61,7 +63,9 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
                     logger.LogDebug("Model {ModelId} billing: {Billing}", model.Id, DescribeBilling(model));
                 }
 
-                _customModels = ActiveCustomModels(models.Select(m => m.Id));
+                _copilotIds = models.Select(m => m.Id).ToHashSet(StringComparer.Ordinal);
+                var listedCustom = ActiveCustomModels();
+                logger.LogInformation("{CustomModelCount} custom models listed", listedCustom.Count);
                 _status = new LlmGatewayStatus(LlmGatewayState.Ready, $"Signed in as {auth.Login}; {models.Count} models.");
                 logger.LogInformation("Copilot runtime ready with {ModelCount} models", models.Count);
             }
@@ -121,32 +125,34 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
                 m.DefaultReasoningEffort))
             .ToList();
 
-        copilot.AddRange(_customModels.Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true,
+        copilot.AddRange(ActiveCustomModels().Select(c => new LlmModelInfo(c.Id, c.DisplayName ?? c.Id, PremiumMultiplier: null, Enabled: true,
             CustomModelPricing.TokenPrices(c, _arena.Cost.UsdPerAiCredit), Custom: true)));
         return copilot;
     }
 
     /// <summary>
-    /// The custom models that may be listed. A custom id that a Copilot model already uses is refused and logged: the
-    /// Copilot id would otherwise be ambiguous (ADR-014).
+    /// The custom models that may be listed: those of <c>Arena:CustomModels</c> and those added at run time. A custom id that a
+    /// Copilot model already uses is refused and logged once: the Copilot id would otherwise be ambiguous (ADR-014).
     /// </summary>
-    private IReadOnlyList<CustomModelOptions> ActiveCustomModels(IEnumerable<string> copilotIds)
+    private IReadOnlyList<CustomModelOptions> ActiveCustomModels()
     {
-        var taken = copilotIds.ToHashSet(StringComparer.Ordinal);
+        var taken = _copilotIds;
         var active = new List<CustomModelOptions>();
-        foreach (var custom in _arena.CustomModels)
+        foreach (var custom in _arena.CustomModels.Concat(runtimeModels?.Current ?? []))
         {
             if (taken.Contains(custom.Id))
             {
-                logger.LogError("Custom model {ModelId} is not listed: a Copilot model has the same id. Rename it under Arena:CustomModels.", custom.Id);
+                if (_clashLogged.Add(custom.Id))
+                {
+                    logger.LogError("Custom model {ModelId} is not listed: a Copilot model has the same id. Rename it under Arena:CustomModels.", custom.Id);
+                }
             }
-            else
+            else if (!active.Exists(a => a.Id == custom.Id))
             {
                 active.Add(custom);
             }
         }
 
-        logger.LogInformation("{CustomModelCount} custom models listed", active.Count);
         return active;
     }
 
@@ -190,7 +196,7 @@ public sealed class CopilotLlmGateway(IOptions<CopilotOptions> options, IOptions
     public async Task<ILlmConversation> StartConversationAsync(LlmConversationOptions options, CancellationToken ct)
     {
         var client = RequireReady();
-        var custom = _customModels.FirstOrDefault(c => string.Equals(c.Id, options.ModelId, StringComparison.Ordinal));
+        var custom = ActiveCustomModels().FirstOrDefault(c => string.Equals(c.Id, options.ModelId, StringComparison.Ordinal));
         var config = custom is null
             ? CopilotSessionSettings.ForCopilotModel(options)
             : CopilotSessionSettings.ForCustomModel(options, custom);

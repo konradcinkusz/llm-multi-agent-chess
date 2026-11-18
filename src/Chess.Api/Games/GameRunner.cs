@@ -216,12 +216,14 @@ public sealed class GameRunner(
                 return null;
             }
 
-            await FinishAsync(run, end, gameId, slot, stoppingToken);
             if (end.Termination != GameTermination.Aborted.Termination)
             {
-                // A real end proves the gateway answered, so the cooldown is over.
+                // A real end proves the gateway answered, so the cooldown is over. It is cleared before the end is published, so
+                // whoever waits for the finished event never sees a cooldown that is already over.
                 cooldown?.RecordSuccess();
             }
+
+            await FinishAsync(run, end, gameId, slot, stoppingToken);
 
             return end;
         }
