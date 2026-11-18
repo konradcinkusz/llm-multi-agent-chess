@@ -1,0 +1,140 @@
+@page "/admin/providers"
+@using Chess.Web.Api
+@inject ArenaApiClient Api
+
+<PageTitle>Providers · LLM Chess Arena</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Providers</h1>
+        <p class="page-lede">API keys for models that do not run on the Copilot subscription. The key is checked, then kept on this computer.</p>
+    </div>
+
+    <section class="card stack" aria-labelledby="anthropic-title" data-testid="anthropic-card">
+        <h2 id="anthropic-title">Anthropic</h2>
+
+        @if (!_loaded)
+        {
+            <p class="muted" role="status">Loading…</p>
+        }
+        else if (_status is null)
+        {
+            <p class="status-error" role="alert" data-testid="anthropic-unavailable">@(_error ?? "The arena API is not answering.")</p>
+        }
+        else
+        {
+            @if (_status.Configured)
+            {
+                <p class="callout callout-info" role="status" data-testid="anthropic-status">
+                    A key is saved. @_status.ModelCount models are listed@(_status.RefreshedAt is { } at ? $", last refreshed {at.LocalDateTime:g}" : "").
+                </p>
+                @if (_status.Error is not null)
+                {
+                    <p class="callout callout-danger" role="alert" data-testid="anthropic-status-error">The last refresh failed: @_status.Error</p>
+                }
+            }
+            else
+            {
+                <p class="muted" data-testid="anthropic-status">No key is saved.</p>
+            }
+
+            <form class="stack" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <label for="anthropic-key">API key</label>
+                <input id="anthropic-key" data-testid="anthropic-key" type="password" autocomplete="off" spellcheck="false"
+                       placeholder="@(_status.Configured ? "Paste a new key to replace the saved one" : "sk-ant-…")"
+                       @bind="_key" @bind:event="oninput" disabled="@_busy" />
+                <div class="cluster">
+                    <button type="submit" class="btn-primary" data-testid="anthropic-save" disabled="@(_busy || string.IsNullOrWhiteSpace(_key))">Save and list models</button>
+                    @if (_status.Configured)
+                    {
+                        <button type="button" class="btn" data-testid="anthropic-refresh" @onclick="RefreshAsync" disabled="@_busy">Refresh models</button>
+                        <button type="button" class="btn" data-testid="anthropic-remove" @onclick="RemoveAsync" disabled="@_busy">Remove key</button>
+                    }
+                </div>
+            </form>
+
+            @if (_busy)
+            {
+                <p class="loading-msg muted" role="status">Asking Anthropic…</p>
+            }
+            @if (_error is not null)
+            {
+                <p class="callout callout-danger" role="alert" data-testid="anthropic-error">@_error</p>
+            }
+            @if (_message is not null)
+            {
+                <p class="callout callout-info" role="status" data-testid="anthropic-message">@_message</p>
+            }
+
+            <p class="muted">
+                The key is sent to the arena API on this computer and to Anthropic, nowhere else. It is stored encrypted in your user
+                folder, outside the repository, and is never shown again. The models appear on the Play, Tournament and Benchmark
+                pages next to the Copilot models, marked <em>Anthropic API</em>. Anthropic's model list has no prices, so these models
+                cannot be offered on the viewer-request menu until you give them prices (<code>Arena:CustomModels</code>).
+                Games on them are billed by Anthropic to your key.
+            </p>
+        }
+    </section>
+</div>
+
+@code {
+    private AnthropicStatusDto? _status;
+    private bool _loaded;
+    private bool _busy;
+    private string _key = "";
+    private string? _error;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _status = await Api.GetAnthropicAsync();
+        }
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, CancellationToken.None))
+        {
+            _error = ApiFailure.Describe(ex);
+        }
+
+        _loaded = true;
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        _status = await Api.SaveAnthropicKeyAsync(_key.Trim());
+        _key = "";
+        _message = $"The key was accepted. {_status.ModelCount} models are listed.";
+    });
+
+    private Task RefreshAsync() => RunAsync(async () =>
+    {
+        _status = await Api.RefreshAnthropicModelsAsync();
+        _message = $"{_status.ModelCount} models are listed.";
+    });
+
+    private Task RemoveAsync() => RunAsync(async () =>
+    {
+        await Api.RemoveAnthropicKeyAsync();
+        _status = await Api.GetAnthropicAsync();
+        _message = "The key was removed, and its models are no longer listed.";
+    });
+
+    private async Task RunAsync(Func<Task> work)
+    {
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            await work();
+        }
+        catch (Exception ex) when (ApiFailure.IsFailure(ex, CancellationToken.None))
+        {
+            _error = ApiFailure.Describe(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

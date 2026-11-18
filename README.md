@@ -101,7 +101,7 @@ This starts the PostgreSQL container with the named volume `chess-arena-pg`, the
 
 ## Pages
 
-The table lists the pages in the order of the navigation: Results, Live game, Head-to-head, Tournaments, Benchmark, Live broadcast, Broadcast plan, Games. Attempts and Site sit under **More** at the end of the strip (a disclosure that needs no script), so every item fits the header at 1366 px; on a phone the strip scrolls sideways. Viewer requests is not in the navigation. The filters of Results, Head-to-head, Games and Attempts, and the game the Live game page follows, are kept in the address (Results `?tournament=&order=&style=`, Head-to-head `?a=&b=`, Games `?model=&status=&page=`, Attempts `?game=&model=&reply=&page=`, Live game `?game=`), so a link, a reload and the Back button show the same page.
+The table lists the pages in the order of the navigation: Results, Live game, Head-to-head, Tournaments, Benchmark, Live broadcast, Broadcast plan, Games. Attempts, Site and Providers sit under **More** at the end of the strip (a disclosure that needs no script), so every item fits the header at 1366 px; on a phone the strip scrolls sideways. Viewer requests is not in the navigation. The filters of Results, Head-to-head, Games and Attempts, and the game the Live game page follows, are kept in the address (Results `?tournament=&order=&style=`, Head-to-head `?a=&b=`, Games `?model=&status=&page=`, Attempts `?game=&model=&reply=&page=`, Live game `?game=`), so a link, a reload and the Back button show the same page.
 
 | Page | Route | What it shows |
 |---|---|---|
@@ -115,6 +115,7 @@ The table lists the pages in the order of the navigation: Results, Live game, He
 | Games | `/games`, `/games/{id}` | Paged archive, filterable by player (the rated players, then the models that have no rating) and status. Replay shows the same move table, engine log and game summary as the live page, with each move's attempts, latency, centipawn loss and best move, and a PGN download. A long game's move list is paged and follows the move on the board; a slider steps through the plies. |
 | Attempts | `/admin/attempts` | Every LLM attempt with its prompt and reply, filterable by game, player and legality. The legality filter is applied by the API, so it covers every page. Times are UTC. |
 | Site | `/admin/site` | Export the public results site of your own database and, as an advanced option, publish it to a branch; see the last export, its size against the Pages limit, and the last publish. The public URL is served by the `publish-site` workflow, not by this. See [Public results site](#public-results-site). |
+| Providers | `/admin/providers` | Paste an Anthropic API key. The API checks it with Anthropic, keeps it encrypted in a file in your user folder (never the repository or the database), and lists every model the key can use next to the Copilot models, marked *Anthropic API*. **Refresh models** asks again; **Remove key** deletes the file and the models. The key is never shown again or returned by the API. The models have no prices, so they are not on the viewer-request menu until `Arena:CustomModels` prices them. The Copilot runtime still has to be running: the models are served through its bring-your-own-key configuration. |
 | Viewer requests | `/admin/requests` | Not in the navigation. The requests playing now, the queue with cancel, the recent requests, and a simulate form in Mock mode. The stage and the public site show no menu, price or queue; see [Viewer-paid games](#viewer-paid-games). |
 
 Copilot's `auto` model is hidden from the model pickers unless `Arena:ShowAutoModel` is `true`: it picks a different model for each request, so it is not one player.
@@ -306,9 +307,11 @@ The API reads its settings from `src/Chess.Api/appsettings.json` and from the us
 | `Arena:Cost:UsdPerAiCredit` | `0.01` | The dollar figure shown beside AI credits. |
 | `Analysis:StockfishPath` | empty | Empty means look for Stockfish on `PATH`. |
 | `Analysis:Depth` | `12` | Stockfish search depth. |
+| `Arena:Anthropic:KeyFolder` | `llm-chess-arena` in the user's local application data | Where the key saved on the Providers page is kept (`anthropic.key`, encrypted with Data Protection, next to its `keys` folder). Outside the repository. |
+| `Arena:Anthropic:BaseUrl` | `https://api.anthropic.com` | The Anthropic API the key is checked against. |
 | `Arena:AllowedOrigins` | none | Extra origins the [403 guard](#troubleshooting-the-health-states) accepts. |
 
-Secrets (the Copilot token, PostgreSQL password) are AppHost secret parameters; none belongs in a file.
+Secrets (the Copilot token, PostgreSQL password) are AppHost secret parameters; none belongs in a file. An Anthropic key is typed on the Providers page and kept encrypted in your user folder, outside the repository.
 
 ## API
 
@@ -320,6 +323,7 @@ The API listens on <http://127.0.0.1:5080> and every route is under `/api`. The 
 | Tournaments | `POST` and `GET /api/tournaments`, `GET` and `DELETE /api/tournaments/{id}` |
 | Benchmarks | `POST` and `GET /api/benchmarks`, `GET /api/benchmarks/{id}`, `GET /api/benchmarks/{id}/report`, `POST /api/benchmarks/{id}/cancel` |
 | Ratings | `GET /api/ratings`, `/api/ratings/history`, `/api/ratings/matrix`, `/api/ratings/pairwise`, `/api/results/breakdown` |
+| Anthropic key | `GET /api/anthropic` (saved or not, model count, never the key), `PUT /api/anthropic` (`{"apiKey": "…"}`, checked before it is saved), `POST /api/anthropic/refresh`, `DELETE /api/anthropic` |
 | Catalog and status | `GET /api/models`, `/api/prompt-styles`, `/api/status`, `/api/attempts`, `/api/cost/inputs` |
 | Broadcast | `POST /api/broadcast/plan`, `POST` and `GET /api/broadcast/schedules`, `GET` and `DELETE /api/broadcast/schedules/{id}`, `PUT …/slots`, `POST …/start`, `…/pause`, `…/resume`, `…/stop`, `GET /api/broadcast/now` |
 | Viewer requests | `GET /api/requests/menu`, `/quote`, `/queue`, `POST /api/requests/simulate` (Mock mode only), `POST /api/requests/{id}/cancel` (see [Viewer-paid games](#viewer-paid-games)) |

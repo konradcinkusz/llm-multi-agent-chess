@@ -10,13 +10,14 @@
     <NavLink href="/broadcast" Match="NavLinkMatch.All">Live broadcast</NavLink>
     <NavLink href="/broadcast/plan">Broadcast plan</NavLink>
     <NavLink href="/games">Games</NavLink>
-    @* The two admin pages sit under a disclosure that needs no script. The key changes with every navigation, so the
+    @* The admin pages sit under a disclosure that needs no script. The key changes with every navigation, so the
        menu is closed again on the page it led to. *@
     <details class="nav-more" @key="_menuKey" data-testid="nav-more">
         <summary>More</summary>
         <div class="nav-more-panel">
             <NavLink href="/admin/attempts">Attempts</NavLink>
             <NavLink href="/admin/site">Site</NavLink>
+            <NavLink href="/admin/providers">Providers</NavLink>
         </div>
     </details>
 </nav>
