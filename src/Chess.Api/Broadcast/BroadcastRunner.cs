@@ -92,16 +92,18 @@ public sealed class BroadcastRunner(
     /// </summary>
     private async Task StepAsync(CancellationToken ct)
     {
+        // Taken before the state is read, so a command published while it is read still wakes the wait below.
+        var changed = signals.Changed;
         var active = await ActiveScheduleAsync(ct);
         if (active?.Status == ScheduleStatus.Paused)
         {
-            await WaitAsync(clock.GetUtcNow() + MaxWait, ct);
+            await WaitAsync(clock.GetUtcNow() + MaxWait, ct, changed);
             return;
         }
 
         if (active is null)
         {
-            await WaitAsync(clock.GetUtcNow() + MaxWait, ct);
+            await WaitAsync(clock.GetUtcNow() + MaxWait, ct, changed);
             return;
         }
 
@@ -539,9 +541,16 @@ public sealed class BroadcastRunner(
     /// </summary>
     private async Task HoldAsync(Guid scheduleId, DateTimeOffset until, CancellationToken ct)
     {
-        while (clock.GetUtcNow() < until && await ActiveAsync(scheduleId, ct))
+        while (true)
         {
-            await WaitAsync(until, ct);
+            // Taken before the schedule is read, so a stop published while it is read still ends the hold.
+            var changed = signals.Changed;
+            if (clock.GetUtcNow() >= until || !await ActiveAsync(scheduleId, ct))
+            {
+                return;
+            }
+
+            await WaitAsync(until, ct, changed);
         }
     }
 
@@ -555,8 +564,11 @@ public sealed class BroadcastRunner(
     /// <summary>
     /// Sleeps until the time, or until something is published (a command, a finished game), whichever comes first. The caller
     /// then re-reads the state; the sleep is capped so that a missed signal costs at most <see cref="MaxWait"/>.
+    /// <paramref name="changed"/> is the signal the caller took before it read the state: a publish between that read and this
+    /// wait has completed it, so the wait returns at once instead of sleeping through the change. Without it the wait takes the
+    /// current signal, which is right only when nothing was read that a publish could have changed.
     /// </summary>
-    private async Task WaitAsync(DateTimeOffset until, CancellationToken ct)
+    private async Task WaitAsync(DateTimeOffset until, CancellationToken ct, Task? changed = null)
     {
         var remaining = until - clock.GetUtcNow();
         if (remaining <= TimeSpan.Zero)
@@ -571,7 +583,7 @@ public sealed class BroadcastRunner(
 
         using var wake = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var delay = Task.Delay(remaining, clock, wake.Token);
-        await Task.WhenAny(signals.Changed, delay);
+        await Task.WhenAny(changed ?? signals.Changed, delay);
         wake.Cancel();
         ct.ThrowIfCancellationRequested();
     }

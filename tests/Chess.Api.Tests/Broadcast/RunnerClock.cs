@@ -9,6 +9,14 @@ internal sealed class RunnerClock(DateTimeOffset start) : TimeProvider
     private readonly Lock _gate = new();
     private readonly List<ArmedTimer> _timers = [];
     private DateTimeOffset _now = start;
+    private long _changes;
+    private long _settledChanges = -1;
+    private long _settledSince;
+
+    /// <summary>A jump of the clock at least this long waits until the timers have stood still for <see cref="SettleMilliseconds"/>.</summary>
+    private static readonly TimeSpan SettleOver = TimeSpan.FromSeconds(10);
+
+    private const long SettleMilliseconds = 20;
 
     public override DateTimeOffset GetUtcNow()
     {
@@ -25,7 +33,12 @@ internal sealed class RunnerClock(DateTimeOffset start) : TimeProvider
         return timer;
     }
 
-    /// <summary>Fires the earliest armed timer, moving the clock to its due time. Returns false when none is armed.</summary>
+    /// <summary>
+    /// Fires the earliest armed timer, moving the clock to its due time. Returns false when none is armed, and also when the
+    /// jump would be long while timers are still changing: a signal may have woken a waiter whose continuation, still queued on
+    /// the thread pool, is about to disarm its long timer (the runner's 30 s idle wait) and arm a short one (a 5 s gap). Firing
+    /// the long timer first would move the clock past the gap. The caller waits a moment and asks again.
+    /// </summary>
     public bool FireNext()
     {
         ArmedTimer next;
@@ -37,6 +50,10 @@ internal sealed class RunnerClock(DateTimeOffset start) : TimeProvider
             }
 
             next = _timers.MinBy(t => t.Due)!;
+            if (next.Due - _now >= SettleOver && !SettledLocked())
+            {
+                return false;
+            }
             _timers.Remove(next);
             if (next.Due > _now)
             {
@@ -79,11 +96,26 @@ internal sealed class RunnerClock(DateTimeOffset start) : TimeProvider
         }
     }
 
+    /// <summary>True once no timer has been armed or disarmed for <see cref="SettleMilliseconds"/> of real time.</summary>
+    private bool SettledLocked()
+    {
+        var now = Environment.TickCount64;
+        if (_changes != _settledChanges)
+        {
+            _settledChanges = _changes;
+            _settledSince = now;
+            return false;
+        }
+
+        return now - _settledSince >= SettleMilliseconds;
+    }
+
     private void Arm(ArmedTimer timer)
     {
         lock (_gate)
         {
             _timers.Add(timer);
+            _changes++;
         }
     }
 
@@ -91,7 +123,10 @@ internal sealed class RunnerClock(DateTimeOffset start) : TimeProvider
     {
         lock (_gate)
         {
-            _timers.Remove(timer);
+            if (_timers.Remove(timer))
+            {
+                _changes++;
+            }
         }
     }
 

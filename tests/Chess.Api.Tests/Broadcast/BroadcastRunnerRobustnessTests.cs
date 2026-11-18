@@ -228,7 +228,7 @@ public class BroadcastRunnerRobustnessTests
         await h.Clock.RunUntilAsync(async () => (await h.ScheduleAsync(id)).Status == ScheduleStatus.Finished, "the schedule to finish");
 
         var slot = (await h.SlotsAsync(id)).Single();
-        Assert.Equal(SlotState.Finished, slot.State);
+        Assert.True(slot.State == SlotState.Finished, $"slot {slot.State}, note {slot.Note}, attempts {slot.Attempts}");
         Assert.NotEqual(aborted, slot.GameId);
         Assert.Equal(2, slot.Attempts);
     }
