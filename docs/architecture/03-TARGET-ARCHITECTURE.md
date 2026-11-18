@@ -324,8 +324,10 @@ and there is no CORS — without a second stack:
 - Live updates: `GameEventsClient` reads `GET /api/games/{id}/events` as a stream
   (`HttpCompletionOption.ResponseHeadersRead`, line-by-line SSE parsing) and raises C# events
   the page re-renders on. No SignalR client package, no hub on the API.
-- Pages: `/results` (**first item in the navigation**) · `/` live game · `/head-to-head` ·
-  `/tournaments` (+ `/{id}`) · `/games` (+ `/{id}` replay) · `/admin/attempts`.
+- Pages, in the order of the navigation: `/results` (**first item**) · `/` live game · `/head-to-head` ·
+  `/tournaments` (+ `/{id}`) · `/benchmark` (+ `/{id}` report) · `/broadcast` (live broadcast) · `/broadcast/plan` ·
+  `/games` (+ `/{id}` replay), then under **More**: `/admin/attempts` · `/admin/site`. `/admin/requests` has no navigation
+  link. `/not-found` is the 404 page.
 - Charts are pure Razor SVG components in `Components/Charts/` (no JS library), following the
   dataviz rules in §6.1.
 
@@ -406,7 +408,7 @@ the dependency budget and is not the product.)
   and an ordered list of **slots** (one slot = one game: white model, black model, planned start,
   planned end).
 - **Pacing** makes games watchable: `MoveDelayMs` (pause after every move so viewers can read, default
-  4000), `GameGapSeconds` (title-card pause between games, default 20), `MoveTimeoutSeconds`
+  4000), `GameGapSeconds` (title-card pause between games; the API has no default, the planner page sends 1800), `MoveTimeoutSeconds`
   as before. Pacing is a property of broadcast games only (stored on the schedule) — ordinary games
   keep running at full speed.
 - **Timing.** Planned start and end are estimates, not appointments (the planner's lengths give the first one). The runner
@@ -453,7 +455,9 @@ public sealed record NowNextDto(string Status, SlotDto? Current, IReadOnlyList<S
 Endpoints (`/api/broadcast/…`): `POST /plan` (PlanRequest → ScheduleDetailDto, saved as Draft — nothing
 runs), `GET /schedules`, `GET /schedules/{id}`, `PUT /schedules/{id}/slots` (replace/reorder slots of a
 Draft/Scheduled schedule), `POST /schedules/{id}/start` (Scheduled → Running now, or at `startsAt`),
-`POST /pause`, `POST /resume`, `POST /stop`, `GET /now` (NowNextDto — for the broadcast page and OBS).
+`POST /pause`, `POST /resume`, `POST /stop`, `GET /now` (NowNextDto — for the broadcast page and OBS). Added since:
+`POST /schedules` (create a schedule from picked games in one call, optionally started; the planner page uses it) and
+`DELETE /schedules/{id}` (a draft only).
 Live game events reuse `GET /api/games/{id}/events`.
 
 ### 9.3 Persistence (Postgres, migration `AddBroadcast`)
@@ -465,17 +469,19 @@ attempts, note?`). Everything the channel plays is stored; nothing about the sch
 
 ### 9.4 Pages
 
-- `/broadcast/plan` (in the app navigation): the planner form — pick models (premium multiplier
-  shown), start time, 24 h default, pacing, seed; **preview timeline** of all slots and the day's
-  premium-request estimate **before** anything is saved; edit/reorder/delete slots; Save as draft;
-  Start. Lists existing schedules with status and a Pause/Resume/Stop control.
-- `/broadcast` (**not** in the navigation, no app chrome — the OBS Browser Source): full-viewport
-  1920×1080 layout on a dark theme, readable at stream bitrates: large board with last-move
-  highlight; both model names with colours; move list tail; "move N · thinking…" indicator; a header
-  "LLM Chess 24h — Game 17 of 48"; a **mini leaderboard** (top 8, arena score + rating) refreshed after every
-  game; **Up next** (next 3 slots with start times); local clock; "technical break" and "intermission
-  between games" cards; auto-reconnect of the live stream; no scrollbars, no cursor, no text
-  smaller than 28 px. Query options: `?theme=light`, `?top=5`.
+- `/broadcast/plan` (in the app navigation): the planner as built (owner rework, commit `0d1056b`). Games are added one by one
+  (White, Black), with no dates and no duration; pacing is the move delay and the game gap; the day's cost estimate (AI credits
+  and USD, per model) shows **before** anything is saved; **Start** sends the games in one call (`POST /schedules`) and starts
+  the day; the list of broadcasts has Start, Pause, Resume, Stop (after a confirmation) and, for a draft, Delete.
+- `/broadcast` (in the navigation as "Live broadcast", no app chrome — the OBS Browser Source): full-viewport 1920×1080 layout on
+  a dark theme: the board on the full height with a last-move highlight and both players' model names and colours, and one
+  column beside it with the status line ("Move N · model is thinking…", "Requested by …", "Replay of a past game"), the move
+  list (filling the column) and **Up next** (the next slots with start times); the header has the repository link, a link line
+  while the API cannot be read, and a local clock. Cards over the board: "technical break" and "intermission between games"
+  (the next start, the two players and a countdown). There is **no leaderboard and no request panel**. Replays of stored games
+  play only while the broadcast is running, no game is scheduled next and nothing is queued or playing (§15.6). Auto-reconnect of
+  the live stream; every poll read is cut after 20 s and a failed read is retried; no scrollbars, no cursor, no text smaller
+  than 28 px. Query options: `?theme=light`, `?view=mobile`. (`?top=` went with the leaderboard.)
 
 ## 10. Live game transparency and cost (owner request 2026-10-25)
 
@@ -848,7 +854,8 @@ cheap configuration costs little.
      Super Chat, so a payment is never lost: it is either played or kept as credit.
 4. The broadcast runner plays queued requests one at a time, oldest first, at the broadcast pace. A playing game is
    never interrupted.
-5. When the queue is empty, the stream shows replays of past games, which cost nothing, and the menu with its prices.
+5. When the queue is empty, no game is scheduled next and the broadcast is running, the stream replays past games, which cost
+   nothing (§15.6). It no longer shows the menu or its prices.
 
 ### 15.2 Menu, prices and the budget
 
@@ -933,12 +940,15 @@ public sealed record SimulateChatRequest(string PayerId, string PayerDisplay, do
 
 ### 15.6 Stream
 
-- The `/broadcast` page gains:
-  - "Now playing, requested by …";
-  - the next requests with an estimated wait;
-  - the menu with codes and per-side cost, and how to order;
-  - recent rejections as "@name: credit kept, see the menu", with no free text.
-- With an empty queue, it replays stored games (the best-rated recent games) at the broadcast pace.
-- `/admin/requests` holds the queue and the ledger, cancel and requeue, and a simulate form in Mock mode.
-- The static site gets a menu page with the full price matrix (menu × menu, classic and think), so a viewer can check
-  a price before paying.
+- **As designed (V4), now removed.** `/broadcast` had panels for "Now playing, requested by …", the next requests with an
+  estimated wait, the menu with codes and per-side cost, and recent rejections; the static site had a menu page with the price
+  matrix (menu × menu, classic and think). The owner removed the panels and the site page (commit `0d1056b`). The owner is
+  deferring the decision whether to restore them or retire viewer-paid games, so no viewer-facing menu, price or queue view
+  exists today. `GET /api/requests/menu`, `/quote` and `/queue` remain.
+- **What the stream shows now.** The status line names the payer while the requested game is on the board ("Requested by …").
+  Nothing else of the request is shown, and a viewer's message text never is.
+- **Replays.** With an empty queue the page replays stored games (the best-rated recent games) at the broadcast pace, and only
+  while the broadcast is running and no further game is scheduled. Before a scheduled game the intermission card with its
+  countdown shows, so a replay never covers it. A final position is held for 10 s.
+- `/admin/requests` holds the queue (playing, queued, recent), cancel of a queued request, and a simulate form in Mock mode. It
+  has no ledger view and no requeue. It is not in the navigation.

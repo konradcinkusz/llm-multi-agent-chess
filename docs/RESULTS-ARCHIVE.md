@@ -1,6 +1,7 @@
 # Results archive
 
-The `results/` folder holds finished rated games as files, one file per game. Git is the database: history, review and
+The `results/` folder holds finished rated games as files, one file per game. A game that ended undecided (result `*`: a
+cancelled tournament's queued games, a game cut off by a restart or an aborted one) is never exported, so it is not in the archive and not on the site. Git is the database: history, review and
 authorship come with it. The ratings are not stored; the site computes them from the games with the formula in
 [RATING.md](RATING.md), as the app does for its own games.
 

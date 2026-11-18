@@ -101,8 +101,9 @@ The script prints the estimate before the first game:
 Estimate: 0 premium request(s), about $0.0002; 0 model(s) without a price are not counted.
 ```
 
-The estimate is only as good as the price data. A model with no price, including every custom model, is left out of the
-total, and the line says how many were left out. Retries are not in the estimate, so a real bill can be higher, and a game
+The estimate is only as good as the price data. A model with no price is left out of the total, and the line says how many
+were left out. A custom model has a price when its entry sets a complete pair (`UsdPerMillionInput` and `UsdPerMillionOutput`,
+or `CreditsPerMillionInput` and `CreditsPerMillionOutput`, section 4); one without a pair is left out. Retries are not in the estimate, so a real bill can be higher, and a game
 that reaches the 200-ply cap costs more than the estimate assumes.
 
 To cut the cost, do one or both of these:
@@ -195,7 +196,11 @@ Copilot runtime, even for a local endpoint. Whether a provider session also need
 owner's live run will settle it; until then, treat it as unconfirmed. If a sign-in turns out to be needed, the Copilot runtime
 needs the same sign-in as for a Copilot model.
 
-Custom models have no prices yet, so their cost is not in the estimate.
+A custom model is priced only when its entry sets a complete pair of prices per million tokens, in US dollars
+(`UsdPerMillionInput`, `UsdPerMillionOutput`) or in AI credits (`CreditsPerMillionInput`, `CreditsPerMillionOutput`); credits win
+when both are given, and a dollar pair is converted at `Arena:Cost:UsdPerAiCredit`. Without a pair its cost is not in the
+estimate. Set them in the same user-secrets entry as the other fields, for example
+`Arena:CustomModels:0:UsdPerMillionInput`.
 
 ## 5. Reading the report
 

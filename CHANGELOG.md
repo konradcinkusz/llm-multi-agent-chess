@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
-Everything merged to `main` since 0.1.0.
+Everything merged to `main` since 0.1.0, and the work of the session branch that follows it.
 
 ### Added
 
@@ -37,8 +37,52 @@ Everything merged to `main` since 0.1.0.
 - **Broadcast planning.** Games are planned one by one with per-game model options, cost estimates and queue rules; the live page
   has navigation, indicators, a layout that fits one screen in landscape and portrait, and an intermission state between
   scheduled games.
+- **Public site from Actions.** The `publish-site` workflow builds the public site from the results archive (`results/`) and
+  deploys it to GitHub Pages (Settings, Pages, Source = GitHub Actions). The workflow checks that the site has no script and fits
+  the Pages limit, and writes the rating history from the archive. Undecided games (a cancelled tournament's queued games, a game
+  cut off by a restart) are not on the site. The in-app *Publish* to a branch stays as an advanced option for your own database.
+  `deploy-pages` now only checks the one-pager.
+- **Results archive checks.** A game file is checked more strictly (standard start position, model-id characters, bounds on
+  tokens, latency and date, and one spelling per model), and the CI archive test replays every file.
+- **Planner.** The broadcast plan starts in one call (`POST /api/broadcast/schedules`): it validates the games, saves the schedule
+  and starts it, and a refusal saves nothing. Drafts can be deleted; Stop asks for a second click; the list refreshes while a day runs.
+- **Live broadcast page.** A wider 16:9 layout with larger type, `?theme=light` and `?view=mobile`, an intermission card with a
+  countdown before each scheduled game, and a replay only when no game is scheduled next. The page keeps running through a slow or
+  failed read of the API.
+- **Navigation and pages.** The strip lists Results, Live game, Head-to-head, Tournaments, Benchmark, Live broadcast, Broadcast
+  plan and Games, with Attempts and Site under **More**. Unknown addresses answer 404 inside the layout. A status strip shows
+  the Copilot, database and Stockfish states. Filters, the chosen game and the pager are kept in the address, and the replay page
+  has a slider. Pages show plain words when the API is away, keep their last data and ask again.
+- **Custom model prices.** A custom model with a price pair is priced in the estimates and the game summary.
+- **PostgreSQL tests.** `tests/Chess.Api.Tests/Postgres` runs the real app against a PostgreSQL server (`ARENA_TEST_POSTGRES`), and
+  the CI job `postgres` also checks that the model matches the migrations (`dotnet ef migrations has-pending-model-changes`).
 
 ### Changed
+
+- A move whose every attempt was a gateway error aborts the game, unrated, instead of forfeiting the side, in every game. A
+  tournament or benchmark then starts no new game for 15 s, doubling to 2 minutes (`Arena:TechnicalCooldown`,
+  `Arena:MaxTechnicalCooldown`; ADR-017, `docs/RATING.md` §2).
+- The Copilot runtime starts in the background, so the API answers while it starts; opening a conversation has a timeout
+  (`Copilot:SessionStartTimeout`) and a conversation's session is deleted when it ends.
+- The Results and rating endpoints are faster: the report and the pairwise matrix share one bootstrap, the last computation is
+  kept in memory until a game finishes, move statistics are summed in the database, and the rating history sends at most 200
+  points per model.
+- Unsafe requests (POST, DELETE) are not retried after a failure, so one click cannot create a tournament, benchmark or plan
+  several times.
+- The broadcast clock is one rule: the first game starts when you press Start, each next one a game gap after the previous one
+  left *running*, and the planned times follow what happened. A restart plays the next game at once.
+- A request or a game left over by a restart is closed as interrupted, never played unpaced, and a viewer request whose model
+  catalog is not ready yet is tried again after 5 s.
+- The Stockfish analysis has a handshake and a search timeout (`Analysis:HandshakeTimeoutSeconds`, `SearchTimeoutSeconds`,
+  `RetryAfterSeconds`); a binary that does not answer is reported as Degraded and the arena carries on without it.
+- The random player shows as free in the cost estimates, and a model billed by token is counted in AI credits instead of "unknown
+  multiplier". A rating that rounds to zero shows no sign.
+- The API and the web app answer 403 to a foreign `Host` header (DNS rebinding), as they do to a foreign `Origin`.
+- The tournament and benchmark forms start on concurrency 1 and say what is missing only after you touch them; both API calls
+  check the models, the game counts and the Copilot state, and answer 503 while Copilot is not ready.
+- Repetition: a position counts as equal only when the en passant capture is legal; `LoadFen` rejects an invalid position; the PGN
+  has a Termination tag.
+- CI: job timeouts, a run on a pull request is cancelled by a newer push, no Copilot CLI download, and the Stockfish tests run.
 
 - The leaderboard order is conservative: by the lower bound of the arena score interval (`docs/RATING.md`).
 - The live game page keeps the board in place: the player bars and the status line have fixed heights, and the live move list
@@ -49,7 +93,9 @@ Everything merged to `main` since 0.1.0.
 
 ### Removed
 
-- The viewer-paid request panels on the broadcast pages. The request intake and queue remain.
+- The viewer-paid request panels on the broadcast pages, and the public site's menu and price page. The request intake, the queue,
+  the ledger and `/admin/requests` remain; the owner is deferring the decision on what viewers see.
+- The mini leaderboard of the broadcast page and its `?top=` option.
 
 ### Fixed
 
@@ -57,6 +103,13 @@ Everything merged to `main` since 0.1.0.
   projected record, which Npgsql cannot translate. It now orders before projecting.
 - Aborting a game that had already finished reported success; it now reports false.
 - The broadcast keeps its intermission while a replay is still looking for a game.
+- The broadcast stage froze when one read of the API timed out; every read is now cut after 20 s and retried on the next poll.
+- A viewer-paid game could run on the Copilot subscription when its menu id was also a Copilot model id: the API now stops at
+  start-up with a message that names the id, and a request that names such a model is refused and credited. A cancel and a
+  restart recovery no longer race with the runner.
+- The site export failed on a game without a PGN (an undecided game); such games are left out.
+- `scripts/smoke-copilot.sh` waited for the wrong ready state, `scripts/benchmark.ps1` had no CI guard, and
+  `scripts/broadcast-smoke.sh` needed GNU `date`.
 
 ## [0.1.0] - 2026-10-24
 

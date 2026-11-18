@@ -3,7 +3,7 @@
 The only project that references `GitHub.Copilot.SDK`. Copilot SDK types never appear in a public
 signature here (ADR-004, 03 §3.1, checked by `PublicSurfaceTests`).
 
-## Spike: `GitHub.Copilot.SDK` 1.0.26
+## Spike: `GitHub.Copilot.SDK` (pinned in `Directory.Packages.props`, 1.0.28)
 
 Inspected from the NuGet package: the bundled XML docs (`lib/net10.0/GitHub.Copilot.SDK.xml`) and a
 reflection probe of `lib/net10.0/GitHub.Copilot.SDK.dll`.
@@ -74,8 +74,8 @@ used; the gateway's state comes from `GetAuthStatusAsync` and `ListModelsAsync`.
 - **Experimental types.** `Rpc.PermissionDecision` and `Rpc.ModelPolicyState` are marked
   `GHCP001` (evaluation only). The permission pragma is scoped to the one method that uses it. The
   "disabled" policy check compares to the literal wire value `"disabled"`, not to the experimental enum.
-- **Pinned.** The version is pinned in `Directory.Packages.props` (1.0.26). Nothing here relies on
-  anything newer.
+- **Pinned.** The version is pinned in `Directory.Packages.props` (1.0.28, the single place package versions live). Nothing here
+  relies on anything newer.
 
 ### Not verified here
 
@@ -99,6 +99,7 @@ The owner's live smoke run confirms all three.
 | `Copilot:CliUrl` | unset | Already-running runtime (`port`, `host:port` or URL); takes precedence over `CliPath` |
 | `Copilot:GitHubToken` | unset | Overrides the logged-in user. Never logged or stored |
 | `Copilot:StartupTimeout` | 30 s | Start, sign-in check and model listing together |
+| `Copilot:SessionStartTimeout` | 30 s | Opening one conversation. The board and think styles open one for every move |
 | `Llm:Seed` | `1` | Seed for `FakeLlmGateway` |
 | `Llm:FakeLatencyMs` | `0` | Simulated reply delay for `FakeLlmGateway` |
 | `Arena:CustomModels` | empty | Models on an OpenAI-compatible or Azure endpoint (see below); validated at startup |
@@ -140,7 +141,9 @@ The owner's live smoke run confirms all three.
 - **Not verified live.** Whether a provider session also needs a Copilot sign-in is unknown. Custom models are listed
   only while the Copilot runtime is `Ready`, so a runtime must be up even for a local endpoint. The owner's live run
   will show whether it must also be signed in.
-- **Prices.** Custom models have no `Pricing` yet, so their cost estimate is unknown.
+- **Prices.** A custom model that is given a complete pair of prices (see Reasoning effort and custom models, Prices) is listed with
+  those prices as its `Pricing`, so its cost is in the estimates and the game summary. One without a complete pair has no
+  price, and its cost shows as unknown.
 
 ## Status and health
 

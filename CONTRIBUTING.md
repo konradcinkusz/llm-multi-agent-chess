@@ -25,11 +25,18 @@ Thank you for taking the time to contribute. The product, its layout and its rul
 
 ```bash
 dotnet build Chess.sln -warnaserror
-dotnet test Chess.sln
+dotnet test Chess.sln --filter "FullyQualifiedName!~Chess.E2E"
 ```
 
-Both must pass with no warnings. CI runs the same build and tests, plus these jobs:
+Both must pass with no warnings. The filter leaves out the six browser journeys in `tests/Chess.E2E`, which need a Chromium: run
+them with `E2E_CHROMIUM_PATH=/path/to/chromium dotnet test tests/Chess.E2E` when your change touches a page (`dotnet test Chess.sln`
+without the filter runs them too). Read each project's `Passed!` or `Failed!` line; skipped tests (Stockfish, PostgreSQL) are
+explained in the [README](README.md#tests-and-ci). CI runs the same build and unit tests (the `build and test` job), plus these jobs:
 
+- **end-to-end journeys**: the six Playwright journeys.
+- **PostgreSQL tests and model drift**: the tests of `tests/Chess.Api.Tests/Postgres` against a real server, and
+  `dotnet ef migrations has-pending-model-changes --project src/Chess.Api` (run `dotnet tool restore` once; it must pass after a
+  change to an entity or `ArenaDbContext`).
 - **secret scan**: gitleaks over the commits reachable from `HEAD`.
 - **kernel size guard**: `Chess.ServiceDefaults` stays at or below 400 lines of C#.
 - **Copilot SDK only in Chess.Llm**: no other project may reference `GitHub.Copilot.SDK`.
@@ -115,5 +122,5 @@ dotnet run --project src/Chess.AppHost --launch-profile fake   # no Docker, no C
 dotnet run --project src/Chess.AppHost                         # PostgreSQL in Docker, Copilot if logged in
 ```
 
-The fake profile is enough for most UI and API work. Live Copilot runs cost premium requests, so the owner runs them, not CI:
+The fake profile is enough for most UI and API work. Live Copilot runs cost AI credits, so the owner runs them, not CI:
 see [docs/EVALS.md](docs/EVALS.md).

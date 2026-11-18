@@ -191,6 +191,8 @@ limits are the dominant operational risk and are handled by the failure policy, 
 
 **Amended 2026-10-24: broadcast games are outside `Arena:MaxConcurrentGames` by decision; the cap is per source; operational rule: do not run a tournament during a broadcast.**
 
+**Amended 2026-11-17: the planner takes games one by one with no dates; planned times are estimates, and the runner plays each game one game gap after the previous one left `Running`, re-timing the pending slots (03 §9.1). The `/broadcast` page shows no leaderboard and no request panels, and replays only when no game is scheduled next (03 §9.4, §15.6). The cap decision above is unchanged.**
+
 ## ADR-012 — Cost in AI credits and US dollars; reasoning is stored
 
 **Status:** Accepted (2026-10-25).
@@ -290,6 +292,12 @@ terms. The app runs on localhost only.
 not live data. Super Chat cannot refund, so failures become credit. The YouTube Data API quota bounds the poll rate. A
 request game that hits its budget is adjudicated. Before going live, the owner checks the YouTube Super Chat policy and
 the tax treatment of the income.
+
+**Amended 2026-11-17.** The viewer-facing views of this decision were removed by the owner: the request panels on `/broadcast`
+(next requests, the menu, recent rejections) and the public site's menu and price page. The intake, ledger, queue, budget stop,
+`/admin/requests` and the replays remain, and the stage still names the payer of the game on air. The owner is deferring the
+decision whether to restore the views or to retire viewer-paid games; until then a viewer learns the menu and prices from what the
+owner posts (REQUESTS.md §5).
 
 ## ADR-017 — A gateway error aborts the game; dispatch backs off
 

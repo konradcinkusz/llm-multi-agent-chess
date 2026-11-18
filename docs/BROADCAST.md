@@ -172,7 +172,7 @@ The app does not stream. Set up the stream in OBS and YouTube:
 
 1. In YouTube Studio, create a live stream and copy its **stream key** from the stream settings.
 2. In OBS, **Settings → Stream**: Service **YouTube - RTMPS**, and paste the stream key.
-3. Start streaming from OBS. Start the day in the app shortly before the stream goes live, or let it run from its start time.
+3. Start streaming from OBS. Press **Start** in the planner shortly before the stream goes live: the first game starts when you press it (there is no start time to wait for).
 
 ## Keep the machine awake and the app running 24 h
 

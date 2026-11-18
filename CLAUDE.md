@@ -4,8 +4,8 @@
 
 LLM Chess Arena is a local tool that makes LLMs available through the owner's GitHub Copilot
 subscription, has them play chess against each other, and ranks them with a published,
-deterministic formula ([docs/RATING.md](docs/RATING.md)). It runs on localhost only; nothing is
-deployed. Everything is persisted in Postgres. User-facing setup and usage are in
+deterministic formula ([docs/RATING.md](docs/RATING.md)). The app runs on localhost only; the one
+thing published is the static results site (GitHub Pages, from Actions). Everything is persisted in Postgres. User-facing setup and usage are in
 [README.md](README.md).
 
 ## Build and test
@@ -14,6 +14,13 @@ deployed. Everything is persisted in Postgres. User-facing setup and usage are i
 dotnet build Chess.sln -warnaserror
 dotnet test Chess.sln
 ```
+
+`dotnet test Chess.sln` also runs the browser journeys (`tests/Chess.E2E`), which need a Chromium (`E2E_CHROMIUM_PATH`). The unit
+run, which is what CI's `build and test` job runs, leaves them out:
+`dotnet test Chess.sln --no-build --filter "FullyQualifiedName!~Chess.E2E"`. Read the result per project: each prints
+`Passed!` or `Failed!` with its own Failed, Passed and Skipped counts. The Stockfish integration tests count as skipped unless
+`STOCKFISH_PATH` names a binary, and so do the PostgreSQL tests unless `ARENA_TEST_POSTGRES` is set. The totals are not written in
+any document: they go stale with every pull request.
 
 PostgreSQL-backed tests (`tests/Chess.Api.Tests/Postgres`) run only when `ARENA_TEST_POSTGRES` holds a connection string, and the CI job
 `postgres` runs them. After a change to an entity or `ArenaDbContext`, run `dotnet tool restore` and
@@ -41,23 +48,29 @@ src/
   Chess.Llm/              ILlmGateway, CopilotLlmGateway, FakeLlmGateway. The ONLY project that references GitHub.Copilot.SDK
   Chess.Analysis/         IMoveQualityAnalyzer, StockfishAnalyzer (UCI), NoOpMoveQualityAnalyzer
   Chess.Rating/           pure rating maths (RATING.md): Bradley-Terry fit, RQC, bootstrap. No I/O, clock or EF
-  Chess.Api/              the one service: Players, Games (runner, SSE), Tournaments, Ratings, Results (snapshots),
-                          Quality (post-game move quality), Attempts, Catalog (models, status), Broadcast (planner,
-                          runner, endpoints), Benchmarks (variant runs, schedule, report, Markdown), Usage (game cost
-                          and token figures, model prices), Persistence (EF Core, migrations, startup sweep), Contracts (DTOs)
+  Chess.Api/              the one service: Players, Games (runner, SSE), Tournaments, Ratings, Results (snapshots, the
+                          results archive), Quality (post-game move quality), Attempts, Catalog (models, status), Broadcast
+                          (planner, runner, endpoints), Requests (viewer-paid games: menu, quote, ledger, queue, intake,
+                          YouTube), Benchmarks (variant runs, schedule, report, Markdown), Usage (game cost and token
+                          figures, model prices), Persistence (EF Core, migrations, startup sweep), Contracts (DTOs)
   Chess.Web/              Blazor Web App, interactive server rendering. Api/ holds its own DTO copies, the typed
                           ArenaApiClient and the SSE GameEventsClient. Components/: Layout, Charts (pure SVG),
                           Shared (ChessBoardSvg, StatusStrip, Game: player bars, move table, engine log, usage summary),
                           Pages (Play, Results, HeadToHead, Tournaments, Games, Benchmark, Admin, Broadcast), Site
                           (the pages of the static public site). Site/: the static export (SiteExporter, one page per
-                          game) and the publishing to gh-pages (GitSitePublisher, auto-publish)
+                          game) and the in-app publishing of the owner's own export to a branch (GitSitePublisher, auto-publish; the public
+                          site itself is deployed by `publish-site.yml`)
 tests/
   Chess.Engine.Tests/  Chess.Rating.Tests/  Chess.Llm.Tests/  Chess.Api.Tests/  Chess.Web.Tests/
-  Chess.E2E/              Playwright journeys on the fake profile: live game, replay, results, tournament, benchmark (CI job `e2e`)
+  Chess.E2E/              six Playwright journeys on the fake profile: live game, replay, results, tournament, benchmark, a viewer
+                          request on the stage (CI job `e2e`)
 results/                  the results archive: one JSON file per rated game (docs/RESULTS-ARCHIVE.md); CI builds the public site from it
-docs/  RATING.md, RESULTS-ARCHIVE.md, BROADCAST.md, BENCHMARK.md, EVALS.md (linked from the README); architecture/ (owned by the supervisor)
+docs/  RATING.md, RESULTS-ARCHIVE.md, BROADCAST.md, REQUESTS.md, BENCHMARK.md, EVALS.md (linked from the README); architecture/ (owned by the supervisor)
 scripts/                  dev-setup.sh, setup-hooks.sh, smoke-copilot.sh (owner's live run), broadcast-smoke.sh (fake profile),
-                          benchmark.sh and benchmark.ps1 (a benchmark against a running arena; refuse under CI)
+                          youtube-smoke.sh (owner's, during a live stream), benchmark.sh and benchmark.ps1 (a benchmark against a
+                          running arena; refuse under CI)
+.github/workflows/        ci.yml (build and test, postgres, e2e, secrets, kernel-size, contracts, solution), publish-site.yml
+                          (builds the public site from results/ and deploys it to Pages), deploy-pages.yml (checks the one-pager)
 ```
 
 Project references are the allowed edges: `Chess.Api` → ServiceDefaults, Engine, Llm, Analysis,
@@ -152,3 +165,23 @@ Fixes merged to `main`, with their pull request numbers in brackets. Keep them i
   page did not load. The InMemory provider evaluates that query fine, so the tests did not catch it. Put `OrderBy` before
   `Select` in any query that runs on PostgreSQL. A test on the InMemory provider does not prove the translation: a query that reads data back belongs in the PostgreSQL tests too
   (`Chess.Api.Tests.Postgres`, which play a game and call every read endpoint against a real server).
+- **Retries of unsafe methods create things twice.** The standard resilience handler retried a POST after a
+  late 5xx, so one click made four tournaments, benchmarks or plans. `Chess.ServiceDefaults` now disables the retry for POST and
+  DELETE (`DisableForUnsafeHttpMethods`); a test asserts one attempt for each and four for a GET. A caller that creates something
+  says why it failed and does not retry by itself; the page tells the user to check the list first.
+- **A poll loop on the stage must survive its own timeouts.** The OBS page reads the API every 5 seconds for a day. A timeout is a
+  `TaskCanceledException` while the page's token is not cancelled, so `catch (Exception) when (!ct.IsCancellationRequested)` is the
+  filter that keeps a loop alive, and `catch (OperationCanceledException)` is not. Cut each read with its own timeout (20 s), log
+  the failure, and wait for the next tick. A fire-and-forget loop is awaited by an observer that logs, or its failure vanishes and
+  the stage freezes.
+- **The InMemory provider and PostgreSQL disagree, so both are tested.** The InMemory tests are fast and need nothing. They cannot
+  show an untranslatable query, a model that drifted from its migrations, or a timestamp stored at a lower precision (the planner
+  once planned slots finer than PostgreSQL keeps). `tests/Chess.Api.Tests/Postgres` runs the app against a real server in the CI job
+  `postgres`, with `dotnet ef migrations has-pending-model-changes`. A fix for a query bug adds its test there.
+- **Pages is deployed from Actions, not from a branch.** With the Pages source set to GitHub Actions, a `gh-pages` branch is not
+  served at all. `publish-site.yml` builds the site from `results/` and deploys it; the in-app *Publish* to a branch is an advanced
+  option for the owner's own database and does not serve the public URL. `deploy-pages.yml` only checks the one-pager. Do not
+  describe the branch as the public site.
+- **Undecided games are not public.** A game that ended with result `*` (a cancelled tournament's queued games, a game cut off by a
+  restart) has no PGN and no result. The site export (`SiteGames.Finished`) and the results archive leave it out; once the API's
+  409 for its PGN failed the whole export. Filter on a decided result before asking the API for a game's PGN.
