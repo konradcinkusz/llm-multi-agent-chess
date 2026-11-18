@@ -108,7 +108,7 @@
         }
         else
         {
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Games in the broadcast (scrollable table)">
                 <table class="plan-slots">
                     <thead>
                         <tr>
@@ -158,7 +158,7 @@
                     Assumes @AssumedPlies plies a game and @(AssumedMoveLatencyMs / 1000) s a move (ADR-011). An upper bound, not a bill.
                     AI credits and USD use the API's rate and the tokens of past moves.
                 </p>
-                <div class="table-wrap">
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Estimated cost per model (scrollable table)">
                     <table class="table-compact">
                         <thead>
                             <tr><th>Model</th><th>Price</th><th class="num">Games</th><th class="num">Premium requests</th><th class="num">AI credits</th><th class="num">USD</th><th>Tokens per move</th></tr>
@@ -217,7 +217,7 @@
     }
     else
     {
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Broadcasts (scrollable table)">
             <table class="plan-schedules">
                 <thead>
                     <tr>
